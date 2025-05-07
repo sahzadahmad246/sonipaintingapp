@@ -12,6 +12,7 @@ import {
   Tag,
   Edit,
   DollarSign,
+  History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -35,7 +36,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import Link from "next/link";
-import Image from "next/image"; // Import Next.js Image
+import Image from "next/image";
 import { apiFetch } from "@/app/lib/api";
 import type { Project } from "@/app/types";
 
@@ -100,7 +101,6 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
     }
 
     const formData = new FormData();
-    // Include required project fields
     formData.append("projectId", project.projectId);
     formData.append("quotationNumber", project.quotationNumber);
     formData.append("clientName", project.clientName);
@@ -118,7 +118,6 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
       formData.append(`terms[${index}]`, term);
     });
 
-    // Add new payment
     const newPayment = {
       amount: Number(data.amount),
       date: data.date || new Date().toISOString(),
@@ -126,7 +125,6 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
     };
     formData.append("newPayment", JSON.stringify(newPayment));
 
-    // Log FormData for debugging
     console.log("Payment FormData:", Object.fromEntries(formData));
 
     try {
@@ -138,7 +136,7 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
       toast.success("Payment added successfully!");
       setIsPaymentDialogOpen(false);
       resetForm();
-      fetchProject(); // Refresh project data to show updated payment history
+      fetchProject();
     } catch (error: unknown) {
       console.error("Add payment error:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to add payment";
@@ -165,6 +163,15 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
             <Skeleton className="h-4 w-3/4" />
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-8 w-64 mb-2" />
+            <Skeleton className="h-4 w-40" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-32 w-full" />
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -179,7 +186,7 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
               Project Not Found
             </h3>
             <p className="text-gray-500 mb-6 text-center">
-              The project doesn&apos;t exist or has been deleted.
+              The project does not exist or has been deleted.
             </p>
             <Button asChild>
               <Link href="/dashboard">
@@ -198,7 +205,9 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
         0
       )
     : 0;
-  const amountDue = (Number(project.grandTotal) || 0) - totalPayments;
+  const grandTotal = Number(project.grandTotal) || 0;
+  const amountDue = grandTotal - totalPayments;
+  const paymentPercentage = grandTotal > 0 ? (totalPayments / grandTotal) * 100 : 0;
 
   return (
     <div className="container mx-auto py-10 px-4">
@@ -245,9 +254,7 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
                   required: "Amount is required",
                   min: { value: 0.01, message: "Amount must be positive" },
                   validate: (value) =>
-                    value <=
-                      (Number(project.grandTotal) || 0) - totalPayments ||
-                    "Payment exceeds remaining amount due",
+                    value <= amountDue || "Payment exceeds remaining amount due",
                 })}
               />
               {errors.amount && (
@@ -294,43 +301,41 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <Card className="mb-6">
-          <CardHeader>
+        <Card className="mb-6 overflow-hidden border-0 shadow-md">
+          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
             <CardTitle className="text-xl">Client Information</CardTitle>
-            <CardDescription>
+            <CardDescription className="text-indigo-100">
               Details of the client for this project
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div className="flex items-start">
-                  <User className="h-5 w-5 text-primary mr-2 mt-0.5" />
+                  <User className="h-5 w-5 text-indigo-500 mr-2 mt-0.5" />
                   <div>
                     <p className="text-sm text-gray-500">Client Name</p>
                     <p className="font-medium">{project.clientName}</p>
                   </div>
                 </div>
                 <div className="flex items-start">
-                  <MapPin className="h-5 w-5 text-primary mr-2 mt-0.5" />
+                  <MapPin className="h-5 w-5 text-indigo-500 mr-2 mt-0.5" />
                   <div>
                     <p className="text-sm text-gray-500">Address</p>
-                    <p className="whitespace-pre-line">
-                      {project.clientAddress}
-                    </p>
+                    <p className="whitespace-pre-line">{project.clientAddress}</p>
                   </div>
                 </div>
               </div>
               <div className="space-y-4">
                 <div className="flex items-start">
-                  <Phone className="h-5 w-5 text-primary mr-2 mt-0.5" />
+                  <Phone className="h-5 w-5 text-indigo-500 mr-2 mt-0.5" />
                   <div>
                     <p className="text-sm text-gray-500">Contact Number</p>
                     <p className="font-medium">{project.clientNumber}</p>
                   </div>
                 </div>
                 <div className="flex items-start">
-                  <Calendar className="h-5 w-5 text-primary mr-2 mt-0.5" />
+                  <Calendar className="h-5 w-5 text-indigo-500 mr-2 mt-0.5" />
                   <div>
                     <p className="text-sm text-gray-500">Project Date</p>
                     <p className="font-medium">
@@ -343,16 +348,18 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
           </CardContent>
         </Card>
 
-        <Card className="mb-6">
-          <CardHeader>
+        <Card className="mb-6 overflow-hidden border-0 shadow-md">
+          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
             <CardTitle className="text-xl">Project Items</CardTitle>
-            <CardDescription>Services and products included</CardDescription>
+            <CardDescription className="text-indigo-100">
+              Services and products included
+            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className="border-b">
+                  <tr className="bg-gray-50">
                     <th className="text-left py-3 px-4 font-medium text-gray-600">
                       Description
                     </th>
@@ -370,7 +377,12 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
                 <tbody>
                   {Array.isArray(project.items) && project.items.length > 0 ? (
                     project.items.map((item, index) => (
-                      <tr key={index} className="border-b last:border-b-0">
+                      <tr
+                        key={index}
+                        className={`border-b last:border-b-0 ${
+                          index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                        }`}
+                      >
                         <td className="py-3 px-4">
                           <div>
                             <p className="font-medium">{item.description}</p>
@@ -409,16 +421,18 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
         </Card>
 
         {Array.isArray(project.extraWork) && project.extraWork.length > 0 && (
-          <Card className="mb-6">
-            <CardHeader>
+          <Card className="mb-6 overflow-hidden border-0 shadow-md">
+            <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
               <CardTitle className="text-xl">Extra Work</CardTitle>
-              <CardDescription>Additional work performed</CardDescription>
+              <CardDescription className="text-indigo-100">
+                Additional work performed
+              </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
                   <thead>
-                    <tr className="border-b">
+                    <tr className="bg-gray-50">
                       <th className="text-left py-3 px-4 font-medium text-gray-600">
                         Description
                       </th>
@@ -429,7 +443,12 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
                   </thead>
                   <tbody>
                     {project.extraWork.map((ew, index) => (
-                      <tr key={index} className="border-b last:border-b-0">
+                      <tr
+                        key={index}
+                        className={`border-b last:border-b-0 ${
+                          index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                        }`}
+                      >
                         <td className="py-3 px-4">
                           <div>
                             <p className="font-medium">{ew.description}</p>
@@ -453,12 +472,14 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
         )}
 
         {Array.isArray(project.siteImages) && project.siteImages.length > 0 && (
-          <Card className="mb-6">
-            <CardHeader>
+          <Card className="mb-6 overflow-hidden border-0 shadow-md">
+            <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
               <CardTitle className="text-xl">Site Images</CardTitle>
-              <CardDescription>Images from the project site</CardDescription>
+              <CardDescription className="text-indigo-100">
+                Images from the project site
+              </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {project.siteImages.map((img, index) => (
                   <Image
@@ -475,12 +496,31 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
           </Card>
         )}
 
-        <Card className="mb-6">
-          <CardHeader>
+        <Card className="mb-6 overflow-hidden border-0 shadow-md">
+          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
             <CardTitle className="text-xl">Project Summary</CardTitle>
+            <CardDescription className="text-indigo-100">
+              Financial overview and status of the project
+            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Status:</span>
+                <span className={`font-medium ${project.status === "completed" ? "text-green-600" : "text-blue-600"}`}>
+                  {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Payment Progress:</span>
+                <span className="font-medium">{paymentPercentage.toFixed(2)}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div
+                  className={`h-2.5 rounded-full ${paymentPercentage === 100 ? "bg-green-600" : "bg-blue-600"}`}
+                  style={{ width: `${paymentPercentage}%` }}
+                />
+              </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Subtotal:</span>
                 <span className="font-medium">
@@ -501,8 +541,8 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
               </div>
               <div className="flex justify-between items-center pt-4 border-t">
                 <span className="text-lg font-semibold">Grand Total:</span>
-                <span className="text-lg font-bold text-primary">
-                  ₹{(Number(project.grandTotal) || 0).toFixed(2)}
+                <span className="text-lg font-bold text-indigo-600">
+                  ₹{(grandTotal || 0).toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -521,28 +561,36 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse">
                       <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-2 px-4 font-medium text-gray-600">
+                        <tr className="bg-gray-50">
+                          <th className="text-left py-3 px-4 font-medium text-gray-600">
                             Date
                           </th>
-                          <th className="text-right py-2 px-4 font-medium text-gray-600">
+                          <th className="text-right py-3 px-4 font-medium text-gray-600">
                             Amount (₹)
                           </th>
-                          <th className="text-left py-2 px-4 font-medium text-gray-600">
+                          <th className="text-left py Até 3:32 PM 3/18/2026
+                            font-medium text-gray-600">
                             Note
                           </th>
                         </tr>
                       </thead>
                       <tbody>
                         {project.paymentHistory.map((payment, index) => (
-                          <tr key={index} className="border-b last:border-b-0">
-                            <td className="py-2 px-4">
+                          <tr
+                            key={index}
+                            className={`border-b last:border-b-0 ${
+                              index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                            }`}
+                          >
+                            <td className="py-3 px-4">
                               {new Date(payment.date).toLocaleString()}
                             </td>
-                            <td className="text-right py-2 px-4 font-medium">
+                            <td className="text-right py-3 px-4 font-medium">
                               ₹{(Number(payment.amount) || 0).toFixed(2)}
                             </td>
-                            <td className="py-2 px-4">{payment.note || "-"}</td>
+                            <td className="py-3 px-4">
+                              {payment.note || "-"}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -553,13 +601,16 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
           </CardContent>
         </Card>
 
-        <Card className="mb-6">
-          <CardHeader>
+        <Card className="mb-6 overflow-hidden border-0 shadow-md">
+          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
             <CardTitle className="flex items-center text-lg">
-              <Tag className="h-5 w-5 mr-2 text-primary" /> Terms & Conditions
+              <Tag className="h-5 w-5 mr-2" /> Terms & Conditions
             </CardTitle>
+            <CardDescription className="text-indigo-100">
+              Terms applicable to this project
+            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             {Array.isArray(project.terms) && project.terms.length > 0 ? (
               <ul className="list-disc pl-5 space-y-2">
                 {project.terms.map((term, index) => (
@@ -575,11 +626,14 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
         </Card>
 
         {project.note && (
-          <Card className="mb-6">
-            <CardHeader>
+          <Card className="mb-6 overflow-hidden border-0 shadow-md">
+            <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
               <CardTitle className="text-lg">Additional Notes</CardTitle>
+              <CardDescription className="text-indigo-100">
+                Extra information about the project
+              </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6">
               <p className="text-gray-700 whitespace-pre-line">
                 {project.note}
               </p>
@@ -587,14 +641,61 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
           </Card>
         )}
 
-        <Card>
-          <CardHeader>
+        <Card className="mb-6 overflow-hidden border-0 shadow-md">
+          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
             <CardTitle className="text-lg">Project Status</CardTitle>
-            <CardDescription>
+            <CardDescription className="text-indigo-100">
+              Created:{" "}
+              {project.createdAt
+                ? new Date(project.createdAt).toLocaleString()
+                : "N/A"}
               {project.lastUpdated &&
-                `Last Updated: ${new Date(project.lastUpdated).toLocaleString()}`}
+                ` • Last Updated: ${new Date(project.lastUpdated).toLocaleString()}`}
             </CardDescription>
           </CardHeader>
+          <CardContent className="p-6"></CardContent>
+        </Card>
+
+        <Card className="mb-6 overflow-hidden border-0 shadow-md">
+          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+            <CardTitle className="flex items-center text-lg">
+              <History className="h-5 w-5 mr-2" /> Update History
+            </CardTitle>
+            <CardDescription className="text-indigo-100">
+              Record of all updates made to this project
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-6">
+            {project.updateHistory?.length ? (
+              <ul className="space-y-4">
+                {project.updateHistory.map((update, index) => (
+                  <li
+                    key={index}
+                    className="border-b pb-4 last:border-b-0 last:pb-0"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500">
+                          Updated on{" "}
+                          {new Date(update.updatedAt).toLocaleString()}
+                        </p>
+                        <p className="font-medium">
+                          By User ID: {update.updatedBy}
+                        </p>
+                        <p className="text-sm text-gray-700 mt-1">
+                          Changes: {update.changes.join(", ")}
+                        </p>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-500">
+                No updates recorded for this project.
+              </p>
+            )}
+          </CardContent>
         </Card>
       </motion.div>
     </div>

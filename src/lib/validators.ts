@@ -28,6 +28,19 @@ const paymentHistorySchema = z
   )
   .default([]);
 
+// Schema for updateHistory (used in Quotation and Project)
+const updateHistorySchema = z
+  .array(
+    z.object({
+      updatedAt: z
+        .string()
+        .refine((val) => !isNaN(Date.parse(val)), "Invalid date format"),
+      updatedBy: z.string().min(1, "Updated by is required"),
+      changes: z.array(z.string()).min(1, "At least one change is required"),
+    })
+  )
+  .optional();
+
 // Base schema for quotations and projects
 const baseQuotationSchema = z.object({
   clientName: z.string().min(1, "Client name is required"),
@@ -52,6 +65,7 @@ export const updateQuotationSchema = baseQuotationSchema
   .merge(
     z.object({
       isAccepted: z.enum(["pending", "accepted", "rejected"]).optional(),
+      updateHistory: updateHistorySchema,
     })
   )
   .refine(
@@ -129,6 +143,7 @@ export const updateProjectSchema = z.object({
   note: z.string().optional(),
   subtotal: z.number().min(0, "Subtotal must be non-negative").optional(),
   grandTotal: z.number().min(0, "Grand total must be non-negative").optional(),
+  updateHistory: updateHistorySchema,
 });
 
 // Invoice schema
@@ -137,6 +152,7 @@ export const updateInvoiceSchema = baseProjectSchema
   .merge(
     z.object({
       amountDue: z.number().min(0).optional(),
+      paymentHistory: paymentHistorySchema,
     })
   )
   .refine(
@@ -157,7 +173,7 @@ export const deletePortfolioSchema = z.object({
 // GeneralInfo schema
 export const updateGeneralInfoSchema = z.object({
   siteName: z.string().min(1, "Business name is required"),
-  gstNumber: z.string().optional(), // Allow empty or undefined
+  gstNumber: z.string().optional(),
   gstPercent: z.number().min(0, "GST percent cannot be negative"),
   termsAndConditions: z.array(z.string()).optional(),
   mobileNumber1: z.string().min(10, "Primary mobile number is required"),

@@ -28,11 +28,13 @@ export default function ProjectList() {
   const fetchProjects = useCallback(async () => {
     try {
       const { projects, pages } = await getProjects(page, limit);
-      setProjects(projects);
-      setTotalPages(pages);
+      console.log("Fetched projects:", projects); // Log API response for debugging
+      setProjects(projects || []);
+      setTotalPages(pages || 1);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "Failed to fetch projects";
       toast.error(errorMessage);
+      setProjects([]);
     } finally {
       setLoading(false);
     }
@@ -43,10 +45,10 @@ export default function ProjectList() {
     if (searchTerm) {
       filtered = filtered.filter(
         (p) =>
-          p.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.projectId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.clientAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.clientNumber.includes(searchTerm)
+          (p.clientName?.toLowerCase()?.includes(searchTerm.toLowerCase()) || false) ||
+          (p.projectId?.toLowerCase()?.includes(searchTerm.toLowerCase()) || false) ||
+          (p.clientAddress?.toLowerCase()?.includes(searchTerm.toLowerCase()) || false) ||
+          (p.clientNumber?.includes(searchTerm) || false)
       );
     }
     setFilteredProjects(filtered);
@@ -77,6 +79,12 @@ export default function ProjectList() {
   const confirmDelete = (projectId: string) => {
     setProjectToDelete(projectId);
     setDeleteDialogOpen(true);
+  };
+
+  // Helper function to format status
+  const formatStatus = (status?: string) => {
+    if (!status) return "Unknown"; // Fallback for undefined or null status
+    return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
   if (loading) {
@@ -133,83 +141,112 @@ export default function ProjectList() {
               </motion.div>
             ) : (
               <div className="space-y-4">
-                {filteredProjects.map((project, index) => (
-                  <motion.div
-                    key={project.projectId}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.2, delay: index * 0.05 }}
-                  >
-                    <Card>
-                      <div className="border-l-4 border-primary">
-                        <CardContent className="p-6">
-                          <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
-                            <div>
-                              <h3 className="text-lg font-bold">Project #{project.projectId}</h3>
-                              <p className="text-sm text-gray-500">
-                                {project.lastUpdated && ` • Updated: ${new Date(project.lastUpdated).toLocaleDateString()}`}
-                              </p>
+                {filteredProjects.map((project, index) => {
+                  const totalPayments = Array.isArray(project.paymentHistory)
+                    ? project.paymentHistory.reduce(
+                        (sum, payment) => sum + (Number(payment.amount) || 0),
+                        0
+                      )
+                    : 0;
+                  const grandTotal = Number(project.grandTotal) || 0;
+                  const paymentPercentage = grandTotal > 0 ? (totalPayments / grandTotal) * 100 : 0;
+
+                  return (
+                    <motion.div
+                      key={project.projectId}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.2, delay: index * 0.05 }}
+                    >
+                      <Card>
+                        <div className="border-l-4 border-primary">
+                          <CardContent className="p-6">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
+                              <div>
+                                <h3 className="text-lg font-bold">Project #{project.projectId}</h3>
+                                <p className="text-sm text-gray-500">
+                                  {project.lastUpdated && ` • Updated: ${new Date(project.lastUpdated).toLocaleDateString()}`}
+                                </p>
+                              </div>
+                              <div className="mt-4 md:mt-0">
+                                <p className="text-lg font-bold text-primary">₹{project.grandTotal?.toFixed(2) || "0.00"}</p>
+                              </div>
                             </div>
-                            <div className="mt-4 md:mt-0">
-                              <p className="text-lg font-bold text-primary">₹{project.grandTotal?.toFixed(2) || "0.00"}</p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                              <div>
+                                <p className="text-sm font-medium text-gray-500">Client</p>
+                                <p className="font-medium">{project.clientName || "N/A"}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-500">Contact</p>
+                                <p>{project.clientNumber || "N/A"}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-500">Date</p>
+                                <p>{project.date ? new Date(project.date).toLocaleDateString() : "N/A"}</p>
+                              </div>
                             </div>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                            <div>
-                              <p className="text-sm font-medium text-gray-500">Client</p>
-                              <p className="font-medium">{project.clientName}</p>
+                            <div className="flex justify-between items-center mb-4">
+                              <div>
+                                <p className="text-sm font-medium text-gray-500">Status</p>
+                                <p className={`font-medium ${project.status === "completed" ? "text-green-600" : "text-blue-600"}`}>
+                                  {formatStatus(project.status)}
+                                </p>
+                              </div>
+                              <div className="w-1/2">
+                                <p className="text-sm font-medium text-gray-500">Payment Progress</p>
+                                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                  <div
+                                    className={`h-1.5 rounded-full ${paymentPercentage === 100 ? "bg-green-600" : "bg-blue-600"}`}
+                                    style={{ width: `${paymentPercentage}%` }}
+                                  />
+                                </div>
+                                <p className="text-sm text-gray-500 text-right">{paymentPercentage.toFixed(0)}%</p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-500">Contact</p>
-                              <p>{project.clientNumber}</p>
+                            <div className="flex flex-wrap gap-2 mt-4">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button variant="outline" size="sm" asChild>
+                                      <Link href={`/dashboard/projects/${project.projectId}`}><Eye className="h-4 w-4 mr-1" /> View</Link>
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>View project details</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button variant="outline" size="sm" asChild>
+                                      <Link href={`/dashboard/projects/edit/${project.projectId}`}><Edit className="h-4 w-4 mr-1" /> Edit</Link>
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Edit project</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => confirmDelete(project.projectId)}
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-1" /> Delete
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Delete this project</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-500">Date</p>
-                              <p>{new Date(project.date).toLocaleDateString()}</p>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-2 mt-4">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="outline" size="sm" asChild>
-                                    <Link href={`/dashboard/projects/${project.projectId}`}><Eye className="h-4 w-4 mr-1" /> View</Link>
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>View project details</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="outline" size="sm" asChild>
-                                    <Link href={`/dashboard/projects/edit/${project.projectId}`}><Edit className="h-4 w-4 mr-1" /> Edit</Link>
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Edit project</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={() => confirmDelete(project.projectId)}
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-1" /> Delete
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Delete this project</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-                        </CardContent>
-                      </div>
-                    </Card>
-                  </motion.div>
-                ))}
+                          </CardContent>
+                        </div>
+                      </Card>
+                    </motion.div>
+                  );
+                })}
               </div>
             )}
           </AnimatePresence>

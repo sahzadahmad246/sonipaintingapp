@@ -8,9 +8,9 @@ export interface IQuotation extends Document {
   date: Date;
   items: {
     description: string;
-    area?: number | null; // Allow null
+    area?: number | null;
     rate: number;
-    total?: number | null; // Allow null
+    total?: number | null;
     note?: string;
   }[];
   subtotal?: number;
@@ -22,6 +22,11 @@ export interface IQuotation extends Document {
   createdAt: Date;
   lastUpdated?: Date;
   isAccepted?: "pending" | "accepted" | "rejected";
+  updateHistory?: {
+    updatedAt: Date;
+    updatedBy: string;
+    changes: string[];
+  }[];
 }
 
 const QuotationSchema: Schema = new Schema({
@@ -29,13 +34,13 @@ const QuotationSchema: Schema = new Schema({
   clientName: { type: String, required: true },
   clientAddress: { type: String, required: true },
   clientNumber: { type: String, required: true },
-  date: { type: Date, default: Date.now },
+  date: { type: Date, required: true },
   items: [
     {
       description: { type: String, required: true },
-      area: { type: Number, default: null }, // Allow null
+      area: { type: Number, default: null },
       rate: { type: Number, required: true },
-      total: { type: Number, default: null }, // Allow null
+      total: { type: Number, default: null },
       note: { type: String },
     },
   ],
@@ -52,6 +57,13 @@ const QuotationSchema: Schema = new Schema({
     enum: ["pending", "accepted", "rejected"],
     default: "pending",
   },
+  updateHistory: [
+    {
+      updatedAt: { type: Date, required: true },
+      updatedBy: { type: String, required: true },
+      changes: [{ type: String, required: true }],
+    },
+  ],
 });
 
 // Add indexes

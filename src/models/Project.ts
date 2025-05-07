@@ -22,6 +22,7 @@ export interface IProject extends Document {
   subtotal?: number;
   discount: number;
   grandTotal?: number;
+  amountDue?: number;
   paymentHistory: {
     amount: number;
     date: Date;
@@ -31,7 +32,14 @@ export interface IProject extends Document {
   terms: string[];
   note?: string;
   createdAt: Date;
+  createdBy: string;
   lastUpdated?: Date;
+  status: "ongoing" | "completed";
+  updateHistory?: {
+    updatedAt: Date;
+    updatedBy: string;
+    changes: string[];
+  }[];
 }
 
 const ProjectSchema: Schema = new Schema({
@@ -60,6 +68,7 @@ const ProjectSchema: Schema = new Schema({
   subtotal: { type: Number },
   discount: { type: Number, default: 0 },
   grandTotal: { type: Number },
+  amountDue: { type: Number },
   paymentHistory: [
     {
       amount: { type: Number, required: true },
@@ -71,7 +80,24 @@ const ProjectSchema: Schema = new Schema({
   terms: [{ type: String }],
   note: { type: String },
   createdAt: { type: Date, default: Date.now },
+  createdBy: { type: String, required: true },
   lastUpdated: { type: Date },
+  status: {
+    type: String,
+    enum: ["ongoing", "completed"],
+    default: "ongoing",
+  },
+  updateHistory: [
+    {
+      updatedAt: { type: Date, required: true },
+      updatedBy: { type: String, required: true },
+      changes: [{ type: String, required: true }],
+    },
+  ],
 });
+
+ProjectSchema.index({ projectId: 1 });
+ProjectSchema.index({ quotationNumber: 1 });
+ProjectSchema.index({ createdBy: 1, createdAt: -1 });
 
 export default mongoose.models.Project || mongoose.model<IProject>("Project", ProjectSchema);

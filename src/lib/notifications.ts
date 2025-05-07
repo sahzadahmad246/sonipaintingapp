@@ -14,7 +14,7 @@ export async function sendNotification({
   message,
   action = "default",
   retries = 3,
-  debounceSeconds = 20,
+  debounceSeconds = 3600,
 }: {
   to: string;
   message: string;

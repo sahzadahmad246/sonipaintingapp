@@ -16,6 +16,7 @@ import {
   Calendar,
   Tag,
   Edit,
+  History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -96,7 +97,7 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
   };
 
   const getStatusBadge = (status: string | undefined) => {
-    const badgeStatus = status || "pending"; // Fallback to "pending" if undefined
+    const badgeStatus = status || "pending";
     switch (badgeStatus) {
       case "accepted":
         return (
@@ -148,6 +149,15 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
           <CardContent className="space-y-6">
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-3/4" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-8 w-64 mb-2" />
+            <Skeleton className="h-4 w-40" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-32 w-full" />
           </CardContent>
         </Card>
         <Card>
@@ -305,7 +315,7 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
                       Discount
                     </td>
                     <td className="text-right py-3 px-4 font-medium">₹{quotation.discount?.toFixed(2)}</td>
-                    </tr>
+                  </tr>
                   {quotation.grandTotal && (
                     <tr>
                       <td colSpan={3} className="text-right py-3 px-4 font-bold text-lg">
@@ -330,13 +340,17 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
-              <ul className="list-disc pl-5 space-y-2">
-                {quotation.terms?.map((term, index) => (
-                  <li key={index} className="text-gray-700">
-                    {term}
-                  </li>
-                ))}
-              </ul>
+              {quotation.terms?.length ? (
+                <ul className="list-disc pl-5 space-y-2">
+                  {quotation.terms.map((term, index) => (
+                    <li key={index} className="text-gray-700">
+                      {term}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-gray-500">No terms specified.</p>
+              )}
             </CardContent>
           </Card>
 
@@ -352,7 +366,7 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
           )}
         </div>
 
-        <Card className="overflow-hidden border-0 shadow-md">
+        <Card className="mb-6 overflow-hidden border-0 shadow-md">
           <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
             <CardTitle className="text-lg">Quotation Status</CardTitle>
             <CardDescription className="text-indigo-100">
@@ -374,6 +388,40 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
                   <XCircle className="mr-2 h-4 w-4" /> Reject Quotation
                 </Button>
               </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6 overflow-hidden border-0 shadow-md">
+          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+            <CardTitle className="flex items-center text-lg">
+              <History className="h-5 w-5 mr-2" /> Update History
+            </CardTitle>
+            <CardDescription className="text-indigo-100">
+              Record of all updates made to this quotation
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-6">
+            {quotation.updateHistory?.length ? (
+              <ul className="space-y-4">
+                {quotation.updateHistory.map((update, index) => (
+                  <li key={index} className="border-b pb-4 last:border-b-0 last:pb-0">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500">
+                          Updated on {new Date(update.updatedAt).toLocaleString()}
+                        </p>
+                        <p className="font-medium">By User ID: {update.updatedBy}</p>
+                        <p className="text-sm text-gray-700 mt-1">
+                          Changed: {update.changes.join(", ")}
+                        </p>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-500">No updates recorded for this quotation.</p>
             )}
           </CardContent>
         </Card>

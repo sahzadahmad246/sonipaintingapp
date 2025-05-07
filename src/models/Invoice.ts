@@ -1,4 +1,3 @@
-// models/Invoice.ts
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface IInvoice extends Document {
@@ -21,16 +20,18 @@ export interface IInvoice extends Document {
     total: number;
     note?: string;
   }[];
-  subtotal: number;
+  subtotal?: number;
   discount: number;
-  grandTotal: number;
+  grandTotal?: number;
+  amountDue?: number;
   paymentHistory: {
     amount: number;
     date: Date;
     note?: string;
   }[];
-  amountDue: number;
-  accessToken?: string;
+  accessToken: string;
+  terms: string[];
+  note?: string;
   createdAt: Date;
   lastUpdated?: Date;
 }
@@ -59,9 +60,10 @@ const InvoiceSchema: Schema = new Schema({
       note: { type: String },
     },
   ],
-  subtotal: { type: Number, required: true },
+  subtotal: { type: Number },
   discount: { type: Number, default: 0 },
-  grandTotal: { type: Number, required: true },
+  grandTotal: { type: Number },
+  amountDue: { type: Number },
   paymentHistory: [
     {
       amount: { type: Number, required: true },
@@ -69,10 +71,14 @@ const InvoiceSchema: Schema = new Schema({
       note: { type: String },
     },
   ],
-  amountDue: { type: Number, required: true },
-  accessToken: { type: String },
+  accessToken: { type: String, required: true },
+  terms: [{ type: String }],
   createdAt: { type: Date, default: Date.now },
   lastUpdated: { type: Date },
 });
+
+InvoiceSchema.index({ invoiceId: 1 });
+InvoiceSchema.index({ projectId: 1 });
+InvoiceSchema.index({ quotationNumber: 1 });
 
 export default mongoose.models.Invoice || mongoose.model<IInvoice>("Invoice", InvoiceSchema);

@@ -22,9 +22,12 @@ export interface Quotation {
   createdAt: string | Date;
   lastUpdated?: string | Date;
   isAccepted: "pending" | "accepted" | "rejected";
+  updateHistory?: {
+    updatedAt: string | Date;
+    updatedBy: string;
+    changes: string[];
+  }[];
 }
-
-
 
 export interface Project {
   projectId: string;
@@ -48,6 +51,7 @@ export interface Project {
   subtotal?: number;
   discount: number;
   grandTotal?: number;
+  amountDue?: number;
   paymentHistory: {
     amount: number;
     date: string | Date;
@@ -58,6 +62,12 @@ export interface Project {
   note?: string;
   createdAt?: string | Date;
   lastUpdated?: string | Date;
+  status: "ongoing" | "completed";
+  updateHistory?: {
+    updatedAt: string | Date;
+    updatedBy: string;
+    changes: string[];
+  }[];
 }
 
 export interface Invoice {
@@ -82,8 +92,6 @@ export interface Invoice {
   }[];
   subtotal: number;
   discount: number;
-  terms: string[];
-  note?: string;
   grandTotal: number;
   paymentHistory: {
     amount: number;
@@ -93,6 +101,8 @@ export interface Invoice {
   amountDue: number;
   accessToken?: string;
   createdAt: string | Date;
+  terms: string[];
+  note?: string;
   lastUpdated?: string | Date;
   totalPayments?: number;
 }
@@ -112,13 +122,12 @@ export interface PortfolioInput {
   image?: File;
 }
 
-
 export interface GeneralInfo {
   _id?: string;
   logoUrl: string;
   publicId?: string;
   siteName: string;
-  gstNumber?: string; // Optional to match form behavior
+  gstNumber?: string;
   gstPercent: number;
   termsAndConditions: string[];
   mobileNumber1: string;
@@ -127,18 +136,16 @@ export interface GeneralInfo {
   lastUpdated?: string;
 }
 
-
-
 export interface AuditLog {
   _id?: string;
   action: string;
   userId: string;
-  details: Record<string, unknown>; // Changed from any
+  details: Record<string, unknown>;
   createdAt: string;
 }
 
 export interface ApiError {
   error: string;
-  details?: { message: string }[]; // Changed from any
+  details?: { message: string }[];
   code?: string;
 }
