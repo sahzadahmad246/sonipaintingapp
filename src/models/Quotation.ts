@@ -27,6 +27,11 @@ export interface IQuotation extends Document {
     updatedBy: string;
     changes: string[];
   }[];
+  siteImages?: {
+    url: string;
+    publicId: string;
+    description?: string;
+  }[];
 }
 
 const QuotationSchema: Schema = new Schema({
@@ -62,6 +67,13 @@ const QuotationSchema: Schema = new Schema({
       updatedAt: { type: Date, required: true },
       updatedBy: { type: String, required: true },
       changes: [{ type: String, required: true }],
+    },
+  ],
+  siteImages: [
+    {
+      url: { type: String, required: true },
+      publicId: { type: String, required: true },
+      description: { type: String },
     },
   ],
 });

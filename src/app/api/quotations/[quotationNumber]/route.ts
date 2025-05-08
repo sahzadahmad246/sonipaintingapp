@@ -16,31 +16,13 @@ import mongoose from "mongoose";
 import cloudinary from "@/lib/cloudinary";
 import { randomBytes } from "crypto";
 
-export async function GET(
-  request: Request,
-  context: { params: Promise<{ quotationNumber: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    if (!session.user.id) {
-      return NextResponse.json({ error: "User ID not found in session" }, { status: 401 });
-    }
+interface CloudinaryUploadResult {
+  secure_url: string;
+  public_id: string;
+}
 
-    const { quotationNumber } = await context.params;
-    await dbConnect();
-
-    const quotation = await Quotation.findOne({ quotationNumber, createdBy: session.user.id });
-    if (!quotation) {
-      return NextResponse.json({ error: "Quotation not found" }, { status: 404 });
-    }
-
-    return NextResponse.json(quotation);
-  } catch (error: unknown) {
-    return handleError(error, "Failed to fetch quotation");
-  }
+interface UpdateQuotationData extends Partial<IQuotation> {
+  existingImages?: { url: string; publicId: string; description?: string }[];
 }
 
 export async function PUT(
@@ -55,11 +37,120 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     if (!authSession.user.id) {
-      return NextResponse.json({ error: "User ID not found in session" }, { status: 401 });
+      return NextResponse.json(
+        { error: "User ID not found in session" },
+        { status: 401 }
+      );
     }
 
     const { quotationNumber } = await context.params;
-    const data = sanitizeInput(await request.json());
+    const formData = await request.formData();
+
+    const sanitizeToString = (
+      value: FormDataEntryValue | null
+    ): string | undefined => {
+      if (value == null || value instanceof File) return undefined;
+      const sanitized = sanitizeInput(value);
+      return typeof sanitized === "string" ? sanitized : undefined;
+    };
+
+    const data: UpdateQuotationData = {
+      clientName: sanitizeToString(formData.get("clientName")),
+      clientAddress: sanitizeToString(formData.get("clientAddress")),
+      clientNumber: sanitizeToString(formData.get("clientNumber")),
+      date: sanitizeToString(formData.get("date"))
+        ? new Date(sanitizeToString(formData.get("date"))!)
+        : undefined,
+      discount: formData.get("discount")
+        ? Number(formData.get("discount")) || 0
+        : undefined,
+      note: sanitizeToString(formData.get("note")),
+      subtotal: formData.get("subtotal")
+        ? Number(formData.get("subtotal")) || 0
+        : undefined,
+      grandTotal: formData.get("grandTotal")
+        ? Number(formData.get("grandTotal")) || 0
+        : undefined,
+      isAccepted: sanitizeToString(formData.get("isAccepted")) as
+        | "pending"
+        | "accepted"
+        | "rejected"
+        | undefined,
+    };
+
+    try {
+      data.items = formData.get("items")
+        ? JSON.parse(sanitizeToString(formData.get("items")) ?? "[]")
+        : undefined;
+      data.existingImages = formData.get("existingImages")
+        ? JSON.parse(sanitizeToString(formData.get("existingImages")) ?? "[]")
+        : [];
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid JSON in items or existingImages" },
+        { status: 400 }
+      );
+    }
+
+    data.terms = [];
+    for (const [key, value] of formData.entries()) {
+      if (key.startsWith("terms[")) {
+        const sanitizedTerm = sanitizeToString(value);
+        if (sanitizedTerm) {
+          data.terms.push(sanitizedTerm);
+        }
+      }
+    }
+    if (data.terms.length === 0) {
+      data.terms = undefined;
+    }
+
+    const siteImages: {
+      url: string;
+      publicId: string;
+      description?: string;
+    }[] = data.existingImages || [];
+    for (const [key, value] of formData.entries()) {
+      if (key.startsWith("siteImages[")) {
+        const file = value as File;
+        if (file && file.size > 0) {
+          const bytes = await file.arrayBuffer();
+          const buffer = Buffer.from(bytes);
+
+          try {
+            const result = await new Promise<CloudinaryUploadResult>(
+              (resolve, reject) => {
+                const uploadStream = cloudinary.uploader.upload_stream(
+                  { folder: "quotations" },
+                  (error, result) => {
+                    if (error) reject(error);
+                    else resolve(result as CloudinaryUploadResult);
+                  }
+                );
+                uploadStream.end(buffer);
+              }
+            );
+
+            const descriptionKey = key
+              .replace("siteImages[", "siteImages[")
+              .replace("]", ".description]");
+            const description = sanitizeToString(formData.get(descriptionKey));
+
+            siteImages.push({
+              url: result.secure_url,
+              publicId: result.public_id,
+              description,
+            });
+          } catch (uploadError: unknown) {
+            throw new Error(
+              `Failed to upload image: ${(uploadError as Error).message}`
+            );
+          }
+        }
+      }
+    }
+    data.siteImages = siteImages.length > 0 ? siteImages : undefined;
+
     const parsed = updateQuotationSchema.safeParse(data);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.errors }, { status: 400 });
@@ -67,16 +158,21 @@ export async function PUT(
 
     await dbConnect();
 
-    const existingQuotation = await Quotation.findOne({ quotationNumber, createdBy: authSession.user.id }).session(session);
+    const existingQuotation = await Quotation.findOne({
+      quotationNumber,
+      createdBy: authSession.user.id,
+    }).session(session);
     if (!existingQuotation) {
-      return NextResponse.json({ error: "Quotation not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Quotation not found" },
+        { status: 404 }
+      );
     }
 
     const updateData: Partial<IQuotation> = {};
     let isStatusUpdate = false;
     const changedFields: string[] = [];
 
-    // Helper function to format item details
     const formatItem = (item: IQuotation["items"][number]): string => {
       const parts: string[] = [`${item.description}`];
       if (item.area != null) parts.push(`area ${item.area} m`);
@@ -86,58 +182,80 @@ export async function PUT(
       return parts.join(", ");
     };
 
-    // Detect changes
+    const formatImage = (img: {
+      url: string;
+      publicId: string;
+      description?: string;
+    }): string => {
+      const parts: string[] = [`url: ${img.url}, publicId: ${img.publicId}`];
+      if (img.description) parts.push(`description: ${img.description}`);
+      return parts.join(", ");
+    };
+
     if (parsed.data) {
       if (
         parsed.data.clientName !== undefined &&
         parsed.data.clientName !== existingQuotation.clientName
       ) {
         updateData.clientName = parsed.data.clientName;
-        changedFields.push(`Client name changed from "${existingQuotation.clientName}" to "${parsed.data.clientName}"`);
+        changedFields.push(
+          `Client name changed from "${existingQuotation.clientName}" to "${parsed.data.clientName}"`
+        );
       }
       if (
         parsed.data.clientAddress !== undefined &&
         parsed.data.clientAddress !== existingQuotation.clientAddress
       ) {
         updateData.clientAddress = parsed.data.clientAddress;
-        changedFields.push(`Client address changed from "${existingQuotation.clientAddress}" to "${parsed.data.clientAddress}"`);
+        changedFields.push(
+          `Client address changed from "${existingQuotation.clientAddress}" to "${parsed.data.clientAddress}"`
+        );
       }
       if (
         parsed.data.clientNumber !== undefined &&
         parsed.data.clientNumber !== existingQuotation.clientNumber
       ) {
         updateData.clientNumber = parsed.data.clientNumber;
-        changedFields.push(`Client number changed from "${existingQuotation.clientNumber}" to "${parsed.data.clientNumber}"`);
+        changedFields.push(
+          `Client number changed from "${existingQuotation.clientNumber}" to "${parsed.data.clientNumber}"`
+        );
       }
       if (
         parsed.data.date !== undefined &&
-        new Date(parsed.data.date).toISOString() !== new Date(existingQuotation.date).toISOString()
+        new Date(parsed.data.date).toISOString() !==
+          new Date(existingQuotation.date).toISOString()
       ) {
-        updateData.date = new Date(parsed.data.date);
-        changedFields.push(`Date changed from "${existingQuotation.date.toISOString()}" to "${parsed.data.date}"`);
+        updateData.date = parsed.data.date
+          ? new Date(parsed.data.date)
+          : undefined; // Convert to Date
+        changedFields.push(
+          `Date changed from "${existingQuotation.date.toISOString()}" to "${parsed.data.date.toString()}"`
+        );
       }
       if (parsed.data.items !== undefined) {
         const oldItems: IQuotation["items"] = existingQuotation.items || [];
         const newItems: IQuotation["items"] = parsed.data.items || [];
         const addedItems = newItems.filter(
-          (newItem: IQuotation["items"][number]) => !oldItems.some(
-            (oldItem: IQuotation["items"][number]) => 
-              oldItem.description === newItem.description &&
-              (oldItem.area ?? null) === (newItem.area ?? null) &&
-              oldItem.rate === newItem.rate &&
-              (oldItem.total ?? null) === (newItem.total ?? null) &&
-              (oldItem.note ?? '') === (newItem.note ?? '')
-          )
+          (newItem: IQuotation["items"][number]) =>
+            !oldItems.some(
+              (oldItem: IQuotation["items"][number]) =>
+                oldItem.description === newItem.description &&
+                (oldItem.area ?? null) === (newItem.area ?? null) &&
+                oldItem.rate === newItem.rate &&
+                (oldItem.total ?? null) === (newItem.total ?? null) &&
+                (oldItem.note ?? "") === (newItem.note ?? "")
+            )
         );
         const removedItems = oldItems.filter(
-          (oldItem: IQuotation["items"][number]) => !newItems.some(
-            (newItem: IQuotation["items"][number]) => 
-              newItem.description === oldItem.description &&
-              (newItem.area ?? null) === (oldItem.area ?? null) &&
-              newItem.rate === oldItem.rate &&
-              (newItem.total ?? null) === (newItem.total ?? null) &&
-              (newItem.note ?? '') === (newItem.note ?? '')
-          )
+          (oldItem: IQuotation["items"][number]) =>
+            !newItems.some(
+              (newItem: IQuotation["items"][number]) =>
+                newItem.description === oldItem.description &&
+                (newItem.area ?? null) === (oldItem.area ?? null) &&
+                newItem.rate === newItem.rate &&
+                (newItem.total ?? null) === (newItem.total ?? null) &&
+                (newItem.note ?? "") === (newItem.note ?? "")
+            )
         );
         if (addedItems.length > 0 || removedItems.length > 0) {
           updateData.items = newItems;
@@ -154,27 +272,43 @@ export async function PUT(
         parsed.data.subtotal !== existingQuotation.subtotal
       ) {
         updateData.subtotal = parsed.data.subtotal;
-        changedFields.push(`Subtotal changed from ${existingQuotation.subtotal || 0} to ${parsed.data.subtotal}`);
+        changedFields.push(
+          `Subtotal changed from ${existingQuotation.subtotal || 0} to ${
+            parsed.data.subtotal
+          }`
+        );
       }
       if (
         parsed.data.discount !== undefined &&
         parsed.data.discount !== existingQuotation.discount
       ) {
         updateData.discount = parsed.data.discount;
-        changedFields.push(`Discount changed from ${existingQuotation.discount || 0} to ${parsed.data.discount}`);
+        changedFields.push(
+          `Discount changed from ${existingQuotation.discount || 0} to ${
+            parsed.data.discount
+          }`
+        );
       }
       if (
         parsed.data.grandTotal !== undefined &&
         parsed.data.grandTotal !== existingQuotation.grandTotal
       ) {
         updateData.grandTotal = parsed.data.grandTotal;
-        changedFields.push(`Grand total changed from ${existingQuotation.grandTotal || 0} to ${parsed.data.grandTotal}`);
+        changedFields.push(
+          `Grand total changed from ${existingQuotation.grandTotal || 0} to ${
+            parsed.data.grandTotal
+          }`
+        );
       }
       if (parsed.data.terms !== undefined) {
         const oldTerms: string[] = existingQuotation.terms || [];
         const newTerms: string[] = parsed.data.terms || [];
-        const addedTerms = newTerms.filter((term: string) => !oldTerms.includes(term));
-        const removedTerms = oldTerms.filter((term: string) => !newTerms.includes(term));
+        const addedTerms = newTerms.filter(
+          (term: string) => !oldTerms.includes(term)
+        );
+        const removedTerms = oldTerms.filter(
+          (term: string) => !newTerms.includes(term)
+        );
         if (addedTerms.length > 0 || removedTerms.length > 0) {
           updateData.terms = newTerms;
           addedTerms.forEach((term: string) => {
@@ -190,7 +324,11 @@ export async function PUT(
         parsed.data.note !== existingQuotation.note
       ) {
         updateData.note = parsed.data.note;
-        changedFields.push(`Note changed from "${existingQuotation.note || ''}" to "${parsed.data.note}"`);
+        changedFields.push(
+          `Note changed from "${existingQuotation.note || ""}" to "${
+            parsed.data.note
+          }"`
+        );
       }
       if (
         parsed.data.isAccepted !== undefined &&
@@ -198,18 +336,56 @@ export async function PUT(
       ) {
         updateData.isAccepted = parsed.data.isAccepted;
         isStatusUpdate = true;
-        changedFields.push(`Status changed from "${existingQuotation.isAccepted}" to "${parsed.data.isAccepted}"`);
-      } else if (existingQuotation.isAccepted !== "pending" && changedFields.length > 0) {
+        changedFields.push(
+          `Status changed from "${existingQuotation.isAccepted}" to "${parsed.data.isAccepted}"`
+        );
+      } else if (
+        existingQuotation.isAccepted !== "pending" &&
+        changedFields.length > 0
+      ) {
         updateData.isAccepted = "pending";
-        changedFields.push(`Status changed from "${existingQuotation.isAccepted}" to "pending"`);
+        changedFields.push(
+          `Status changed from "${existingQuotation.isAccepted}" to "pending"`
+        );
+      }
+      if (parsed.data.siteImages !== undefined) {
+        const oldImages: {
+          url: string;
+          publicId: string;
+          description?: string;
+        }[] = existingQuotation.siteImages || [];
+        const newImages: {
+          url: string;
+          publicId: string;
+          description?: string;
+        }[] = parsed.data.siteImages || [];
+        const addedImages = newImages.filter(
+          (newImg) =>
+            !oldImages.some((oldImg) => oldImg.publicId === newImg.publicId)
+        );
+        const removedImages = oldImages.filter(
+          () =>
+            !newImages.some((newImg) => newImg.publicId === newImg.publicId)
+        );
+        if (addedImages.length > 0 || removedImages.length > 0) {
+          updateData.siteImages = newImages;
+          addedImages.forEach((img) => {
+            changedFields.push(`Image added: ${formatImage(img)}`);
+          });
+          removedImages.forEach((img) => {
+            changedFields.push(`Image removed: ${formatImage(img)}`);
+            cloudinary.uploader.destroy(img.publicId).catch((err) => {
+              console.error(
+                `Failed to delete image ${img.publicId} from Cloudinary:`,
+                err
+              );
+            });
+          });
+        }
       }
     }
     updateData.lastUpdated = new Date();
 
-    // Log changed fields for debugging
-    console.log("Changed fields:", changedFields);
-
-    // Only add to updateHistory if there are actual changes
     if (changedFields.length > 0) {
       updateData.updateHistory = [
         ...(existingQuotation.updateHistory || []),
@@ -221,9 +397,6 @@ export async function PUT(
       ];
     }
 
-    // Log updateData for debugging
-    console.log("Update data:", JSON.stringify(updateData, null, 2));
-
     const updatedQuotation = await Quotation.findOneAndUpdate(
       { quotationNumber, createdBy: authSession.user.id },
       { $set: updateData },
@@ -231,12 +404,18 @@ export async function PUT(
     );
 
     if (!updatedQuotation) {
-      return NextResponse.json({ error: "Quotation not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Quotation not found" },
+        { status: 404 }
+      );
     }
 
-    // Update Project and Invoice if quotation is accepted
+    // Update Project and Invoice if quotation is accepted (excluding siteImages)
     if (parsed.data?.isAccepted === "accepted") {
-      const existingProject = await Project.findOne({ quotationNumber, createdBy: authSession.user.id }).session(session);
+      const existingProject = await Project.findOne({
+        quotationNumber,
+        createdBy: authSession.user.id,
+      }).session(session);
       if (existingProject) {
         const projectUpdate: Partial<IProject> = {
           clientName: updatedQuotation.clientName,
@@ -257,7 +436,20 @@ export async function PUT(
             {
               updatedAt: new Date(),
               updatedBy: authSession.user.id,
-              changes: ["clientName", "clientAddress", "clientNumber", "date", "items", "subtotal", "discount", "grandTotal", "amountDue", "terms", "note", "status"],
+              changes: [
+                "clientName",
+                "clientAddress",
+                "clientNumber",
+                "date",
+                "items",
+                "subtotal",
+                "discount",
+                "grandTotal",
+                "amountDue",
+                "terms",
+                "note",
+                "status",
+              ],
             },
           ],
         };
@@ -267,16 +459,23 @@ export async function PUT(
           { new: true, session }
         );
         if (!updatedProject) {
-          throw new Error(`Failed to update project for quotation ${quotationNumber}`);
+          throw new Error(
+            `Failed to update project for quotation ${quotationNumber}`
+          );
         }
         console.log(`Project updated for quotation ${quotationNumber}`);
 
-        const invoice = await Invoice.findOne({ quotationNumber, projectId: existingProject.projectId }).session(session);
+        const invoice = await Invoice.findOne({
+          quotationNumber,
+          projectId: existingProject.projectId,
+        }).session(session);
         if (invoice) {
-          const totalPayments = existingProject.paymentHistory?.reduce(
-            (sum: number, payment: { amount: number }) => sum + payment.amount,
-            0
-          ) || 0;
+          const totalPayments =
+            existingProject.paymentHistory?.reduce(
+              (sum: number, payment: { amount: number }) =>
+                sum + payment.amount,
+              0
+            ) || 0;
           const invoiceUpdate: Partial<IInvoice> = {
             clientName: updatedQuotation.clientName,
             clientAddress: updatedQuotation.clientAddress,
@@ -289,6 +488,7 @@ export async function PUT(
             amountDue: (updatedQuotation.grandTotal || 0) - totalPayments,
             lastUpdated: new Date(),
             terms: updatedQuotation.terms,
+            note: updatedQuotation.note,
           };
           const updatedInvoice = await Invoice.findOneAndUpdate(
             { quotationNumber, projectId: existingProject.projectId },
@@ -296,7 +496,9 @@ export async function PUT(
             { new: true, session }
           );
           if (!updatedInvoice) {
-            throw new Error(`Failed to update invoice for quotation ${quotationNumber}`);
+            throw new Error(
+              `Failed to update invoice for quotation ${quotationNumber}`
+            );
           }
           console.log(`Invoice updated for quotation ${quotationNumber}`);
         }
@@ -322,17 +524,23 @@ export async function PUT(
           createdAt: new Date(),
           createdBy: authSession.user.id,
           status: "ongoing",
-          updateHistory: [{
-            updatedAt: new Date(),
-            updatedBy: authSession.user.id,
-            changes: ["Project created"],
-          }],
+          updateHistory: [
+            {
+              updatedAt: new Date(),
+              updatedBy: authSession.user.id,
+              changes: ["Project created"],
+            },
+          ],
         };
         const newProject = await Project.create([projectData], { session });
         if (!newProject || newProject.length === 0) {
-          throw new Error(`Failed to create project for quotation ${quotationNumber}`);
+          throw new Error(
+            `Failed to create project for quotation ${quotationNumber}`
+          );
         }
-        console.log(`Project ${projectId} created for quotation ${quotationNumber}`);
+        console.log(
+          `Project ${projectId} created for quotation ${quotationNumber}`
+        );
 
         const invoiceId = await generateInvoiceId();
         const invoiceData: Partial<IInvoice> = {
@@ -353,22 +561,31 @@ export async function PUT(
           accessToken: randomBytes(16).toString("hex"),
           createdAt: new Date(),
           terms: updatedQuotation.terms,
+          note: updatedQuotation.note,
         };
         const newInvoice = await Invoice.create([invoiceData], { session });
         if (!newInvoice || newInvoice.length === 0) {
-          throw new Error(`Failed to create invoice for quotation ${quotationNumber}`);
+          throw new Error(
+            `Failed to create invoice for quotation ${quotationNumber}`
+          );
         }
-        console.log(`Invoice ${invoiceId} created for quotation ${quotationNumber}`);
+        console.log(
+          `Invoice ${invoiceId} created for quotation ${quotationNumber}`
+        );
       }
     }
 
     await AuditLog.create(
-      [{
-        action: isStatusUpdate ? "update_quotation_status" : "update_quotation",
-        userId: authSession.user.id,
-        details: { quotationNumber, changes: changedFields },
-        createdAt: new Date(),
-      }],
+      [
+        {
+          action: isStatusUpdate
+            ? "update_quotation_status"
+            : "update_quotation",
+          userId: authSession.user.id,
+          details: { quotationNumber, changes: changedFields },
+          createdAt: new Date(),
+        },
+      ],
       { session }
     );
 
@@ -378,19 +595,36 @@ export async function PUT(
     let whatsappMessage: string;
 
     if (isStatusUpdate) {
-      const statusText = updatedQuotation.isAccepted === "accepted" ? "accepted" : "rejected";
+      const statusText =
+        updatedQuotation.isAccepted === "accepted" ? "accepted" : "rejected";
       whatsappMessage = `Dear ${updatedQuotation.clientName}, you have ${statusText} Quotation #${quotationNumber}. Thank you! View details: ${quotationUrl}`;
     } else {
       const itemDetails = updatedQuotation.items
         .map((item: IQuotation["items"][number], index: number) => {
           const area = item.area ? `Area: ${item.area} sq.ft` : "";
           const rate = item.rate ? `Rate: ₹${item.rate.toFixed(2)}` : "";
-          const total = item.total ? `Total: ₹${item.total.toFixed(2)}` : `Total: ₹${item.rate.toFixed(2)}`;
-          return `${index + 1}. ${item.description}${area ? `, ${area}` : ""}${rate ? `, ${rate}` : ""}, ${total}`;
+          const total = item.total
+            ? `Total: ₹${item.total.toFixed(2)}`
+            : `Total: ₹${item.rate.toFixed(2)}`;
+          return `${index + 1}. ${item.description}${area ? `, ${area}` : ""}${
+            rate ? `, ${rate}` : ""
+          }, ${total}`;
         })
         .join("; ");
-      const discountText = updatedQuotation.discount > 0 ? `, Discount: ₹${updatedQuotation.discount.toFixed(2)}` : "";
-      whatsappMessage = `Dear ${updatedQuotation.clientName}, your Quotation #${quotationNumber} has been updated. Items: ${itemDetails}. Subtotal: ₹${updatedQuotation.subtotal?.toFixed(2) || "0.00"}${discountText}, Grand Total: ₹${updatedQuotation.grandTotal?.toFixed(2) || "0.00"}. You can now accept or reject it again. View details: ${quotationUrl}`;
+      const discountText =
+        updatedQuotation.discount > 0
+          ? `, Discount: ₹${updatedQuotation.discount.toFixed(2)}`
+          : "";
+      const imagesText = updatedQuotation.siteImages?.length
+        ? `, Images: ${updatedQuotation.siteImages.length} attached`
+        : "";
+      whatsappMessage = `Dear ${
+        updatedQuotation.clientName
+      }, your Quotation #${quotationNumber} has been updated. Items: ${itemDetails}. Subtotal: ₹${
+        updatedQuotation.subtotal?.toFixed(2) || "0.00"
+      }${discountText}${imagesText}, Grand Total: ₹${
+        updatedQuotation.grandTotal?.toFixed(2) || "0.00"
+      }. You can now accept or reject it again. View details: ${quotationUrl}`;
     }
 
     try {
@@ -398,9 +632,14 @@ export async function PUT(
         to: updatedQuotation.clientNumber,
         message: whatsappMessage,
       });
-      console.log(`WhatsApp notification sent for quotation ${quotationNumber}`);
+      console.log(
+        `WhatsApp notification sent for quotation ${quotationNumber}`
+      );
     } catch (error: unknown) {
-      console.error(`Failed to send WhatsApp notification for quotation ${quotationNumber}:`, error);
+      console.error(
+        `Failed to send WhatsApp notification for quotation ${quotationNumber}:`,
+        error
+      );
       return NextResponse.json({
         quotation: updatedQuotation,
         warning: "Quotation updated, but failed to send notification",
@@ -417,6 +656,42 @@ export async function PUT(
   }
 }
 
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ quotationNumber: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== "admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!session.user.id) {
+      return NextResponse.json(
+        { error: "User ID not found in session" },
+        { status: 401 }
+      );
+    }
+
+    const { quotationNumber } = await context.params;
+    await dbConnect();
+
+    const quotation = await Quotation.findOne({
+      quotationNumber,
+      createdBy: session.user.id,
+    });
+    if (!quotation) {
+      return NextResponse.json(
+        { error: "Quotation not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(quotation);
+  } catch (error: unknown) {
+    return handleError(error, "Failed to fetch quotation");
+  }
+}
+
 export async function DELETE(
   request: Request,
   context: { params: Promise<{ quotationNumber: string }> }
@@ -429,7 +704,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     if (!authSession.user.id) {
-      return NextResponse.json({ error: "User ID not found in session" }, { status: 401 });
+      return NextResponse.json(
+        { error: "User ID not found in session" },
+        { status: 401 }
+      );
     }
 
     const { quotationNumber } = await context.params;
@@ -440,29 +718,54 @@ export async function DELETE(
     );
 
     if (!quotation) {
-      return NextResponse.json({ error: "Quotation not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Quotation not found" },
+        { status: 404 }
+      );
     }
 
-    const project = await Project.findOneAndDelete({ quotationNumber, createdBy: authSession.user.id }, { session });
+    // Delete siteImages from Cloudinary
+    if (quotation.siteImages && quotation.siteImages.length > 0) {
+      for (const image of quotation.siteImages) {
+        await cloudinary.uploader.destroy(image.publicId).catch((err) => {
+          console.error(
+            `Failed to delete image ${image.publicId} from Cloudinary:`,
+            err
+          );
+        });
+      }
+    }
+
+    const project = await Project.findOneAndDelete(
+      { quotationNumber, createdBy: authSession.user.id },
+      { session }
+    );
     if (project) {
       for (const image of project.siteImages) {
         await cloudinary.uploader.destroy(image.publicId);
       }
-      await Invoice.findOneAndDelete({ projectId: project.projectId, quotationNumber }, { session });
+      await Invoice.findOneAndDelete(
+        { projectId: project.projectId, quotationNumber },
+        { session }
+      );
     }
 
     await AuditLog.create(
-      [{
-        action: "delete_quotation",
-        userId: authSession.user.id,
-        details: { quotationNumber },
-        createdAt: new Date(),
-      }],
+      [
+        {
+          action: "delete_quotation",
+          userId: authSession.user.id,
+          details: { quotationNumber },
+          createdAt: new Date(),
+        },
+      ],
       { session }
     );
 
     await session.commitTransaction();
-    return NextResponse.json({ message: "Quotation, project, and invoice deleted" });
+    return NextResponse.json({
+      message: "Quotation, project, and invoice deleted",
+    });
   } catch (error: unknown) {
     await session.abortTransaction();
     console.error("DELETE /api/quotations/[quotationNumber] error:", error);

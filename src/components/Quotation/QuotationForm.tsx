@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Plus, Trash2, Save, FileText } from "lucide-react";
+import { Plus, Trash2, Save, FileText, Image as ImageIcon } from "lucide-react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import Image from "next/image"; // Added import
 import { apiFetch } from "@/app/lib/api";
 import type { Quotation, ApiError } from "@/app/types";
 
@@ -48,6 +49,12 @@ interface FormData {
   terms: string[];
   subtotal: number;
   grandTotal: number;
+  siteImages?: {
+    file?: File;
+    url?: string;
+    publicId?: string;
+    description?: string;
+  }[];
 }
 
 export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
@@ -68,74 +75,89 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
       clientAddress: "",
       clientNumber: "",
       date: new Date().toISOString().split("T")[0],
-      items: [{ description: "", area: undefined, rate: 0, total: undefined, note: "" }],
+      items: [
+        {
+          description: "",
+          area: undefined,
+          rate: 0,
+          total: undefined,
+          note: "",
+        },
+      ],
       discount: 0,
       note: "",
       terms: [],
       subtotal: 0,
       grandTotal: 0,
+      siteImages: [],
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const {
+    fields: itemFields,
+    append: appendItem,
+    remove: removeItem,
+  } = useFieldArray({
     control,
     name: "items",
   });
 
+  const {
+    fields: imageFields,
+    append: appendImage,
+    remove: removeImage,
+  } = useFieldArray({
+    control,
+    name: "siteImages",
+  });
+
   const [loading, setLoading] = useState(isEditMode);
+  const [failedImages, setFailedImages] = useState<number[]>([]); // Added state for failed images
 
   // Watch form fields for real-time updates
   const items = watch("items");
   const discount = watch("discount");
+  const siteImages = watch("siteImages");
 
-  // Create a serialized version of items to detect deep changes
-  const itemsSerialized = useMemo(
-    () =>
-      JSON.stringify(
-        items.map((item) => ({
-          area: item.area,
-          rate: item.rate,
-          total: item.total,
-        }))
-      ),
-    [items]
-  );
+  // Fix: Use deep dependency for items to trigger useEffect on any change
+  const itemsDeps = useMemo(() => JSON.stringify(items), [items]);
 
   // Auto-calculate totals whenever items or discount change
   useEffect(() => {
-    // Update each item's total
     items.forEach((item, index) => {
       const area = item.area;
       const rate = item.rate;
-      // Auto-calculate total only if both area and rate are non-zero numbers
       if (area != null && rate != null && area > 0 && rate > 0) {
         const total = area * rate;
         setValue(`items.${index}.total`, total, { shouldValidate: true });
       } else {
-        // If area or rate is zero or undefined, retain existing total (or undefined)
         setValue(`items.${index}.total`, item.total, { shouldValidate: true });
       }
     });
 
-    // Calculate subtotal and grandTotal
     const subtotal = items.reduce((sum: number, item) => {
-      const total = item.total ?? (item.area && item.rate && item.area > 0 && item.rate > 0 ? item.area * item.rate : 0);
+      const total =
+        item.total ??
+        (item.area && item.rate && item.area > 0 && item.rate > 0
+          ? item.area * item.rate
+          : 0);
       return sum + (total || 0);
     }, 0);
 
     const grandTotal = subtotal - (discount || 0);
 
-    // Update form state
     setValue("subtotal", subtotal, { shouldValidate: true });
     setValue("grandTotal", grandTotal, { shouldValidate: true });
-  }, [itemsSerialized, discount, setValue, items]);
+  }, [itemsDeps, discount, setValue, items]);
 
   // Fetch quotation data in edit mode
   useEffect(() => {
     if (isEditMode && effectiveQuotationNumber) {
       const fetchQuotation = async () => {
         try {
-          const data = await apiFetch<Quotation>(`/quotations/${effectiveQuotationNumber}`);
+          const data = await apiFetch<Quotation>(
+            `/quotations/${effectiveQuotationNumber}`
+          );
           reset({
             clientName: data.clientName,
             clientAddress: data.clientAddress,
@@ -153,6 +175,12 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
             terms: data.terms ?? [],
             subtotal: data.subtotal ?? 0,
             grandTotal: data.grandTotal ?? 0,
+            siteImages:
+              data.siteImages?.map((img) => ({
+                url: img.url,
+                publicId: img.publicId,
+                description: img.description ?? "",
+              })) ?? [],
           });
         } catch (error: unknown) {
           const apiError = error as ApiError;
@@ -166,26 +194,74 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
   }, [isEditMode, effectiveQuotationNumber, reset]);
 
   const onSubmit = async (data: FormData) => {
-    const payload = {
-      ...data,
-      date: new Date(data.date),
-      terms: data.terms?.filter((term) => term.trim()) || [],
-    };
-
     try {
-      const url = isEditMode ? `/quotations/${effectiveQuotationNumber}` : "/quotations";
+      const formData = new FormData();
+      formData.append("clientName", data.clientName);
+      formData.append("clientAddress", data.clientAddress);
+      formData.append("clientNumber", data.clientNumber);
+      formData.append("date", data.date);
+      formData.append("items", JSON.stringify(data.items));
+      formData.append("discount", data.discount.toString());
+      formData.append("note", data.note || "");
+      data.terms?.forEach((term, index) => {
+        if (term.trim()) formData.append(`terms[${index}]`, term);
+      });
+      formData.append("subtotal", data.subtotal.toString());
+      formData.append("grandTotal", data.grandTotal.toString());
+
+      // Append only valid images
+      (data.siteImages || []).forEach((img, index) => {
+        if (img.file) {
+          formData.append(`siteImages[${index}]`, img.file);
+          if (img.description) {
+            formData.append(
+              `siteImages[${index}].description`,
+              img.description
+            );
+          }
+        }
+      });
+
+      // Append existing images
+      const existingImages = (data.siteImages || [])
+        .filter((img) => img.url && img.publicId)
+        .map((img) => ({
+          url: img.url!,
+          publicId: img.publicId!,
+          description: img.description,
+        }));
+      formData.append("existingImages", JSON.stringify(existingImages));
+
+      const url = isEditMode
+        ? `/quotations/${effectiveQuotationNumber}`
+        : "/quotations";
       const method = isEditMode ? "PUT" : "POST";
       await apiFetch<Quotation>(url, {
         method,
-        body: JSON.stringify(payload),
+        body: formData,
       });
-      toast.success(isEditMode ? "Quotation updated successfully!" : "Quotation created successfully!");
-      router.push(isEditMode ? `/dashboard/quotations/${effectiveQuotationNumber}` : "/dashboard/quotations");
+      toast.success(
+        isEditMode
+          ? "Quotation updated successfully!"
+          : "Quotation created successfully!"
+      );
+      router.push(
+        isEditMode
+          ? `/dashboard/quotations/${effectiveQuotationNumber}`
+          : "/dashboard/quotations"
+      );
     } catch (error: unknown) {
       const apiError = error as ApiError;
-      toast.error(apiError.error || (isEditMode ? "Failed to update quotation" : "Failed to create quotation"));
+      toast.error(
+        apiError.error ||
+          (isEditMode
+            ? "Failed to update quotation"
+            : "Failed to create quotation")
+      );
       if (apiError.details) {
-        apiError.details.forEach((err: { message: string }) => toast.error(err.message));
+        apiError.details.forEach((err: { message: string }) =>
+          toast.error(err.message)
+        );
       }
     }
   };
@@ -199,10 +275,14 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
       <CardHeader>
         <CardTitle className="flex items-center">
           <FileText className="mr-2 h-6 w-6 text-primary" />
-          {isEditMode ? `Edit Quotation #${effectiveQuotationNumber}` : "Create New Quotation"}
+          {isEditMode
+            ? `Edit Quotation #${effectiveQuotationNumber}`
+            : "Create New Quotation"}
         </CardTitle>
         <CardDescription>
-          {isEditMode ? "Update the quotation details." : "Fill in the details to create a new quotation."}
+          {isEditMode
+            ? "Update the quotation details."
+            : "Fill in the details to create a new quotation."}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -215,9 +295,19 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                   control={control}
                   name="clientName"
                   rules={{ required: "Client name is required" }}
-                  render={({ field }) => <Input {...field} id="clientName" placeholder="Enter client name" />}
+                  render={({ field }) => (
+                    <Input
+                      {...field}
+                      id="clientName"
+                      placeholder="Enter client name"
+                    />
+                  )}
                 />
-                {errors.clientName && <p className="text-red-500 text-sm">{errors.clientName.message}</p>}
+                {errors.clientName && (
+                  <p className="text-red-500 text-sm">
+                    {errors.clientName.message}
+                  </p>
+                )}
               </div>
               <div>
                 <Label htmlFor="clientAddress">Client Address</Label>
@@ -226,10 +316,19 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                   name="clientAddress"
                   rules={{ required: "Client address is required" }}
                   render={({ field }) => (
-                    <Textarea {...field} id="clientAddress" placeholder="Enter client address" rows={3} />
+                    <Textarea
+                      {...field}
+                      id="clientAddress"
+                      placeholder="Enter client address"
+                      rows={3}
+                    />
                   )}
                 />
-                {errors.clientAddress && <p className="text-red-500 text-sm">{errors.clientAddress.message}</p>}
+                {errors.clientAddress && (
+                  <p className="text-red-500 text-sm">
+                    {errors.clientAddress.message}
+                  </p>
+                )}
               </div>
             </div>
             <div className="space-y-4">
@@ -240,10 +339,18 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                   name="clientNumber"
                   rules={{ required: "Client number is required" }}
                   render={({ field }) => (
-                    <Input {...field} id="clientNumber" placeholder="Enter client phone number" />
+                    <Input
+                      {...field}
+                      id="clientNumber"
+                      placeholder="Enter client phone number"
+                    />
                   )}
                 />
-                {errors.clientNumber && <p className="text-red-500 text-sm">{errors.clientNumber.message}</p>}
+                {errors.clientNumber && (
+                  <p className="text-red-500 text-sm">
+                    {errors.clientNumber.message}
+                  </p>
+                )}
               </div>
               <div>
                 <Label htmlFor="date">Date</Label>
@@ -252,11 +359,23 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                   name="date"
                   rules={{
                     required: "Date is required",
-                    validate: (value) => !isNaN(Date.parse(value)) || "Invalid date format",
+                    pattern: {
+                      value: /^\d{4}-\d{2}-\d{2}$/,
+                      message: "Date must be in YYYY-MM-DD format",
+                    },
                   }}
-                  render={({ field }) => <Input {...field} id="date" type="date" />}
+                  render={({ field }) => (
+                    <Input
+                      {...field}
+                      id="date"
+                      type="date"
+                      placeholder="YYYY-MM-DD"
+                    />
+                  )}
                 />
-                {errors.date && <p className="text-red-500 text-sm">{errors.date.message}</p>}
+                {errors.date && (
+                  <p className="text-red-500 text-sm">{errors.date.message}</p>
+                )}
               </div>
             </div>
           </div>
@@ -269,7 +388,15 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                   <TooltipTrigger asChild>
                     <Button
                       type="button"
-                      onClick={() => append({ description: "", area: undefined, rate: 0, total: undefined, note: "" })}
+                      onClick={() =>
+                        appendItem({
+                          description: "",
+                          area: undefined,
+                          rate: 0,
+                          total: undefined,
+                          note: "",
+                        })
+                      }
                       size="sm"
                     >
                       <Plus className="h-4 w-4 mr-1" /> Add Item
@@ -281,7 +408,7 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
             </div>
 
             <div className="space-y-4">
-              {fields.map((field, index) => (
+              {itemFields.map((field, index) => (
                 <motion.div
                   key={field.id}
                   initial={{ opacity: 0, y: 10 }}
@@ -298,8 +425,8 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                             type="button"
                             variant="destructive"
                             size="sm"
-                            onClick={() => remove(index)}
-                            disabled={fields.length === 1}
+                            onClick={() => removeItem(index)}
+                            disabled={itemFields.length === 1}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -311,19 +438,27 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
                     <div className="lg:col-span-2">
-                      <Label htmlFor={`items.${index}.description`}>Description</Label>
+                      <Label htmlFor={`items.${index}.description`}>
+                        Description
+                      </Label>
                       <Controller
                         control={control}
                         name={`items.${index}.description`}
                         rules={{ required: "Description is required" }}
-                        render={({ field }) => <Input {...field} placeholder="Item description" />}
+                        render={({ field }) => (
+                          <Input {...field} placeholder="Item description" />
+                        )}
                       />
                       {errors.items?.[index]?.description && (
-                        <p className="text-red-500 text-sm">{errors.items[index]?.description?.message}</p>
+                        <p className="text-red-500 text-sm">
+                          {errors.items[index]?.description?.message}
+                        </p>
                       )}
                     </div>
                     <div>
-                      <Label htmlFor={`items.${index}.area`}>Area (sq.ft)</Label>
+                      <Label htmlFor={`items.${index}.area`}>
+                        Area (sq.ft)
+                      </Label>
                       <Controller
                         control={control}
                         name={`items.${index}.area`}
@@ -332,12 +467,20 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                             type="number"
                             placeholder="Area"
                             value={field.value ?? ""}
-                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                            onChange={(e) =>
+                              field.onChange(
+                                e.target.value
+                                  ? Number(e.target.value)
+                                  : undefined
+                              )
+                            }
                           />
                         )}
                       />
                       {errors.items?.[index]?.area && (
-                        <p className="text-red-500 text-sm">{errors.items[index]?.area?.message}</p>
+                        <p className="text-red-500 text-sm">
+                          {errors.items[index]?.area?.message}
+                        </p>
                       )}
                     </div>
                     <div>
@@ -347,19 +490,26 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                         name={`items.${index}.rate`}
                         rules={{
                           required: "Rate is required",
-                          min: { value: 0, message: "Rate must be non-negative" },
+                          min: {
+                            value: 0,
+                            message: "Rate must be non-negative",
+                          },
                         }}
                         render={({ field }) => (
                           <Input
                             type="number"
                             placeholder="Rate"
                             value={field.value ?? ""}
-                            onChange={(e) => field.onChange(Number(e.target.value))}
+                            onChange={(e) =>
+                              field.onChange(Number(e.target.value))
+                            }
                           />
                         )}
                       />
                       {errors.items?.[index]?.rate && (
-                        <p className="text-red-500 text-sm">{errors.items[index]?.rate?.message}</p>
+                        <p className="text-red-500 text-sm">
+                          {errors.items[index]?.rate?.message}
+                        </p>
                       )}
                     </div>
                     <div>
@@ -369,7 +519,11 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                         name={`items.${index}.total`}
                         rules={{
                           validate: (value) =>
-                            (items[index].area == null || items[index].rate == null || items[index].area === 0 || items[index].rate === 0 || value != null) ||
+                            items[index].area == null ||
+                            items[index].rate == null ||
+                            items[index].area === 0 ||
+                            items[index].rate === 0 ||
+                            value != null ||
                             "Total is required if area or rate is missing or zero",
                         }}
                         render={({ field }) => (
@@ -377,31 +531,149 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                             type="number"
                             placeholder="Auto-calculated or enter total"
                             value={field.value ?? ""}
-                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                            disabled={items[index].area != null && items[index].rate != null && items[index].area > 0 && items[index].rate > 0}
+                            onChange={(e) =>
+                              field.onChange(
+                                e.target.value
+                                  ? Number(e.target.value)
+                                  : undefined
+                              )
+                            }
+                            disabled={
+                              items[index].area != null &&
+                              items[index].rate != null &&
+                              items[index].area > 0 &&
+                              items[index].rate > 0
+                            }
                           />
                         )}
                       />
                       {errors.items?.[index]?.total && (
-                        <p className="text-red-500 text-sm">{errors.items[index]?.total?.message}</p>
+                        <p className="text-red-500 text-sm">
+                          {errors.items[index]?.total?.message}
+                        </p>
                       )}
                     </div>
                   </div>
 
                   <div className="mt-3">
-                    <Label htmlFor={`items.${index}.note`}>Note (Optional)</Label>
+                    <Label htmlFor={`items.${index}.note`}>
+                      Note (Optional)
+                    </Label>
                     <Controller
                       control={control}
                       name={`items.${index}.note`}
                       render={({ field }) => (
-                        <Input {...field} placeholder="Additional notes" value={field.value ?? ""} />
+                        <Input
+                          {...field}
+                          placeholder="Additional notes"
+                          value={field.value ?? ""}
+                        />
                       )}
                     />
                   </div>
                 </motion.div>
               ))}
             </div>
-            {errors.items && <p className="text-red-500 text-sm">{errors.items.message}</p>}
+            {errors.items && (
+              <p className="text-red-500 text-sm">{errors.items.message}</p>
+            )}
+          </div>
+
+          <div className="mt-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium">Site Images</h3>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      onClick={() => appendImage({ description: "" })}
+                      size="sm"
+                    >
+                      <ImageIcon className="h-4 w-4 mr-1" /> Add Image
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Add a new site image</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            <div className="space-y-4">
+              {imageFields.map((field, index) => (
+                <motion.div
+                  key={field.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="p-4 border rounded-md bg-gray-50"
+                >
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="font-medium">Image {index + 1}</h4>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => removeImage(index)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Remove this image</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+
+                  <div>
+                    <Label htmlFor={`siteImages.${index}.file`}>
+                      Upload Image
+                    </Label>
+                    <Controller
+                      control={control}
+                      name={`siteImages.${index}.file`}
+                      render={({ field: { onChange, ref, ...field } }) => (
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={(
+                            e: React.ChangeEvent<HTMLInputElement>
+                          ) => {
+                            const file = e.target.files?.[0];
+                            onChange(file); // Update form state with the selected file
+                          }}
+                          ref={ref} // Pass ref for react-hook-form
+                          {...field} // Spread other props (e.g., name, disabled)
+                          value={undefined} // Explicitly set value to undefined to avoid type error
+                        />
+                      )}
+                    />
+                    {siteImages && siteImages[index] && (
+                      <Image
+                        src={
+                          failedImages.includes(index)
+                            ? "/placeholder-image.jpg"
+                            : siteImages[index].url ||
+                              (siteImages[index].file
+                                ? URL.createObjectURL(siteImages[index].file)
+                                : "/placeholder-image.jpg")
+                        }
+                        alt="Site preview"
+                        width={200}
+                        height={128}
+                        className="mt-2 h-32 w-auto object-cover rounded"
+                        onError={() => {
+                          setFailedImages((prev) => [...prev, index]);
+                          toast.error(`Failed to load image ${index + 1}`);
+                        }}
+                        unoptimized={true}
+                      />
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
@@ -412,7 +684,13 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                   control={control}
                   name="note"
                   render={({ field }) => (
-                    <Textarea {...field} id="note" placeholder="Any additional notes" rows={4} value={field.value ?? ""} />
+                    <Textarea
+                      {...field}
+                      id="note"
+                      placeholder="Any additional notes"
+                      rows={4}
+                      value={field.value ?? ""}
+                    />
                   )}
                 />
               </div>
@@ -446,11 +724,15 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                       placeholder="Enter terms, one per line"
                       rows={6}
                       value={field.value?.join("\n") ?? ""}
-                      onChange={(e) => field.onChange(e.target.value.split("\n"))}
+                      onChange={(e) =>
+                        field.onChange(e.target.value.split("\n"))
+                      }
                     />
                   )}
                 />
-                <p className="text-sm text-gray-500 mt-1">Enter each term on a new line</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Enter each term on a new line
+                </p>
               </div>
             </div>
 
@@ -466,7 +748,9 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                       control={control}
                       name="subtotal"
                       render={({ field }) => (
-                        <span className="font-medium">₹{(field.value ?? 0).toFixed(2)}</span>
+                        <span className="font-medium">
+                          ₹{(field.value ?? 0).toFixed(2)}
+                        </span>
                       )}
                     />
                   </div>
@@ -477,18 +761,29 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                         <Controller
                           control={control}
                           name="discount"
-                          rules={{ min: { value: 0, message: "Discount cannot be negative" } }}
+                          rules={{
+                            min: {
+                              value: 0,
+                              message: "Discount cannot be negative",
+                            },
+                          }}
                           render={({ field }) => (
                             <Input
                               id="discount"
                               type="number"
                               value={field.value ?? ""}
-                              onChange={(e) => field.onChange(Number(e.target.value))}
+                              onChange={(e) =>
+                                field.onChange(Number(e.target.value))
+                              }
                               className="text-right"
                             />
                           )}
                         />
-                        {errors.discount && <p className="text-red-500 text-sm">{errors.discount.message}</p>}
+                        {errors.discount && (
+                          <p className="text-red-500 text-sm">
+                            {errors.discount.message}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -498,7 +793,9 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                       control={control}
                       name="grandTotal"
                       render={({ field }) => (
-                        <span className="text-lg font-bold text-primary">₹{(field.value ?? 0).toFixed(2)}</span>
+                        <span className="text-lg font-bold text-primary">
+                          ₹{(field.value ?? 0).toFixed(2)}
+                        </span>
                       )}
                     />
                   </div>
@@ -509,7 +806,11 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
         </form>
       </CardContent>
       <CardFooter className="flex justify-end">
-        <Button type="submit" onClick={handleSubmit(onSubmit)} disabled={isSubmitting}>
+        <Button
+          type="submit"
+          onClick={handleSubmit(onSubmit)}
+          disabled={isSubmitting}
+        >
           <Save className="mr-2 h-4 w-4" />
           {isSubmitting
             ? isEditMode

@@ -15,6 +15,12 @@ const extraWorkSchema = z.object({
   note: z.string().optional(),
 });
 
+const siteImageSchema = z.object({
+  url: z.string().url("Invalid URL"),
+  publicId: z.string().min(1, "Public ID is required"),
+  description: z.string().optional(),
+});
+
 const paymentHistorySchema = z
   .array(
     z.object({
@@ -32,9 +38,7 @@ const paymentHistorySchema = z
 const updateHistorySchema = z
   .array(
     z.object({
-      updatedAt: z
-        .string()
-        .refine((val) => !isNaN(Date.parse(val)), "Invalid date format"),
+      updatedAt: z.date().or(z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid date format")),
       updatedBy: z.string().min(1, "Updated by is required"),
       changes: z.array(z.string()).min(1, "At least one change is required"),
     })
@@ -48,13 +52,18 @@ const baseQuotationSchema = z.object({
   clientNumber: z
     .string()
     .regex(/^\d{10}$/, "Client number must be a 10-digit number"),
-  date: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid date"),
+  date: z.date({ invalid_type_error: "Date must be a valid Date object" }).refine(
+    (val) => val instanceof Date && !isNaN(val.getTime()),
+    "Invalid date"
+  ),
   items: z.array(itemSchema).min(1, "At least one item is required"),
   subtotal: z.number().min(0).optional(),
   discount: z.number().min(0).default(0),
   grandTotal: z.number().min(0).optional(),
   terms: z.array(z.string()).optional(),
   note: z.string().optional(),
+  siteImages: z.array(siteImageSchema).optional(),
+  existingImages: z.array(siteImageSchema).optional(),
 });
 
 // Quotation schemas
@@ -66,6 +75,7 @@ export const updateQuotationSchema = baseQuotationSchema
     z.object({
       isAccepted: z.enum(["pending", "accepted", "rejected"]).optional(),
       updateHistory: updateHistorySchema,
+      existingImages: z.array(siteImageSchema).optional(),
     })
   )
   .refine(
@@ -91,8 +101,8 @@ export const updateProjectSchema = z.object({
   clientAddress: z.string().min(1, "Client address is required").optional(),
   clientNumber: z.string().min(1, "Client number is required").optional(),
   date: z
-    .string()
-    .refine((val) => !val || !isNaN(Date.parse(val)), "Invalid date format")
+    .date()
+    .or(z.string().refine((val) => !val || !isNaN(Date.parse(val)), "Invalid date format"))
     .optional(),
   items: z
     .array(

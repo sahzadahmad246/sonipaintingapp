@@ -17,6 +17,7 @@ import {
   Tag,
   Edit,
   History,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -24,6 +25,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
+import Image from "next/image"; // Added import
 import { apiFetch } from "@/app/lib/api";
 import type { Quotation, ApiError } from "@/app/types";
 import { generateQuotationPDF } from "@/app/lib/pdf-generator";
@@ -38,6 +40,7 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
   const [loading, setLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [failedImages, setFailedImages] = useState<number[]>([]); // Added state for failed images
 
   const fetchQuotation = useCallback(async () => {
     try {
@@ -329,6 +332,52 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
                 </tfoot>
               </table>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6 overflow-hidden border-0 shadow-md">
+          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+            <CardTitle className="flex items-center text-lg">
+              <ImageIcon className="h-5 w-5 mr-2" /> Site Images
+            </CardTitle>
+            <CardDescription className="text-indigo-100">Images related to the quotation site</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6">
+            {quotation.siteImages?.length ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {quotation.siteImages.map((image, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.3, delay: index * 0.1 }}
+                    className="border rounded-lg overflow-hidden bg-white shadow-sm"
+                  >
+                    <Image
+                      src={failedImages.includes(index) ? "/placeholder-image.jpg" : image.url}
+                      alt={`Site image ${index + 1}`}
+                      width={300}
+                      height={192}
+                      className="w-full h-48 object-cover"
+                      onError={() => {
+                        setFailedImages((prev) => [...prev, index]);
+                        toast.error(`Failed to load image ${index + 1}`);
+                      }}
+                      unoptimized={true} // Optional: Disable Next.js optimization if using Cloudinary
+                    />
+                    <div className="p-4">
+                      {image.description ? (
+                        <p className="text-sm text-gray-700">{image.description}</p>
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">No description provided</p>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500">No site images available.</p>
+            )}
           </CardContent>
         </Card>
 

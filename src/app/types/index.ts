@@ -1,6 +1,6 @@
 // types.ts
 export interface Quotation {
-  _id?: string; // MongoDB document ID
+  _id?: string;
   quotationNumber: string;
   clientName: string;
   clientAddress: string;
@@ -18,14 +18,19 @@ export interface Quotation {
   grandTotal?: number;
   terms: string[];
   note?: string;
-  createdBy: string;
-  createdAt: string | Date;
-  lastUpdated?: string | Date;
+  createdBy: Date;
+  createdAt: Date;
+  lastUpdated?: Date;
   isAccepted: "pending" | "accepted" | "rejected";
   updateHistory?: {
     updatedAt: string | Date;
     updatedBy: string;
     changes: string[];
+  }[];
+  siteImages?: {
+    url: string;
+    publicId: string;
+    description?: string;
   }[];
 }
 
