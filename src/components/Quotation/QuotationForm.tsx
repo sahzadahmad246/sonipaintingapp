@@ -57,6 +57,8 @@ interface FormData {
   }[];
 }
 
+
+
 export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
   const router = useRouter();
   const isEditMode = !!quotationNumber;
@@ -112,7 +114,7 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
   });
 
   const [loading, setLoading] = useState(isEditMode);
-  const [failedImages, setFailedImages] = useState<number[]>([]); // Added state for failed images
+  const [failedImages, setFailedImages] = useState<number[]>([]);
 
   // Watch form fields for real-time updates
   const items = watch("items");
@@ -209,15 +211,12 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
       formData.append("subtotal", data.subtotal.toString());
       formData.append("grandTotal", data.grandTotal.toString());
 
-      // Append only valid images
+      // Append images and their descriptions
       (data.siteImages || []).forEach((img, index) => {
         if (img.file) {
           formData.append(`siteImages[${index}]`, img.file);
           if (img.description) {
-            formData.append(
-              `siteImages[${index}].description`,
-              img.description
-            );
+            formData.append(`siteImages[${index}].description`, img.description);
           }
         }
       });
@@ -626,52 +625,72 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                     </TooltipProvider>
                   </div>
 
-                  <div>
-                    <Label htmlFor={`siteImages.${index}.file`}>
-                      Upload Image
-                    </Label>
-                    <Controller
-                      control={control}
-                      name={`siteImages.${index}.file`}
-                      render={({ field: { onChange, ref, ...field } }) => (
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          onChange={(
-                            e: React.ChangeEvent<HTMLInputElement>
-                          ) => {
-                            const file = e.target.files?.[0];
-                            onChange(file); // Update form state with the selected file
-                          }}
-                          ref={ref} // Pass ref for react-hook-form
-                          {...field} // Spread other props (e.g., name, disabled)
-                          value={undefined} // Explicitly set value to undefined to avoid type error
-                        />
-                      )}
-                    />
-                    {siteImages &&
-                      siteImages[index] &&
-                      (siteImages[index].url || siteImages[index].file) && (
-                        <Image
-                          src={
-                            failedImages.includes(index)
-                              ? "/placeholder-image.jpg"
-                              : siteImages[index].url ||
-                                (siteImages[index].file
-                                  ? URL.createObjectURL(siteImages[index].file)
-                                  : "/placeholder-image.jpg")
-                          }
-                          alt="Site preview"
-                          width={200}
-                          height={128}
-                          className="mt-2 h-32 w-auto object-cover rounded"
-                          onError={() => {
-                            setFailedImages((prev) => [...prev, index]);
-                            toast.error(`Failed to load image ${index + 1}`);
-                          }}
-                          unoptimized={true}
-                        />
-                      )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor={`siteImages.${index}.file`}>
+                        Upload Image
+                      </Label>
+                      <Controller
+                        control={control}
+                        name={`siteImages.${index}.file`}
+                        render={({ field: { onChange, ref, ...field } }) => (
+                          <Input
+                            type="file"
+                            accept="image/*"
+                            onChange={(
+                              e: React.ChangeEvent<HTMLInputElement>
+                            ) => {
+                              const file = e.target.files?.[0];
+                              onChange(file);
+                            }}
+                            ref={ref}
+                            {...field}
+                            value={undefined}
+                          />
+                        )}
+                      />
+                      {siteImages &&
+                        siteImages[index] &&
+                        (siteImages[index].url || siteImages[index].file) && (
+                          <Image
+                            src={
+                              failedImages.includes(index)
+                                ? "/placeholder-image.jpg"
+                                : siteImages[index].url ||
+                                  (siteImages[index].file
+                                    ? URL.createObjectURL(siteImages[index].file)
+                                    : "/placeholder-image.jpg")
+                            }
+                            alt="Site preview"
+                            width={200}
+                            height={128}
+                            className="mt-2 h-32 w-auto object-cover rounded"
+                            onError={() => {
+                              setFailedImages((prev) => [...prev, index]);
+                              toast.error(`Failed to load image ${index + 1}`);
+                            }}
+                            unoptimized={true}
+                          />
+                        )}
+                    </div>
+                    <div>
+                      <Label htmlFor={`siteImages.${index}.description`}>
+                        Description (Optional)
+                      </Label>
+                      <Controller
+                        control={control}
+                        name={`siteImages.${index}.description`}
+                        render={({ field }) => (
+                          <Textarea
+                            {...field}
+                            id={`siteImages.${index}.description`}
+                            placeholder="Enter image description"
+                            rows={4}
+                            value={field.value ?? ""}
+                          />
+                        )}
+                      />
+                    </div>
                   </div>
                 </motion.div>
               ))}

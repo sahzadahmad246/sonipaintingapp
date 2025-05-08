@@ -1,13 +1,12 @@
-"use client";
+"use client"
 
-import { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useCallback } from "react"
+import { motion } from "framer-motion"
 import {
   CheckCircle,
   XCircle,
   Clock,
   ArrowLeft,
-  Printer,
   Download,
   FileText,
   User,
@@ -16,126 +15,161 @@ import {
   Calendar,
   Tag,
   Edit,
-  History,
-  Image as ImageIcon,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import Link from "next/link";
-import Image from "next/image"; // Added import
-import { apiFetch } from "@/app/lib/api";
-import type { Quotation, ApiError } from "@/app/types";
-import { generateQuotationPDF } from "@/app/lib/pdf-generator";
-import { PDFViewer } from "./pdf-viewer";
+  ImageIcon,
+  Clipboard,
+  Share2,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import Link from "next/link"
+import Image from "next/image"
+import { apiFetch } from "@/app/lib/api"
+import type { Quotation, ApiError } from "@/app/types"
+import { generateQuotationPDF } from "@/app/lib/pdf-generator"
+import { PDFViewer } from "./pdf-viewer"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 interface QuotationViewProps {
-  quotationNumber: string;
+  quotationNumber: string
 }
 
 export default function QuotationView({ quotationNumber }: QuotationViewProps) {
-  const [quotation, setQuotation] = useState<Quotation | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [failedImages, setFailedImages] = useState<number[]>([]); // Added state for failed images
+  const [quotation, setQuotation] = useState<Quotation | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+  const [failedImages, setFailedImages] = useState<number[]>([])
 
   const fetchQuotation = useCallback(async () => {
     try {
-      const data = await apiFetch<Quotation>(`/quotations/${quotationNumber}`);
-      setQuotation(data);
+      const data = await apiFetch<Quotation>(`/quotations/${quotationNumber}`)
+      setQuotation(data)
     } catch (error: unknown) {
-      const apiError = error as ApiError;
-      toast.error(apiError.error || "Failed to fetch quotation");
+      const apiError = error as ApiError
+      toast.error(apiError.error || "Failed to fetch quotation")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [quotationNumber]);
+  }, [quotationNumber])
 
   useEffect(() => {
     if (!quotationNumber) {
-      toast.error("Invalid quotation number");
-      setLoading(false);
-      return;
+      toast.error("Invalid quotation number")
+      setLoading(false)
+      return
     }
-    fetchQuotation();
-  }, [quotationNumber, fetchQuotation]);
+    fetchQuotation()
+  }, [quotationNumber, fetchQuotation])
 
   const handleAccept = async () => {
-    if (!quotation) return;
-    setIsUpdating(true);
+    if (!quotation) return
+    setIsUpdating(true)
     try {
+      const formData = new FormData()
+      formData.append("isAccepted", "accepted")
+
       const data = await apiFetch<Quotation>(`/quotations/${quotationNumber}`, {
         method: "PUT",
-        body: JSON.stringify({ isAccepted: "accepted" }),
-      });
-      setQuotation(data);
-      toast.success("Quotation accepted!");
+        body: formData,
+      })
+      setQuotation(data)
+      toast.success("Quotation accepted!")
     } catch (error: unknown) {
-      const apiError = error as ApiError;
-      toast.error(apiError.error || "Failed to accept quotation");
+      const apiError = error as ApiError
+      toast.error(apiError.error || "Failed to accept quotation")
     } finally {
-      setIsUpdating(false);
+      setIsUpdating(false)
     }
-  };
+  }
 
   const handleReject = async () => {
-    if (!quotation) return;
-    setIsUpdating(true);
+    if (!quotation) return
+    setIsUpdating(true)
     try {
+      const formData = new FormData()
+      formData.append("isAccepted", "rejected")
+
       const data = await apiFetch<Quotation>(`/quotations/${quotationNumber}`, {
         method: "PUT",
-        body: JSON.stringify({ isAccepted: "rejected" }),
-      });
-      setQuotation(data);
-      toast.success("Quotation rejected!");
+        body: formData,
+      })
+      setQuotation(data)
+      toast.success("Quotation rejected!")
     } catch (error: unknown) {
-      const apiError = error as ApiError;
-      toast.error(apiError.error || "Failed to reject quotation");
+      const apiError = error as ApiError
+      toast.error(apiError.error || "Failed to reject quotation")
     } finally {
-      setIsUpdating(false);
+      setIsUpdating(false)
     }
-  };
+  }
 
   const getStatusBadge = (status: string | undefined) => {
-    const badgeStatus = status || "pending";
+    const badgeStatus = status || "pending"
     switch (badgeStatus) {
       case "accepted":
         return (
-          <Badge className="bg-green-50 text-green-600 border-green-200 flex items-center">
-            <CheckCircle className="h-3 w-3 mr-1" /> Accepted
+          <Badge className="bg-green-100 text-green-800 border-green-200 flex items-center gap-1">
+            <CheckCircle className="h-3 w-3" /> Accepted
           </Badge>
-        );
+        )
       case "rejected":
         return (
-          <Badge className="bg-red-50 text-red-600 border-red-200 flex items-center">
-            <XCircle className="h-3 w-3 mr-1" /> Rejected
+          <Badge className="bg-red-100 text-red-800 border-red-200 flex items-center gap-1">
+            <XCircle className="h-3 w-3" /> Rejected
           </Badge>
-        );
+        )
       default:
         return (
-          <Badge className="bg-yellow-50 text-yellow-600 border-yellow-200 flex items-center">
-            <Clock className="h-3 w-3 mr-1" /> Pending
+          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 flex items-center gap-1">
+            <Clock className="h-3 w-3" /> Pending
           </Badge>
-        );
+        )
     }
-  };
+  }
 
   const handleGeneratePDF = async () => {
-    if (!quotation) return;
+    if (!quotation) return
     try {
-      setIsUpdating(true);
-      const pdfUrl = await generateQuotationPDF(quotation);
-      setPdfUrl(pdfUrl);
+      setIsUpdating(true)
+      const pdfUrl = await generateQuotationPDF(quotation)
+      setPdfUrl(pdfUrl)
     } catch (error) {
-      console.error("Error generating PDF:", error);
-      toast.error("Failed to generate PDF");
+      console.error("Error generating PDF:", error)
+      toast.error("Failed to generate PDF")
     } finally {
-      setIsUpdating(false);
+      setIsUpdating(false)
     }
-  };
+  }
+
+  const handleCopyLink = () => {
+    const url = window.location.href
+    navigator.clipboard.writeText(url)
+    toast.success("Link copied to clipboard!")
+  }
+
+  const handlePrint = () => {
+    if (!quotation) return
+    handleGeneratePDF().then(() => {
+      setTimeout(() => {
+        const iframe = document.getElementById("pdf-iframe") as HTMLIFrameElement
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.focus()
+          iframe.contentWindow.print()
+        }
+      }, 1000)
+    })
+  }
 
   if (loading) {
     return (
@@ -154,26 +188,12 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
             <Skeleton className="h-4 w-3/4" />
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-8 w-64 mb-2" />
-            <Skeleton className="h-4 w-40" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-32 w-full" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-8 w-64 mb-2" />
-            <Skeleton className="h-4 w-40" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-32 w-full" />
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Skeleton className="h-64 w-full rounded-lg" />
+          <Skeleton className="h-64 w-full rounded-lg" />
+        </div>
       </div>
-    );
+    )
   }
 
   if (!quotation) {
@@ -192,28 +212,63 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
           </CardContent>
         </Card>
       </div>
-    );
+    )
   }
 
   return (
-    <div className="container mx-auto py-10 px-4">
+    <div className="container mx-auto py-6 px-4">
+      <div className="mb-6">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink href="/dashboard/quotations">Quotations</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink>#{quotation.quotationNumber}</BreadcrumbLink>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </div>
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
         <div className="flex items-center">
-          <Button variant="outline" size="sm" asChild className="mr-4">
-            <Link href="/dashboard">
-              <ArrowLeft className="h-4 w-4 mr-1" /> Back
-            </Link>
-          </Button>
           <h1 className="text-2xl sm:text-3xl font-bold">Quotation #{quotation.quotationNumber}</h1>
+          <div className="ml-4">{getStatusBadge(quotation.isAccepted)}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={handleCopyLink}>
+                  <Clipboard className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Copy Link</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon">
+                <Share2 className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleCopyLink}>Copy Link</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleGeneratePDF}>Download PDF</DropdownMenuItem>
+              <DropdownMenuItem onClick={handlePrint}>Print</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button variant="outline" size="sm" asChild>
             <Link href={`/dashboard/quotations/edit/${quotationNumber}`}>
               <Edit className="h-4 w-4 mr-1" /> Edit
             </Link>
-          </Button>
-          <Button variant="outline" size="sm" onClick={handlePrint}>
-            <Printer className="h-4 w-4 mr-1" /> Print
           </Button>
           <Button size="sm" onClick={handleGeneratePDF} disabled={isUpdating}>
             <Download className="h-4 w-4 mr-1" /> {isUpdating ? "Generating..." : "Download PDF"}
@@ -221,171 +276,202 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
         </div>
       </div>
 
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-        <Card className="mb-6 overflow-hidden border-0 shadow-md">
-          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between">
-              <div>
-                <CardTitle className="text-xl">Client Information</CardTitle>
-                <CardDescription className="text-indigo-100">Details of the client for this quotation</CardDescription>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+      >
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="overflow-hidden border shadow-sm">
+            <CardHeader className="bg-white border-b">
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="text-xl flex items-center gap-2 text-gray-800">
+                    <FileText className="h-5 w-5 text-primary" /> Quotation Details
+                  </CardTitle>
+                  <CardDescription>Created on {new Date(quotation.createdAt).toLocaleDateString()}</CardDescription>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">Quotation Date</p>
+                  <p className="font-medium">{new Date(quotation.date).toLocaleDateString()}</p>
+                </div>
               </div>
-              <div className="mt-2 sm:mt-0">{getStatusBadge(quotation.isAccepted)}</div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="text-left py-3 px-4 font-medium text-gray-600 border-b">Description</th>
+                      <th className="text-right py-3 px-4 font-medium text-gray-600 border-b">Area (sq.ft)</th>
+                      <th className="text-right py-3 px-4 font-medium text-gray-600 border-b">Rate (₹)</th>
+                      <th className="text-right py-3 px-4 font-medium text-gray-600 border-b">Total (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {quotation.items?.map((item, index) => (
+                      <tr
+                        key={index}
+                        className={`border-b last:border-b-0 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"}`}
+                      >
+                        <td className="py-3 px-4">
+                          <div>
+                            <p className="font-medium">{item.description}</p>
+                            {item.note && <p className="text-sm text-gray-500 mt-1">{item.note}</p>}
+                          </div>
+                        </td>
+                        <td className="text-right py-3 px-4">{item.area || "-"}</td>
+                        <td className="text-right py-3 px-4">₹{item.rate?.toFixed(2)}</td>
+                        <td className="text-right py-3 px-4 font-medium">₹{(item.total ?? item.rate).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+            <CardFooter className="bg-gray-50 border-t p-4">
+              <div className="ml-auto w-full max-w-xs">
+                {quotation.subtotal && (
+                  <div className="flex justify-between py-1">
+                    <span className="text-gray-600">Subtotal:</span>
+                    <span className="font-medium">₹{quotation.subtotal?.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between py-1">
+                  <span className="text-gray-600">Discount:</span>
+                  <span className="font-medium">₹{quotation.discount?.toFixed(2)}</span>
+                </div>
+                {quotation.grandTotal && (
+                  <div className="flex justify-between py-1 border-t mt-2 pt-2">
+                    <span className="font-semibold">Grand Total:</span>
+                    <span className="font-bold text-primary">₹{quotation.grandTotal?.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+            </CardFooter>
+          </Card>
+
+          <Card className="overflow-hidden border shadow-sm">
+            <CardHeader className="bg-white border-b">
+              <CardTitle className="flex items-center text-lg text-gray-800">
+                <ImageIcon className="h-5 w-5 mr-2 text-primary" /> Site Images
+              </CardTitle>
+              <CardDescription>Images related to the quotation site</CardDescription>
+            </CardHeader>
+            <CardContent className="p-6">
+              {quotation.siteImages?.length ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {quotation.siteImages.map((image, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3, delay: index * 0.1 }}
+                      className="border rounded-lg overflow-hidden bg-white shadow-sm group relative"
+                    >
+                      <div className="relative aspect-video">
+                        <Image
+                          src={failedImages.includes(index) ? "/placeholder-image.jpg" : image.url}
+                          alt={`Site image ${index + 1}`}
+                          fill
+                          className="object-cover transition-transform group-hover:scale-105"
+                          onError={() => {
+                            setFailedImages((prev) => [...prev, index])
+                            toast.error(`Failed to load image ${index + 1}`)
+                          }}
+                          unoptimized={true}
+                        />
+                      </div>
+                      <div className="p-3">
+                        {image.description ? (
+                          <p className="text-sm text-gray-700">{image.description}</p>
+                        ) : (
+                          <p className="text-sm text-gray-500 italic">No description provided</p>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <ImageIcon className="h-12 w-12 text-gray-300 mb-3" />
+                  <p className="text-gray-500">No site images available for this quotation.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          <Card className="overflow-hidden border shadow-sm">
+            <CardHeader className="bg-white border-b">
+              <CardTitle className="text-xl flex items-center gap-2 text-gray-800">
+                <User className="h-5 w-5 text-primary" /> Client Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
               <div className="space-y-4">
                 <div className="flex items-start">
-                  <User className="h-5 w-5 text-indigo-500 mr-2 mt-0.5" />
+                  <User className="h-5 w-5 text-gray-500 mr-3 mt-0.5" />
                   <div>
                     <p className="text-sm text-gray-500">Client Name</p>
                     <p className="font-medium">{quotation.clientName}</p>
                   </div>
                 </div>
                 <div className="flex items-start">
-                  <MapPin className="h-5 w-5 text-indigo-500 mr-2 mt-0.5" />
+                  <MapPin className="h-5 w-5 text-gray-500 mr-3 mt-0.5" />
                   <div>
                     <p className="text-sm text-gray-500">Address</p>
                     <p className="whitespace-pre-line">{quotation.clientAddress}</p>
                   </div>
                 </div>
-              </div>
-              <div className="space-y-4">
                 <div className="flex items-start">
-                  <Phone className="h-5 w-5 text-indigo-500 mr-2 mt-0.5" />
+                  <Phone className="h-5 w-5 text-gray-500 mr-3 mt-0.5" />
                   <div>
                     <p className="text-sm text-gray-500">Contact Number</p>
                     <p className="font-medium">{quotation.clientNumber}</p>
                   </div>
                 </div>
                 <div className="flex items-start">
-                  <Calendar className="h-5 w-5 text-indigo-500 mr-2 mt-0.5" />
+                  <Calendar className="h-5 w-5 text-gray-500 mr-3 mt-0.5" />
                   <div>
                     <p className="text-sm text-gray-500">Quotation Date</p>
                     <p className="font-medium">{new Date(quotation.date).toLocaleDateString()}</p>
                   </div>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card className="mb-6 overflow-hidden border-0 shadow-md">
-          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-            <CardTitle className="text-xl">Quotation Items</CardTitle>
-            <CardDescription className="text-indigo-100">Services and products included</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="text-left py-3 px-4 font-medium text-gray-600 border-b">Description</th>
-                    <th className="text-right py-3 px-4 font-medium text-gray-600 border-b">Area (sq.ft)</th>
-                    <th className="text-right py-3 px-4 font-medium text-gray-600 border-b">Rate (₹)</th>
-                    <th className="text-right py-3 px-4 font-medium text-gray-600 border-b">Total (₹)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {quotation.items?.map((item, index) => (
-                    <tr
-                      key={index}
-                      className={`border-b last:border-b-0 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"}`}
-                    >
-                      <td className="py-3 px-4">
-                        <div>
-                          <p className="font-medium">{item.description}</p>
-                          {item.note && <p className="text-sm text-gray-500 mt-1">{item.note}</p>}
-                        </div>
-                      </td>
-                      <td className="text-right py-3 px-4">{item.area || "-"}</td>
-                      <td className="text-right py-3 px-4">₹{item.rate?.toFixed(2)}</td>
-                      <td className="text-right py-3 px-4 font-medium">₹{(item.total ?? item.rate).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-gray-50">
-                  {quotation.subtotal && (
-                    <tr className="border-t">
-                      <td colSpan={3} className="text-right py-3 px-4 font-medium">
-                        Subtotal
-                      </td>
-                      <td className="text-right py-3 px-4 font-medium">₹{quotation.subtotal?.toFixed(2)}</td>
-                    </tr>
-                  )}
-                  <tr>
-                    <td colSpan={3} className="text-right py-3 px-4 font-medium">
-                      Discount
-                    </td>
-                    <td className="text-right py-3 px-4 font-medium">₹{quotation.discount?.toFixed(2)}</td>
-                  </tr>
-                  {quotation.grandTotal && (
-                    <tr>
-                      <td colSpan={3} className="text-right py-3 px-4 font-bold text-lg">
-                        Grand Total
-                      </td>
-                      <td className="text-right py-3 px-4 font-bold text-lg text-indigo-600">
-                        ₹{quotation.grandTotal?.toFixed(2)}
-                      </td>
-                    </tr>
-                  )}
-                </tfoot>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="mb-6 overflow-hidden border-0 shadow-md">
-          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-            <CardTitle className="flex items-center text-lg">
-              <ImageIcon className="h-5 w-5 mr-2" /> Site Images
-            </CardTitle>
-            <CardDescription className="text-indigo-100">Images related to the quotation site</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6">
-            {quotation.siteImages?.length ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {quotation.siteImages.map((image, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.3, delay: index * 0.1 }}
-                    className="border rounded-lg overflow-hidden bg-white shadow-sm"
+          {quotation.isAccepted === "pending" && (
+            <Card className="overflow-hidden border shadow-sm">
+              <CardHeader className="bg-white border-b">
+                <CardTitle className="text-lg flex items-center gap-2 text-gray-800">
+                  <FileText className="h-5 w-5 text-primary" /> Quotation Actions
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  <Button
+                    onClick={handleAccept}
+                    disabled={isUpdating}
+                    className="w-full bg-green-600 hover:bg-green-700"
                   >
-                    <Image
-                      src={failedImages.includes(index) ? "/placeholder-image.jpg" : image.url}
-                      alt={`Site image ${index + 1}`}
-                      width={300}
-                      height={192}
-                      className="w-full h-48 object-cover"
-                      onError={() => {
-                        setFailedImages((prev) => [...prev, index]);
-                        toast.error(`Failed to load image ${index + 1}`);
-                      }}
-                      unoptimized={true} // Optional: Disable Next.js optimization if using Cloudinary
-                    />
-                    <div className="p-4">
-                      {image.description ? (
-                        <p className="text-sm text-gray-700">{image.description}</p>
-                      ) : (
-                        <p className="text-sm text-gray-500 italic">No description provided</p>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500">No site images available.</p>
-            )}
-          </CardContent>
-        </Card>
+                    <CheckCircle className="mr-2 h-4 w-4" /> Accept Quotation
+                  </Button>
+                  <Button onClick={handleReject} variant="destructive" disabled={isUpdating} className="w-full">
+                    <XCircle className="mr-2 h-4 w-4" /> Reject Quotation
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <Card className="overflow-hidden border-0 shadow-md">
-            <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-              <CardTitle className="flex items-center text-lg">
-                <Tag className="h-5 w-5 mr-2" /> Terms & Conditions
+          <Card className="overflow-hidden border shadow-sm">
+            <CardHeader className="bg-white border-b">
+              <CardTitle className="flex items-center text-lg text-gray-800">
+                <Tag className="h-5 w-5 mr-2 text-primary" /> Terms & Conditions
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
@@ -404,9 +490,9 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
           </Card>
 
           {quotation.note && (
-            <Card className="overflow-hidden border-0 shadow-md">
-              <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-                <CardTitle className="text-lg">Additional Notes</CardTitle>
+            <Card className="overflow-hidden border shadow-sm">
+              <CardHeader className="bg-white border-b">
+                <CardTitle className="text-lg text-gray-800">Additional Notes</CardTitle>
               </CardHeader>
               <CardContent className="p-6">
                 <p className="text-gray-700 whitespace-pre-line">{quotation.note}</p>
@@ -414,67 +500,8 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
             </Card>
           )}
         </div>
-
-        <Card className="mb-6 overflow-hidden border-0 shadow-md">
-          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-            <CardTitle className="text-lg">Quotation Status</CardTitle>
-            <CardDescription className="text-indigo-100">
-              Created: {new Date(quotation.createdAt).toLocaleString()}
-              {quotation.lastUpdated && ` • Last Updated: ${new Date(quotation.lastUpdated).toLocaleString()}`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="flex items-center mb-4">
-              <p className="mr-2">Current Status:</p>
-              {getStatusBadge(quotation.isAccepted)}
-            </div>
-            {quotation.isAccepted === "pending" && (
-              <div className="flex flex-wrap gap-3 mt-4">
-                <Button onClick={handleAccept} disabled={isUpdating} className="bg-green-600 hover:bg-green-700">
-                  <CheckCircle className="mr-2 h-4 w-4" /> Accept Quotation
-                </Button>
-                <Button onClick={handleReject} variant="destructive" disabled={isUpdating}>
-                  <XCircle className="mr-2 h-4 w-4" /> Reject Quotation
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="mb-6 overflow-hidden border-0 shadow-md">
-          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-            <CardTitle className="flex items-center text-lg">
-              <History className="h-5 w-5 mr-2" /> Update History
-            </CardTitle>
-            <CardDescription className="text-indigo-100">
-              Record of all updates made to this quotation
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-6">
-            {quotation.updateHistory?.length ? (
-              <ul className="space-y-4">
-                {quotation.updateHistory.map((update, index) => (
-                  <li key={index} className="border-b pb-4 last:border-b-0 last:pb-0">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm text-gray-500">
-                          Updated on {new Date(update.updatedAt).toLocaleString()}
-                        </p>
-                        <p className="font-medium">By User ID: {update.updatedBy}</p>
-                        <p className="text-sm text-gray-700 mt-1">
-                          Changed: {update.changes.join(", ")}
-                        </p>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-gray-500">No updates recorded for this quotation.</p>
-            )}
-          </CardContent>
-        </Card>
       </motion.div>
+
       {pdfUrl && (
         <PDFViewer
           pdfUrl={pdfUrl}
@@ -483,18 +510,5 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
         />
       )}
     </div>
-  );
-
-  function handlePrint() {
-    if (!quotation) return;
-    handleGeneratePDF().then(() => {
-      setTimeout(() => {
-        const iframe = document.getElementById("pdf-iframe") as HTMLIFrameElement;
-        if (iframe && iframe.contentWindow) {
-          iframe.contentWindow.focus();
-          iframe.contentWindow.print();
-        }
-      }, 1000);
-    });
-  }
+  )
 }

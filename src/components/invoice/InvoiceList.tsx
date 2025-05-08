@@ -1,86 +1,155 @@
-"use client";
+"use client"
 
-import { useState, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, Eye, Search, FileText, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Skeleton } from "@/components/ui/skeleton";
-import Link from "next/link";
-import { getInvoices, apiFetch } from "@/app/lib/api";
-import type { Invoice } from "@/app/types";
+import { useState, useEffect, useCallback } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import {
+  Trash2,
+  Eye,
+  Search,
+  FileText,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  DollarSign,
+  CheckCircle,
+  Clock,
+  XCircle,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { toast } from "sonner"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Badge } from "@/components/ui/badge"
+import Link from "next/link"
+import { getInvoices, apiFetch } from "@/app/lib/api"
+import { generateInvoicePDF } from "@/app/lib/pdf-generator"
+import type { Invoice } from "@/app/types"
 
 export default function InvoiceList() {
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const limit = 10;
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [isGenerating, setIsGenerating] = useState<string | null>(null)
+  const limit = 10
 
   const fetchInvoices = useCallback(async () => {
     try {
-      const { invoices, pages } = await getInvoices(page, limit);
-      setInvoices(invoices);
-      setTotalPages(pages);
+      const { invoices, pages } = await getInvoices(page, limit)
+      setInvoices(invoices)
+      setTotalPages(pages)
     } catch (error: unknown) {
-      console.error("Fetch invoices error:", error);
-      const errorMessage = error instanceof Error ? error.message : "Failed to fetch invoices";
-      toast.error(errorMessage);
-      setInvoices([]);
-      setTotalPages(1);
+      console.error("Fetch invoices error:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch invoices"
+      toast.error(errorMessage)
+      setInvoices([])
+      setTotalPages(1)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [page, limit]);
+  }, [page, limit])
 
   const filterInvoices = useCallback(() => {
-    let filtered = [...invoices];
+    let filtered = [...invoices]
     if (searchTerm) {
       filtered = filtered.filter(
         (i) =>
           i.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
           i.invoiceId.toLowerCase().includes(searchTerm.toLowerCase()) ||
           i.clientAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          i.clientNumber.includes(searchTerm)
-      );
+          i.clientNumber.includes(searchTerm),
+      )
     }
-    setFilteredInvoices(filtered);
-  }, [invoices, searchTerm]);
+    setFilteredInvoices(filtered)
+  }, [invoices, searchTerm])
 
   useEffect(() => {
-    fetchInvoices();
-  }, [fetchInvoices]);
+    fetchInvoices()
+  }, [fetchInvoices])
 
   useEffect(() => {
-    filterInvoices();
-  }, [filterInvoices]);
+    filterInvoices()
+  }, [filterInvoices])
 
   const handleDelete = async (invoiceId: string) => {
     try {
-      await apiFetch(`/invoices/${invoiceId}`, { method: "DELETE" });
-      setInvoices((prev) => prev.filter((i) => i.invoiceId !== invoiceId));
-      toast.success("Invoice deleted successfully!");
+      await apiFetch(`/invoices/${invoiceId}`, { method: "DELETE" })
+      setInvoices((prev) => prev.filter((i) => i.invoiceId !== invoiceId))
+      toast.success("Invoice deleted successfully!")
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete invoice";
-      toast.error(errorMessage);
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete invoice"
+      toast.error(errorMessage)
     } finally {
-      setDeleteDialogOpen(false);
-      setInvoiceToDelete(null);
+      setDeleteDialogOpen(false)
+      setInvoiceToDelete(null)
     }
-  };
+  }
 
   const confirmDelete = (invoiceId: string) => {
-    setInvoiceToDelete(invoiceId);
-    setDeleteDialogOpen(true);
-  };
+    setInvoiceToDelete(invoiceId)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDownloadPDF = async (invoice: Invoice) => {
+    try {
+      setIsGenerating(invoice.invoiceId)
+      const pdfUrl = await generateInvoicePDF(invoice)
+
+      // Create a temporary link element
+      const link = document.createElement("a")
+      link.href = pdfUrl
+      link.download = `Invoice_${invoice.invoiceId}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      toast.success("Invoice downloaded successfully!")
+    } catch (error) {
+      console.error("Error generating PDF:", error)
+      toast.error("Failed to generate PDF")
+    } finally {
+      setIsGenerating(null)
+    }
+  }
+
+  const getPaymentStatus = (invoice: Invoice) => {
+    const amountDue = invoice.amountDue
+    const grandTotal = invoice.grandTotal
+
+    if (amountDue <= 0) {
+      return (
+        <Badge className="bg-green-100 text-green-800 border-green-200 flex items-center">
+          <CheckCircle className="h-3 w-3 mr-1" /> Paid
+        </Badge>
+      )
+    } else if (amountDue < grandTotal) {
+      return (
+        <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 flex items-center">
+          <Clock className="h-3 w-3 mr-1" /> Partially Paid
+        </Badge>
+      )
+    } else {
+      return (
+        <Badge className="bg-red-100 text-red-800 border-red-200 flex items-center">
+          <XCircle className="h-3 w-3 mr-1" /> Unpaid
+        </Badge>
+      )
+    }
+  }
 
   if (loading) {
     return (
@@ -96,7 +165,7 @@ export default function InvoiceList() {
           </Card>
         ))}
       </div>
-    );
+    )
   }
 
   if (invoices.length === 0 && page === 1) {
@@ -108,7 +177,7 @@ export default function InvoiceList() {
           <p className="text-gray-500 mb-6 text-center">Create your first invoice to get started.</p>
         </CardContent>
       </Card>
-    );
+    )
   }
 
   return (
@@ -116,7 +185,7 @@ export default function InvoiceList() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
-            <FileText className="mr-2 h-6 w-6 text-primary" /> Invoice List
+            <DollarSign className="mr-2 h-6 w-6 text-primary" /> Invoice List
           </CardTitle>
           <CardDescription>Manage all your invoices</CardDescription>
         </CardHeader>
@@ -155,69 +224,84 @@ export default function InvoiceList() {
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.2, delay: index * 0.05 }}
                   >
-                    <Card>
-                      <div className="border-l-4 border-primary">
-                        <CardContent className="p-6">
-                          <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
-                            <div>
-                              <h3 className="text-lg font-bold">Invoice #{invoice.invoiceId}</h3>
-                              <p className="text-sm text-gray-500">
-                                Created: {new Date(invoice.createdAt).toLocaleDateString()}
-                                {invoice.lastUpdated &&
-                                  ` • Updated: ${new Date(invoice.lastUpdated).toLocaleDateString()}`}
-                              </p>
-                            </div>
-                            <div className="mt-4 md:mt-0">
-                              <p className="text-lg font-bold text-primary">
-                                ₹{invoice.grandTotal.toFixed(2)}
-                              </p>
-                              <p className="text-sm text-red-600">Due: ₹{invoice.amountDue.toFixed(2)}</p>
-                            </div>
+                    <Card className="overflow-hidden border shadow-sm">
+                      <CardContent className="p-6">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
+                          <div>
+                            <h3 className="text-lg font-bold flex items-center gap-2">
+                              Invoice #{invoice.invoiceId}
+                              <span>{getPaymentStatus(invoice)}</span>
+                            </h3>
+                            <p className="text-sm text-gray-500">
+                              Created: {new Date(invoice.createdAt).toLocaleDateString()}
+                              {invoice.lastUpdated &&
+                                ` • Updated: ${new Date(invoice.lastUpdated).toLocaleDateString()}`}
+                            </p>
                           </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                            <div>
-                              <p className="text-sm font-medium text-gray-500">Client</p>
-                              <p className="font-medium">{invoice.clientName}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-500">Contact</p>
-                              <p>{invoice.clientNumber}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-500">Date</p>
-                              <p>{new Date(invoice.date).toLocaleDateString()}</p>
-                            </div>
+                          <div className="mt-4 md:mt-0 text-right">
+                            <p className="text-lg font-bold text-primary">₹{invoice.grandTotal.toFixed(2)}</p>
+                            <p className="text-sm text-red-600">Due: ₹{invoice.amountDue.toFixed(2)}</p>
                           </div>
-                          <div className="flex flex-wrap gap-2 mt-4">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="outline" size="sm" asChild>
-                                    <Link href={`/invoice/${invoice.invoiceId}`}>
-                                      <Eye className="h-4 w-4 mr-1" /> View
-                                    </Link>
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>View invoice details</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={() => confirmDelete(invoice.invoiceId)}
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-1" /> Delete
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Delete this invoice</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                          <div>
+                            <p className="text-sm font-medium text-gray-500">Client</p>
+                            <p className="font-medium">{invoice.clientName}</p>
                           </div>
-                        </CardContent>
-                      </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-500">Contact</p>
+                            <p>{invoice.clientNumber}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-500">Date</p>
+                            <p>{new Date(invoice.date).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mt-4">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="outline" size="sm" asChild>
+                                  <Link href={`/invoice/${invoice.invoiceId}`}>
+                                    <Eye className="h-4 w-4 mr-1" /> View
+                                  </Link>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>View invoice details</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleDownloadPDF(invoice)}
+                                  disabled={isGenerating === invoice.invoiceId}
+                                >
+                                  <Download className="h-4 w-4 mr-1" />
+                                  {isGenerating === invoice.invoiceId ? "Generating..." : "Download"}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Download as PDF</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => confirmDelete(invoice.invoiceId)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-1" /> Delete
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Delete this invoice</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                      </CardContent>
                     </Card>
                   </motion.div>
                 ))}
@@ -229,11 +313,10 @@ export default function InvoiceList() {
             <Button onClick={() => setPage((p) => Math.max(p - 1, 1))} disabled={page === 1}>
               <ChevronLeft className="h-4 w-4 mr-2" /> Previous
             </Button>
-            <p>Page {page} of {totalPages}</p>
-            <Button
-              onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-              disabled={page === totalPages}
-            >
+            <p>
+              Page {page} of {totalPages}
+            </p>
+            <Button onClick={() => setPage((p) => Math.min(p + 1, totalPages))} disabled={page === totalPages}>
               Next <ChevronRight className="h-4 w-4 ml-2" />
             </Button>
           </div>
@@ -252,15 +335,12 @@ export default function InvoiceList() {
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              onClick={() => invoiceToDelete && handleDelete(invoiceToDelete)}
-            >
+            <Button variant="destructive" onClick={() => invoiceToDelete && handleDelete(invoiceToDelete)}>
               Delete
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
-  );
+  )
 }

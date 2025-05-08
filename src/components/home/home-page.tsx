@@ -1,10 +1,14 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Brush, CheckCircle, Phone, ImageIcon, Star, ArrowRight, PaintBucket, HomeIcon, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import Image from "next/image";
+import { getPortfolio, getProjects } from "@/app/lib/api";
+import type { Portfolio, Project } from "@/app/types";
+import { toast } from "sonner";
 
 const fadeIn = {
   hidden: { opacity: 0, y: 20 },
@@ -22,6 +26,39 @@ const staggerContainer = {
 };
 
 export default function HomePage() {
+  const [portfolio, setPortfolio] = useState<Portfolio[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch portfolio and project data
+  const fetchData = useCallback(async () => {
+    try {
+      // Fetch portfolio (limit to 10 for performance)
+      const { portfolio: portfolioData } = await getPortfolio(1, 10);
+      setPortfolio(portfolioData || []);
+
+      // Fetch projects (limit to 3 for recent projects section)
+      const { projects: projectData } = await getProjects(1, 3);
+      setProjects(projectData || []);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch data";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Function to get a random portfolio image URL
+  const getRandomPortfolioImage = () => {
+    if (portfolio.length === 0) return "/placeholder.svg?height=600&width=800";
+    const randomIndex = Math.floor(Math.random() * portfolio.length);
+    return portfolio[randomIndex].imageUrl;
+  };
+
   const services = [
     {
       icon: <Brush className="h-10 w-10 text-primary" />,
@@ -31,7 +68,7 @@ export default function HomePage() {
     {
       icon: <PaintBucket className="h-10 w-10 text-primary" />,
       title: "Exterior Painting",
-      description: "Enhance your home's curb appeal with durable, weather-resistant exterior painting.",
+      description: "Enhance your home curb appeal with durable, weather-resistant exterior painting.",
     },
     {
       icon: <Palette className="h-10 w-10 text-primary" />,
@@ -63,7 +100,7 @@ export default function HomePage() {
     {
       name: "Amit Verma",
       role: "Business Owner",
-      content: "Our office looks brand new after SoniPainting&apos;s work. Clean, efficient, and professional service.",
+      content: "Our office looks brand new after SoniPainting  work. Clean, efficient, and professional service.",
       rating: 4,
     },
   ];
@@ -75,7 +112,7 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-black/40 z-10" />
         <div className="absolute inset-0">
           <Image
-            src="/placeholder.svg?height=1080&width=1920"
+            src={getRandomPortfolioImage()}
             alt="Painting Services"
             fill
             className="object-cover"
@@ -191,7 +228,7 @@ export default function HomePage() {
               className="relative h-[400px] md:h-[500px] rounded-lg overflow-hidden shadow-xl"
             >
               <Image
-                src="/placeholder.svg?height=800&width=600"
+                src={getRandomPortfolioImage()}
                 alt="Professional Painting"
                 fill
                 className="object-cover"
@@ -215,7 +252,7 @@ export default function HomePage() {
               What Our Clients Say
             </motion.h2>
             <motion.p variants={fadeIn} className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Don&apos;t just take our word for it. Here&apos;s what our satisfied customers have to say.
+              Don not just take our word for it. Here is what our satisfied customers have to say.
             </motion.p>
           </motion.div>
 
@@ -269,7 +306,7 @@ export default function HomePage() {
               Ready to Transform Your Space?
             </motion.h2>
             <motion.p variants={fadeIn} className="text-lg mb-8 max-w-2xl mx-auto opacity-90">
-              Contact us today for a free consultation and quote. Let&apos;s bring your vision to life!
+              Contact us today for a free consultation and quote. Let us bring your vision to life!
             </motion.p>
             <motion.div variants={fadeIn}>
               <Button size="lg" variant="secondary" asChild>
@@ -300,43 +337,60 @@ export default function HomePage() {
             </motion.p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map((item) => (
-              <motion.div
-                key={item}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true, margin: "-50px" }}
-                variants={{
-                  hidden: { opacity: 0, scale: 0.9 },
-                  visible: {
-                    opacity: 1,
-                    scale: 1,
-                    transition: { delay: item * 0.1 },
-                  },
-                }}
-                className="group relative h-80 rounded-lg overflow-hidden shadow-md"
-              >
-                <Image
-                  src={`/placeholder.svg?height=600&width=800`}
-                  alt={`Project ${item}`}
-                  fill
-                  className="object-cover transition-transform duration-500 group-hover:scale-110"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
-                  <div className="p-6 text-white">
-                    <h3 className="text-xl font-semibold mb-2">Project Title {item}</h3>
-                    <p className="text-sm text-gray-200">Interior Painting</p>
-                    <Button variant="link" className="text-white p-0 mt-2" asChild>
-                      <Link href="/portfolio">
-                        View Details <ArrowRight className="ml-1 h-4 w-4" />
-                      </Link>
-                    </Button>
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map((item) => (
+                <div key={item} className="h-80 rounded-lg bg-gray-200 animate-pulse" />
+              ))}
+            </div>
+          ) : projects.length === 0 ? (
+            <div className="text-center py-12">
+              <ImageIcon className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+              <p className="text-lg text-gray-600">No recent projects found.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {projects.map((project, index) => (
+                <motion.div
+                  key={project.projectId}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true, margin: "-50px" }}
+                  variants={{
+                    hidden: { opacity: 0, scale: 0.9 },
+                    visible: {
+                      opacity: 1,
+                      scale: 1,
+                      transition: { delay: index * 0.1 },
+                    },
+                  }}
+                  className="relative h-80 rounded-lg overflow-hidden shadow-md"
+                >
+                  <Image
+                    src={
+                      project.siteImages?.length > 0
+                        ? project.siteImages[0].url
+                        : getRandomPortfolioImage()
+                    }
+                    alt={`Project ${project.projectId}`}
+                    fill
+                    className="object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end">
+                    <div className="p-6 text-white">
+                      <h3 className="text-xl font-semibold mb-2">Project #{project.projectId}</h3>
+                      <p className="text-sm text-gray-200">
+                        Client: {project.clientName || "N/A"}
+                      </p>
+                      <p className="text-sm text-gray-200">
+                        Status: {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
 
           <motion.div
             initial="hidden"

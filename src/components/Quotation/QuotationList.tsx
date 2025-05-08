@@ -1,119 +1,155 @@
-"use client";
+"use client"
 
-import { useState, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, Edit, Eye, Search, CheckCircle, XCircle, Clock, FileText, Filter, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import Link from "next/link";
+import { useState, useEffect, useCallback } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import {
+  Trash2,
+  Edit,
+  Eye,
+  Search,
+  CheckCircle,
+  XCircle,
+  Clock,
+  FileText,
+  Filter,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { toast } from "sonner"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import Link from "next/link"
 
-import { getQuotations, apiFetch } from "@/app/lib/api";
-import type { Quotation, ApiError } from "@/app/types";
+import { getQuotations, apiFetch } from "@/app/lib/api"
+import type { Quotation, ApiError } from "@/app/types"
 
 export default function QuotationList() {
-  const [quotations, setQuotations] = useState<Quotation[]>([]);
-  const [filteredQuotations, setFilteredQuotations] = useState<Quotation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "accepted" | "rejected">("all");
-  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [quotationToDelete, setQuotationToDelete] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const limit = 10;
+  const [quotations, setQuotations] = useState<Quotation[]>([])
+  const [filteredQuotations, setFilteredQuotations] = useState<Quotation[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "accepted" | "rejected">("all")
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [quotationToDelete, setQuotationToDelete] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const limit = 10
 
   const fetchQuotations = useCallback(async () => {
     try {
-      const { quotations, pages } = await getQuotations(page, limit);
-      setQuotations(quotations);
-      setTotalPages(pages);
+      const { quotations, pages } = await getQuotations(page, limit)
+      setQuotations(quotations)
+      setTotalPages(pages)
     } catch (error: unknown) {
-      const apiError = error as ApiError;
-      toast.error(apiError.error || "Failed to fetch quotations");
+      const apiError = error as ApiError
+      toast.error(apiError.error || "Failed to fetch quotations")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [page, limit]);
+  }, [page, limit])
 
   const filterQuotations = useCallback(() => {
-    let filtered = [...quotations];
+    let filtered = [...quotations]
     if (searchTerm) {
       filtered = filtered.filter(
         (q) =>
           q.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
           q.quotationNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
           q.clientAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          q.clientNumber.includes(searchTerm)
-      );
+          q.clientNumber.includes(searchTerm),
+      )
     }
     if (statusFilter !== "all") {
-      filtered = filtered.filter((q) => q.isAccepted === statusFilter);
+      filtered = filtered.filter((q) => q.isAccepted === statusFilter)
     }
     filtered.sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      return sortOrder === "newest" ? dateB - dateA : dateA - dateB;
-    });
-    setFilteredQuotations(filtered);
-  }, [quotations, searchTerm, statusFilter, sortOrder]);
+      const dateA = new Date(a.createdAt).getTime()
+      const dateB = new Date(b.createdAt).getTime()
+      return sortOrder === "newest" ? dateB - dateA : dateA - dateB
+    })
+    setFilteredQuotations(filtered)
+  }, [quotations, searchTerm, statusFilter, sortOrder])
 
   useEffect(() => {
-    fetchQuotations();
-  }, [fetchQuotations]);
+    fetchQuotations()
+  }, [fetchQuotations])
 
   useEffect(() => {
-    filterQuotations();
-  }, [filterQuotations]);
+    filterQuotations()
+  }, [filterQuotations])
 
   const handleDelete = async (quotationNumber: string) => {
     try {
-      await apiFetch(`/quotations/${quotationNumber}`, { method: "DELETE" });
-      setQuotations((prev) => prev.filter((q) => q.quotationNumber !== quotationNumber));
-      toast.success("Quotation deleted successfully!");
+      await apiFetch(`/quotations/${quotationNumber}`, { method: "DELETE" })
+      setQuotations((prev) => prev.filter((q) => q.quotationNumber !== quotationNumber))
+      toast.success("Quotation deleted successfully!")
     } catch (error: unknown) {
-      const apiError = error as ApiError;
-      toast.error(apiError.error || "Failed to delete quotation");
+      const apiError = error as ApiError
+      toast.error(apiError.error || "Failed to delete quotation")
     } finally {
-      setDeleteDialogOpen(false);
-      setQuotationToDelete(null);
+      setDeleteDialogOpen(false)
+      setQuotationToDelete(null)
     }
-  };
+  }
 
   const confirmDelete = (quotationNumber: string) => {
-    setQuotationToDelete(quotationNumber);
-    setDeleteDialogOpen(true);
-  };
+    setQuotationToDelete(quotationNumber)
+    setDeleteDialogOpen(true)
+  }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "accepted":
-        return <Badge className="bg-green-50 text-green-600 border-green-200 flex items-center"><CheckCircle className="h-3 w-3 mr-1" /> Accepted</Badge>;
+        return (
+          <Badge className="bg-green-100 text-green-800 border-green-200 flex items-center">
+            <CheckCircle className="h-3 w-3 mr-1" /> Accepted
+          </Badge>
+        )
       case "rejected":
-        return <Badge className="bg-red-50 text-red-600 border-red-200 flex items-center"><XCircle className="h-3 w-3 mr-1" /> Rejected</Badge>;
+        return (
+          <Badge className="bg-red-100 text-red-800 border-red-200 flex items-center">
+            <XCircle className="h-3 w-3 mr-1" /> Rejected
+          </Badge>
+        )
       default:
-        return <Badge className="bg-yellow-50 text-yellow-600 border-yellow-200 flex items-center"><Clock className="h-3 w-3 mr-1" /> Pending</Badge>;
+        return (
+          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 flex items-center">
+            <Clock className="h-3 w-3 mr-1" /> Pending
+          </Badge>
+        )
     }
-  };
+  }
 
   if (loading) {
     return (
       <div className="space-y-4">
         {[1, 2, 3].map((i) => (
           <Card key={i}>
-            <CardHeader><Skeleton className="h-6 w-48" /></CardHeader>
-            <CardContent><Skeleton className="h-4 w-full" /></CardContent>
+            <CardHeader>
+              <Skeleton className="h-6 w-48" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-4 w-full" />
+            </CardContent>
           </Card>
         ))}
       </div>
-    );
+    )
   }
 
   if (quotations.length === 0 && page === 1) {
@@ -125,14 +161,16 @@ export default function QuotationList() {
           <p className="text-gray-500 mb-6 text-center">Create your first quotation to get started.</p>
         </CardContent>
       </Card>
-    );
+    )
   }
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center"><FileText className="mr-2 h-6 w-6 text-primary" /> Quotation List</CardTitle>
+          <CardTitle className="flex items-center">
+            <FileText className="mr-2 h-6 w-6 text-gray-600" /> Quotation List
+          </CardTitle>
           <CardDescription>Manage all your quotations</CardDescription>
         </CardHeader>
         <CardContent>
@@ -149,7 +187,12 @@ export default function QuotationList() {
             <div className="flex gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline"><Filter className="h-4 w-4 mr-2" /> {statusFilter === "all" ? "All Status" : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}</Button>
+                  <Button variant="outline">
+                    <Filter className="h-4 w-4 mr-2" />{" "}
+                    {statusFilter === "all"
+                      ? "All Status"
+                      : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
+                  </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
                   <DropdownMenuItem onClick={() => setStatusFilter("all")}>All Status</DropdownMenuItem>
@@ -158,10 +201,7 @@ export default function QuotationList() {
                   <DropdownMenuItem onClick={() => setStatusFilter("rejected")}>Rejected</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button
-                variant="outline"
-                onClick={() => setSortOrder(sortOrder === "newest" ? "oldest" : "newest")}
-              >
+              <Button variant="outline" onClick={() => setSortOrder(sortOrder === "newest" ? "oldest" : "newest")}>
                 <ArrowUpDown className="h-4 w-4 mr-2" />
                 {sortOrder === "newest" ? "Newest First" : "Oldest First"}
               </Button>
@@ -170,7 +210,12 @@ export default function QuotationList() {
 
           <AnimatePresence>
             {filteredQuotations.length === 0 ? (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center py-12">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-center py-12"
+              >
                 <Search className="h-12 w-12 mx-auto text-gray-300 mb-4" />
                 <h3 className="text-lg font-medium text-gray-700 mb-2">No matching quotations found</h3>
                 <p className="text-gray-500">Try adjusting your search or filter criteria</p>
@@ -186,7 +231,7 @@ export default function QuotationList() {
                     transition={{ duration: 0.2, delay: index * 0.05 }}
                   >
                     <Card>
-                      <div className="border-l-4 border-primary">
+                      <div className="border-l-4 border-gray-600">
                         <CardContent className="p-6">
                           <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
                             <div>
@@ -196,11 +241,14 @@ export default function QuotationList() {
                               </h3>
                               <p className="text-sm text-gray-500">
                                 Created: {new Date(quotation.createdAt).toLocaleDateString()}
-                                {quotation.lastUpdated && ` • Updated: ${new Date(quotation.lastUpdated).toLocaleDateString()}`}
+                                {quotation.lastUpdated &&
+                                  ` • Updated: ${new Date(quotation.lastUpdated).toLocaleDateString()}`}
                               </p>
                             </div>
                             <div className="mt-4 md:mt-0">
-                              <p className="text-lg font-bold text-primary">₹{quotation.grandTotal?.toFixed(2) || "0.00"}</p>
+                              <p className="text-lg font-bold text-gray-700">
+                                ₹{quotation.grandTotal?.toFixed(2) || "0.00"}
+                              </p>
                             </div>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -222,7 +270,9 @@ export default function QuotationList() {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button variant="outline" size="sm" asChild>
-                                    <Link href={`/dashboard/quotations/${quotation.quotationNumber}`}><Eye className="h-4 w-4 mr-1" /> View</Link>
+                                    <Link href={`/dashboard/quotations/${quotation.quotationNumber}`}>
+                                      <Eye className="h-4 w-4 mr-1" /> View
+                                    </Link>
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>View quotation details</TooltipContent>
@@ -232,7 +282,9 @@ export default function QuotationList() {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button variant="outline" size="sm" asChild>
-                                    <Link href={`/dashboard/quotations/edit/${quotation.quotationNumber}`}><Edit className="h-4 w-4 mr-1" /> Edit</Link>
+                                    <Link href={`/dashboard/quotations/edit/${quotation.quotationNumber}`}>
+                                      <Edit className="h-4 w-4 mr-1" /> Edit
+                                    </Link>
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Edit quotation</TooltipContent>
@@ -263,17 +315,13 @@ export default function QuotationList() {
           </AnimatePresence>
 
           <div className="flex justify-between items-center mt-6">
-            <Button
-              onClick={() => setPage((p) => Math.max(p - 1, 1))}
-              disabled={page === 1}
-            >
+            <Button onClick={() => setPage((p) => Math.max(p - 1, 1))} disabled={page === 1}>
               <ChevronLeft className="h-4 w-4 mr-2" /> Previous
             </Button>
-            <p>Page {page} of {totalPages}</p>
-            <Button
-              onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-              disabled={page === totalPages}
-            >
+            <p>
+              Page {page} of {totalPages}
+            </p>
+            <Button onClick={() => setPage((p) => Math.min(p + 1, totalPages))} disabled={page === totalPages}>
               Next <ChevronRight className="h-4 w-4 ml-2" />
             </Button>
           </div>
@@ -284,14 +332,20 @@ export default function QuotationList() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Confirm Deletion</DialogTitle>
-            <DialogDescription>Are you sure you want to delete this quotation? This action cannot be undone.</DialogDescription>
+            <DialogDescription>
+              Are you sure you want to delete this quotation? This action cannot be undone.
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => quotationToDelete && handleDelete(quotationToDelete)}>Delete</Button>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => quotationToDelete && handleDelete(quotationToDelete)}>
+              Delete
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
-  );
+  )
 }

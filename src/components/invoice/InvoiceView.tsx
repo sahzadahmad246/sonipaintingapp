@@ -1,82 +1,133 @@
-"use client";
+"use client"
 
-import { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
-import { ArrowLeft, FileText, User, MapPin, Phone, Calendar, Download, Printer, Share2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import Link from "next/link";
-import { apiFetch } from "@/app/lib/api";
-import type { Invoice } from "@/app/types";
-import { generateInvoicePDF } from "@/app/lib/pdf-generator";
-import { PDFViewer } from "../Quotation/pdf-viewer";
+import { useState, useEffect, useCallback } from "react"
+import { motion } from "framer-motion"
+import {
+  ArrowLeft,
+  FileText,
+  User,
+  MapPin,
+  Phone,
+  Calendar,
+  Download,
+  Printer,
+  Share2,
+  Clock,
+  CheckCircle,
+  DollarSign,
+  Receipt,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import Link from "next/link"
+import { apiFetch } from "@/app/lib/api"
+import type { Invoice } from "@/app/types"
+import { generateInvoicePDF } from "@/app/lib/pdf-generator"
+import { PDFViewer } from "../Quotation/pdf-viewer"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
+import { Badge } from "@/components/ui/badge"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface InvoiceViewProps {
-  invoiceId: string;
-  token?: string;
+  invoiceId: string
+  token?: string
 }
 
 export default function InvoiceView({ invoiceId, token }: InvoiceViewProps) {
-  const [invoice, setInvoice] = useState<Invoice | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [invoice, setInvoice] = useState<Invoice | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
 
   const fetchInvoice = useCallback(async () => {
     try {
-      const url = `/invoices/${invoiceId}${token ? `?token=${token}` : ""}`;
-      console.log("Fetching invoice:", url);
-      const data = await apiFetch<Invoice>(url);
-      console.log("Invoice data received:", data);
-      setInvoice(data);
+      const url = `/invoices/${invoiceId}${token ? `?token=${token}` : ""}`
+      console.log("Fetching invoice:", url)
+      const data = await apiFetch<Invoice>(url)
+      console.log("Invoice data received:", data)
+      setInvoice(data)
     } catch (error: unknown) {
-      console.error("Fetch invoice error:", error);
-      const errorMessage = error instanceof Error ? error.message : `Failed to fetch invoice: ${error || "Unknown error"}`;
-      toast.error(errorMessage);
+      console.error("Fetch invoice error:", error)
+      const errorMessage =
+        error instanceof Error ? error.message : `Failed to fetch invoice: ${error || "Unknown error"}`
+      toast.error(errorMessage)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [invoiceId, token]);
+  }, [invoiceId, token])
 
   useEffect(() => {
-    console.log("InvoiceView props:", { invoiceId, token });
+    console.log("InvoiceView props:", { invoiceId, token })
     if (!invoiceId) {
-      console.error("Invalid invoice ID:", invoiceId);
-      toast.error("Invalid invoice ID");
-      setLoading(false);
-      return;
+      console.error("Invalid invoice ID:", invoiceId)
+      toast.error("Invalid invoice ID")
+      setLoading(false)
+      return
     }
-    fetchInvoice();
-  }, [invoiceId, token, fetchInvoice]);
+    fetchInvoice()
+  }, [invoiceId, token, fetchInvoice])
 
   const handleGeneratePDF = async () => {
-    if (!invoice) return;
+    if (!invoice) return
     try {
-      setIsGenerating(true);
-      const pdfUrl = await generateInvoicePDF(invoice);
-      setPdfUrl(pdfUrl);
+      setIsGenerating(true)
+      const pdfUrl = await generateInvoicePDF(invoice)
+      setPdfUrl(pdfUrl)
     } catch (error) {
-      console.error("Error generating PDF:", error);
-      toast.error("Failed to generate PDF");
+      console.error("Error generating PDF:", error)
+      toast.error("Failed to generate PDF")
     } finally {
-      setIsGenerating(false);
+      setIsGenerating(false)
     }
-  };
+  }
 
   const handlePrint = () => {
-    if (!invoice) return;
+    if (!invoice) return
     handleGeneratePDF().then(() => {
       setTimeout(() => {
-        const iframe = document.getElementById("pdf-iframe") as HTMLIFrameElement;
+        const iframe = document.getElementById("pdf-iframe") as HTMLIFrameElement
         if (iframe && iframe.contentWindow) {
-          iframe.contentWindow.focus();
-          iframe.contentWindow.print();
+          iframe.contentWindow.focus()
+          iframe.contentWindow.print()
         }
-      }, 1000);
-    });
-  };
+      }, 1000)
+    })
+  }
+
+  const getPaymentStatus = () => {
+    if (!invoice) return null
+
+    const amountDue = invoice.amountDue
+    const grandTotal = invoice.grandTotal
+
+    if (amountDue <= 0) {
+      return (
+        <Badge className="bg-green-100 text-green-800 border-green-200 flex items-center gap-1">
+          <CheckCircle className="h-3 w-3" /> Paid
+        </Badge>
+      )
+    } else if (amountDue < grandTotal) {
+      return (
+        <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 flex items-center gap-1">
+          <Clock className="h-3 w-3" /> Partially Paid
+        </Badge>
+      )
+    } else {
+      return (
+        <Badge className="bg-red-100 text-red-800 border-red-200 flex items-center gap-1">
+          <Clock className="h-3 w-3" /> Unpaid
+        </Badge>
+      )
+    }
+  }
 
   if (loading) {
     return (
@@ -105,7 +156,7 @@ export default function InvoiceView({ invoiceId, token }: InvoiceViewProps) {
           </CardContent>
         </Card>
       </div>
-    );
+    )
   }
 
   if (!invoice) {
@@ -124,123 +175,89 @@ export default function InvoiceView({ invoiceId, token }: InvoiceViewProps) {
           </CardContent>
         </Card>
       </div>
-    );
+    )
   }
 
   return (
-    <div className="container mx-auto py-10 px-4">
+    <div className="container mx-auto py-6 px-4">
+      <div className="mb-6">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink href="/dashboard/invoices">Invoices</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink>#{invoice.invoiceId}</BreadcrumbLink>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </div>
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
         <div className="flex items-center">
-          <Button variant="outline" size="sm" asChild className="mr-4">
-            <Link href="/">
-              <ArrowLeft className="h-4 w-4 mr-1" /> Back
-            </Link>
-          </Button>
           <h1 className="text-2xl sm:text-3xl font-bold">Invoice #{invoice.invoiceId}</h1>
+          <div className="ml-4">{getPaymentStatus()}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handlePrint}>
-            <Printer className="h-4 w-4 mr-1" /> Print
-          </Button>
-          <Button size="sm" onClick={handleGeneratePDF} disabled={isGenerating}>
-            <Download className="h-4 w-4 mr-1" /> {isGenerating ? "Generating..." : "Download PDF"}
-          </Button>
-          <Button variant="outline" size="sm">
-            <Share2 className="h-4 w-4 mr-1" /> Share
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={handlePrint}>
+                  <Printer className="h-4 w-4 mr-1" /> Print
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Print invoice</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="sm" onClick={handleGeneratePDF} disabled={isGenerating}>
+                  <Download className="h-4 w-4 mr-1" /> {isGenerating ? "Generating..." : "Download PDF"}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Download as PDF</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Share2 className="h-4 w-4 mr-1" /> Share
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Share invoice</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-        <Card className="mb-6 overflow-hidden border-0 shadow-md">
-          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-            <CardTitle className="text-xl">Client Information</CardTitle>
-            <CardDescription className="text-indigo-100">Details of the client for this invoice</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="flex items-start">
-                  <User className="h-5 w-5 text-indigo-500 mr-2 mt-0.5" />
-                  <div>
-                    <p className="text-sm text-gray-500">Client Name</p>
-                    <p className="font-medium">{invoice.clientName}</p>
-                  </div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+      >
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="overflow-hidden border shadow-sm">
+            <CardHeader className="bg-white border-b">
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="text-xl flex items-center gap-2 text-gray-800">
+                    <Receipt className="h-5 w-5 text-primary" /> Invoice Details
+                  </CardTitle>
+                  <CardDescription>Created on {new Date(invoice.createdAt).toLocaleDateString()}</CardDescription>
                 </div>
-                <div className="flex items-start">
-                  <MapPin className="h-5 w-5 text-indigo-500 mr-2 mt-0.5" />
-                  <div>
-                    <p className="text-sm text-gray-500">Address</p>
-                    <p className="whitespace-pre-line">{invoice.clientAddress}</p>
-                  </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">Invoice Date</p>
+                  <p className="font-medium">{new Date(invoice.date).toLocaleDateString()}</p>
                 </div>
               </div>
-              <div className="space-y-4">
-                <div className="flex items-start">
-                  <Phone className="h-5 w-5 text-indigo-500 mr-2 mt-0.5" />
-                  <div>
-                    <p className="text-sm text-gray-500">Contact Number</p>
-                    <p className="font-medium">{invoice.clientNumber}</p>
-                  </div>
-                </div>
-                <div className="flex items-start">
-                  <Calendar className="h-5 w-5 text-indigo-500 mr-2 mt-0.5" />
-                  <div>
-                    <p className="text-sm text-gray-500">Invoice Date</p>
-                    <p className="font-medium">{new Date(invoice.date).toLocaleDateString()}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="mb-6 overflow-hidden border-0 shadow-md">
-          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-            <CardTitle className="text-xl">Invoice Items</CardTitle>
-            <CardDescription className="text-indigo-100">Services and products included</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="text-left py-3 px-4 font-medium text-gray-600 border-b">Description</th>
-                    <th className="text-right py-3 px-4 font-medium text-gray-600 border-b">Area (sq.ft)</th>
-                    <th className="text-right py-3 px-4 font-medium text-gray-600 border-b">Rate (₹)</th>
-                    <th className="text-right py-3 px-4 font-medium text-gray-600 border-b">Total (₹)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoice.items.map((item, index) => (
-                    <tr
-                      key={index}
-                      className={`border-b last:border-b-0 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"}`}
-                    >
-                      <td className="py-3 px-4">
-                        <div>
-                          <p className="font-medium">{item.description}</p>
-                          {item.note && <p className="text-sm text-gray-500 mt-1">{item.note}</p>}
-                        </div>
-                      </td>
-                      <td className="text-right py-3 px-4">{item.area ?? "-"}</td>
-                      <td className="text-right py-3 px-4">₹{item.rate.toFixed(2)}</td>
-                      <td className="text-right py-3 px-4 font-medium">
-                        ₹{(item.total ?? (item.area && item.rate ? item.area * item.rate : item.rate)).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {invoice.extraWork.length > 0 && (
-          <Card className="mb-6 overflow-hidden border-0 shadow-md">
-            <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-              <CardTitle className="text-xl">Extra Work</CardTitle>
-              <CardDescription className="text-indigo-100">Additional work performed</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
@@ -248,70 +265,111 @@ export default function InvoiceView({ invoiceId, token }: InvoiceViewProps) {
                   <thead>
                     <tr className="bg-gray-50">
                       <th className="text-left py-3 px-4 font-medium text-gray-600 border-b">Description</th>
+                      <th className="text-right py-3 px-4 font-medium text-gray-600 border-b">Area (sq.ft)</th>
+                      <th className="text-right py-3 px-4 font-medium text-gray-600 border-b">Rate (₹)</th>
                       <th className="text-right py-3 px-4 font-medium text-gray-600 border-b">Total (₹)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {invoice.extraWork.map((ew, index) => (
+                    {invoice.items.map((item, index) => (
                       <tr
                         key={index}
                         className={`border-b last:border-b-0 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"}`}
                       >
                         <td className="py-3 px-4">
                           <div>
-                            <p className="font-medium">{ew.description}</p>
-                            {ew.note && <p className="text-sm text-gray-500 mt-1">{ew.note}</p>}
+                            <p className="font-medium">{item.description}</p>
+                            {item.note && <p className="text-sm text-gray-500 mt-1">{item.note}</p>}
                           </div>
                         </td>
-                        <td className="text-right py-3 px-4 font-medium">₹{ew.total.toFixed(2)}</td>
+                        <td className="text-right py-3 px-4">{item.area ?? "-"}</td>
+                        <td className="text-right py-3 px-4">₹{item.rate.toFixed(2)}</td>
+                        <td className="text-right py-3 px-4 font-medium">
+                          ₹{(item.total ?? (item.area && item.rate ? item.area * item.rate : item.rate)).toFixed(2)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </CardContent>
+            <CardFooter className="bg-gray-50 border-t p-4">
+              <div className="ml-auto w-full max-w-xs">
+                <div className="flex justify-between py-1">
+                  <span className="text-gray-600">Subtotal:</span>
+                  <span className="font-medium">₹{invoice.subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-gray-600">Discount:</span>
+                  <span className="font-medium">₹{invoice.discount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between py-1 border-t mt-2 pt-2">
+                  <span className="font-semibold">Grand Total:</span>
+                  <span className="font-bold text-primary">₹{invoice.grandTotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="font-semibold">Amount Due:</span>
+                  <span className="font-bold text-red-600">₹{invoice.amountDue.toFixed(2)}</span>
+                </div>
+              </div>
+            </CardFooter>
           </Card>
-        )}
 
-        <Card className="mb-6 overflow-hidden border-0 shadow-md">
-          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-            <CardTitle className="text-xl">Invoice Summary</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Subtotal:</span>
-                <span className="font-medium">₹{invoice.subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Discount:</span>
-                <span className="font-medium">₹{invoice.discount.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Total Payments:</span>
-                <span className="font-medium">
-                  ₹{(invoice.totalPayments || invoice.paymentHistory.reduce((sum, p) => sum + p.amount, 0)).toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center pt-4 border-t">
-                <span className="text-lg font-semibold">Grand Total:</span>
-                <span className="text-lg font-bold text-indigo-600">₹{invoice.grandTotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-semibold">Amount Due:</span>
-                <span className="text-lg font-bold text-red-600">₹{invoice.amountDue.toFixed(2)}</span>
-              </div>
-            </div>
-            {invoice.paymentHistory.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-lg font-semibold mb-2">Payment History</h3>
-                <div className="overflow-x-auto bg-gray-50 rounded-lg">
+          {invoice.extraWork.length > 0 && (
+            <Card className="overflow-hidden border shadow-sm">
+              <CardHeader className="bg-white border-b">
+                <CardTitle className="text-xl flex items-center gap-2 text-gray-800">
+                  <DollarSign className="h-5 w-5 text-primary" /> Extra Work
+                </CardTitle>
+                <CardDescription>Additional work performed</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
                   <table className="w-full border-collapse">
                     <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2 px-4 font-medium text-gray-600">Date</th>
-                        <th className="text-right py-2 px-4 font-medium text-gray-600">Amount (₹)</th>
-                        <th className="text-left py-2 px-4 font-medium text-gray-600">Note</th>
+                      <tr className="bg-gray-50">
+                        <th className="text-left py-3 px-4 font-medium text-gray-600 border-b">Description</th>
+                        <th className="text-right py-3 px-4 font-medium text-gray-600 border-b">Total (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {invoice.extraWork.map((ew, index) => (
+                        <tr
+                          key={index}
+                          className={`border-b last:border-b-0 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"}`}
+                        >
+                          <td className="py-3 px-4">
+                            <div>
+                              <p className="font-medium">{ew.description}</p>
+                              {ew.note && <p className="text-sm text-gray-500 mt-1">{ew.note}</p>}
+                            </div>
+                          </td>
+                          <td className="text-right py-3 px-4 font-medium">₹{ew.total.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {invoice.paymentHistory.length > 0 && (
+            <Card className="overflow-hidden border shadow-sm">
+              <CardHeader className="bg-white border-b">
+                <CardTitle className="text-xl flex items-center gap-2 text-gray-800">
+                  <DollarSign className="h-5 w-5 text-primary" /> Payment History
+                </CardTitle>
+                <CardDescription>Record of all payments received</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="text-left py-3 px-4 font-medium text-gray-600 border-b">Date</th>
+                        <th className="text-right py-3 px-4 font-medium text-gray-600 border-b">Amount (₹)</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-600 border-b">Note</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -320,62 +378,114 @@ export default function InvoiceView({ invoiceId, token }: InvoiceViewProps) {
                           key={index}
                           className={`border-b last:border-b-0 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"}`}
                         >
-                          <td className="py-2 px-4">{new Date(payment.date).toLocaleString()}</td>
-                          <td className="text-right py-2 px-4 font-medium">₹{payment.amount.toFixed(2)}</td>
-                          <td className="py-2 px-4">{payment.note || "-"}</td>
+                          <td className="py-3 px-4">{new Date(payment.date).toLocaleString()}</td>
+                          <td className="text-right py-3 px-4 font-medium">₹{payment.amount.toFixed(2)}</td>
+                          <td className="py-3 px-4">{payment.note || "-"}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
-        <Card className="mb-6 overflow-hidden border-0 shadow-md">
-          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-            <CardTitle className="text-xl">Terms & Conditions</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            {invoice.terms && invoice.terms.length > 0 ? (
-              <ul className="list-disc pl-5 space-y-2">
-                {invoice.terms.map((term, index) => (
-                  <li key={index} className="text-gray-700">
-                    {term}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-gray-500">No terms specified.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {invoice.note && (
-          <Card className="mb-6 overflow-hidden border-0 shadow-md">
-            <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-              <CardTitle className="text-xl">Additional Notes</CardTitle>
+        <div className="space-y-6">
+          <Card className="overflow-hidden border shadow-sm">
+            <CardHeader className="bg-white border-b">
+              <CardTitle className="text-xl flex items-center gap-2 text-gray-800">
+                <User className="h-5 w-5 text-primary" /> Client Information
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
-              <p className="text-gray-700 whitespace-pre-line">{invoice.note}</p>
+              <div className="space-y-4">
+                <div className="flex items-start">
+                  <User className="h-5 w-5 text-gray-500 mr-3 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-gray-500">Client Name</p>
+                    <p className="font-medium">{invoice.clientName}</p>
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <MapPin className="h-5 w-5 text-gray-500 mr-3 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-gray-500">Address</p>
+                    <p className="whitespace-pre-line">{invoice.clientAddress}</p>
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <Phone className="h-5 w-5 text-gray-500 mr-3 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-gray-500">Contact Number</p>
+                    <p className="font-medium">{invoice.clientNumber}</p>
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <Calendar className="h-5 w-5 text-gray-500 mr-3 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-gray-500">Invoice Date</p>
+                    <p className="font-medium">{new Date(invoice.date).toLocaleDateString()}</p>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
-        )}
 
-        <Card className="overflow-hidden border-0 shadow-md">
-          <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-            <CardTitle className="text-xl">Invoice Status</CardTitle>
-            <CardDescription className="text-indigo-100">
-              Created: {new Date(invoice.createdAt).toLocaleString()}
-              {invoice.lastUpdated && ` • Last Updated: ${new Date(invoice.lastUpdated).toLocaleString()}`}
-            </CardDescription>
-          </CardHeader>
-        </Card>
+          <Card className="overflow-hidden border shadow-sm">
+            <CardHeader className="bg-white border-b">
+              <CardTitle className="text-xl flex items-center gap-2 text-gray-800">Terms & Conditions</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              {invoice.terms && invoice.terms.length > 0 ? (
+                <ul className="list-disc pl-5 space-y-2">
+                  {invoice.terms.map((term, index) => (
+                    <li key={index} className="text-gray-700">
+                      {term}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-gray-500">No terms specified.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {invoice.note && (
+            <Card className="overflow-hidden border shadow-sm">
+              <CardHeader className="bg-white border-b">
+                <CardTitle className="text-xl flex items-center gap-2 text-gray-800">Additional Notes</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <p className="text-gray-700 whitespace-pre-line">{invoice.note}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card className="overflow-hidden border shadow-sm">
+            <CardHeader className="bg-white border-b">
+              <CardTitle className="text-xl flex items-center gap-2 text-gray-800">Invoice Status</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Created:</span>
+                  <span>{new Date(invoice.createdAt).toLocaleString()}</span>
+                </div>
+                {invoice.lastUpdated && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Last Updated:</span>
+                    <span>{new Date(invoice.lastUpdated).toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </motion.div>
       {pdfUrl && (
         <PDFViewer pdfUrl={pdfUrl} onClose={() => setPdfUrl(null)} documentTitle={`Invoice #${invoice.invoiceId}`} />
       )}
     </div>
-  );
+  )
 }
