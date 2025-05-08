@@ -649,27 +649,29 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                         />
                       )}
                     />
-                    {siteImages && siteImages[index] && (
-                      <Image
-                        src={
-                          failedImages.includes(index)
-                            ? "/placeholder-image.jpg"
-                            : siteImages[index].url ||
-                              (siteImages[index].file
-                                ? URL.createObjectURL(siteImages[index].file)
-                                : "/placeholder-image.jpg")
-                        }
-                        alt="Site preview"
-                        width={200}
-                        height={128}
-                        className="mt-2 h-32 w-auto object-cover rounded"
-                        onError={() => {
-                          setFailedImages((prev) => [...prev, index]);
-                          toast.error(`Failed to load image ${index + 1}`);
-                        }}
-                        unoptimized={true}
-                      />
-                    )}
+                    {siteImages &&
+                      siteImages[index] &&
+                      (siteImages[index].url || siteImages[index].file) && (
+                        <Image
+                          src={
+                            failedImages.includes(index)
+                              ? "/placeholder-image.jpg"
+                              : siteImages[index].url ||
+                                (siteImages[index].file
+                                  ? URL.createObjectURL(siteImages[index].file)
+                                  : "/placeholder-image.jpg")
+                          }
+                          alt="Site preview"
+                          width={200}
+                          height={128}
+                          className="mt-2 h-32 w-auto object-cover rounded"
+                          onError={() => {
+                            setFailedImages((prev) => [...prev, index]);
+                            toast.error(`Failed to load image ${index + 1}`);
+                          }}
+                          unoptimized={true}
+                        />
+                      )}
                   </div>
                 </motion.div>
               ))}
