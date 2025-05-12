@@ -28,8 +28,9 @@ import Link from "next/link"
 import Image from "next/image"
 import { apiFetch } from "@/app/lib/api"
 import type { Quotation, ApiError } from "@/app/types"
-import { generateQuotationPDF } from "@/app/lib/pdf-generator"
-import { PDFViewer } from "./pdf-viewer"
+import { generateQuotationPDF } from "@/app/lib/generate-pdf"
+import { useSession } from "next-auth/react"
+
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -38,7 +39,6 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 interface QuotationViewProps {
   quotationNumber: string
@@ -48,8 +48,10 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
   const [quotation, setQuotation] = useState<Quotation | null>(null)
   const [loading, setLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [failedImages, setFailedImages] = useState<number[]>([])
+
+  // Get session data from NextAuth
+  const { data: session, status } = useSession()
 
   const fetchQuotation = useCallback(async () => {
     try {
@@ -138,40 +140,75 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
     }
   }
 
-  const handleGeneratePDF = async () => {
-    if (!quotation) return
-    try {
-      setIsUpdating(true)
-      const pdfUrl = await generateQuotationPDF(quotation)
-      setPdfUrl(pdfUrl)
-    } catch (error) {
-      console.error("Error generating PDF:", error)
-      toast.error("Failed to generate PDF")
-    } finally {
-      setIsUpdating(false)
-    }
-  }
-
   const handleCopyLink = () => {
     const url = window.location.href
     navigator.clipboard.writeText(url)
     toast.success("Link copied to clipboard!")
   }
 
-  const handlePrint = () => {
+  // Enhanced share function with detailed quotation and client info
+  const handleShare = async () => {
     if (!quotation) return
-    handleGeneratePDF().then(() => {
-      setTimeout(() => {
-        const iframe = document.getElementById("pdf-iframe") as HTMLIFrameElement
-        if (iframe && iframe.contentWindow) {
-          iframe.contentWindow.focus()
-          iframe.contentWindow.print()
-        }
-      }, 1000)
-    })
+
+    // Construct detailed share text
+    const itemsList = quotation.items
+      ?.map((item, index) => `${index + 1}. ${item.description}: ₹${(item.total ?? item.rate).toFixed(2)}`)
+      .join("\n") || "No items listed."
+
+    const shareText = `
+Quotation #${quotation.quotationNumber}
+Client: ${quotation.clientName}
+Address: ${quotation.clientAddress}
+Contact: ${quotation.clientNumber}
+Date: ${new Date(quotation.date).toLocaleDateString()}
+Status: ${quotation.isAccepted || "Pending"}
+
+Items:
+${itemsList}
+
+Subtotal: ₹${quotation.subtotal?.toFixed(2) || "0.00"}
+Discount: ₹${quotation.discount?.toFixed(2) || "0.00"}
+Grand Total: ₹${quotation.grandTotal?.toFixed(2) || "0.00"}
+
+View full details: ${window.location.href}
+    `.trim()
+
+    const shareData = {
+      title: `Quotation #${quotationNumber}`,
+      text: shareText,
+      url: window.location.href,
+    }
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData)
+        toast.success("Quotation shared successfully!")
+      } else {
+        toast.error("Sharing is not supported on this device.")
+      }
+    } catch (error) {
+      console.error("Error sharing quotation:", error)
+      toast.error("Failed to share quotation.")
+    }
   }
 
-  if (loading) {
+  const handleDownloadPDF = async () => {
+    if (!quotation) return
+
+    setIsUpdating(true)
+    try {
+      toast.info("Generating PDF...")
+      generateQuotationPDF(quotation)
+      toast.success("PDF downloaded successfully!")
+    } catch (error) {
+      console.error("Error generating PDF:", error)
+      toast.error("Failed to generate PDF. Please try again.")
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  if (loading || status === "loading") {
     return (
       <div className="container mx-auto py-10 px-4">
         <div className="flex items-center mb-6">
@@ -252,25 +289,31 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
             </Tooltip>
           </TooltipProvider>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
-                <Share2 className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleCopyLink}>Copy Link</DropdownMenuItem>
-              <DropdownMenuItem onClick={handleGeneratePDF}>Download PDF</DropdownMenuItem>
-              <DropdownMenuItem onClick={handlePrint}>Print</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={handleShare}>
+                  <Share2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Share Quotation</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/dashboard/quotations/edit/${quotationNumber}`}>
-              <Edit className="h-4 w-4 mr-1" /> Edit
-            </Link>
-          </Button>
-          <Button size="sm" onClick={handleGeneratePDF} disabled={isUpdating}>
+          {/* Conditionally render Edit button if user is authenticated and admin */}
+          {session?.user?.role === "admin" && (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/dashboard/quotations/edit/${quotationNumber}`}>
+                <Edit className="h-4 w-4 mr-1" /> Edit
+              </Link>
+            </Button>
+          )}
+
+          <Button
+            size="sm"
+            disabled={isUpdating}
+            onClick={handleDownloadPDF}
+          >
             <Download className="h-4 w-4 mr-1" /> {isUpdating ? "Generating..." : "Download PDF"}
           </Button>
         </div>
@@ -501,14 +544,6 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
           )}
         </div>
       </motion.div>
-
-      {pdfUrl && (
-        <PDFViewer
-          pdfUrl={pdfUrl}
-          onClose={() => setPdfUrl(null)}
-          documentTitle={`Quotation #${quotation.quotationNumber}`}
-        />
-      )}
     </div>
   )
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { motion } from "framer-motion"
-import { ArrowLeft, FileText, User, MapPin, Phone, Calendar, Tag, Edit, DollarSign } from "lucide-react"
+import { ArrowLeft, FileText, User, MapPin, Phone, Calendar, Tag, Edit, DollarSign, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,7 +15,8 @@ import { useForm } from "react-hook-form"
 import Link from "next/link"
 import Image from "next/image"
 import { apiFetch } from "@/app/lib/api"
-import type { Project } from "@/app/types"
+import type { Project, Quotation, Invoice } from "@/app/types"
+import { generateQuotationPDF, generateInvoicePDF } from "@/app/lib/generate-pdf"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -23,6 +24,12 @@ import {
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface ProjectViewProps {
   projectId: string
@@ -40,8 +47,13 @@ interface ValidationError {
 
 export default function ProjectView({ projectId }: ProjectViewProps) {
   const [project, setProject] = useState<Project | null>(null)
+  const [quotation, setQuotation] = useState<Quotation | null>(null)
+  const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingQuotation, setLoadingQuotation] = useState(false)
+  const [loadingInvoice, setLoadingInvoice] = useState(false)
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
 
   const {
     register,
@@ -57,26 +69,92 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
   })
 
   const fetchProject = useCallback(async () => {
+    console.log("Fetching project for ID:", projectId)
     try {
       const data = await apiFetch<Project>(`/projects/${projectId}`)
-      console.log("Project data:", data)
-      setProject(data)
+      console.log("Project data received:", data)
+      return data
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "Failed to fetch project"
+      console.error("Project fetch error:", errorMessage)
       toast.error(errorMessage)
-    } finally {
-      setLoading(false)
+      return null
     }
   }, [projectId])
 
+  const fetchQuotation = useCallback(async (quotationNumber: string) => {
+    console.log("Fetching quotation for number:", quotationNumber)
+    setLoadingQuotation(true)
+    try {
+      const data = await apiFetch<Quotation>(`/quotations/${quotationNumber}`)
+      console.log("Quotation data received:", data)
+      setQuotation(data)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch quotation"
+      console.error("Quotation fetch error:", errorMessage)
+      toast.error(errorMessage)
+    } finally {
+      setLoadingQuotation(false)
+    }
+  }, [])
+
+  const fetchInvoice = useCallback(async (invoiceId: string) => {
+    console.log("Fetching invoice for ID:", invoiceId)
+    setLoadingInvoice(true)
+    try {
+      const url = `/invoices/${invoiceId}`
+      console.log("Fetching invoice:", url)
+      const data = await apiFetch<Invoice>(url)
+      console.log("Invoice data received:", data)
+      setInvoice(data)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch invoice"
+      console.error("Invoice fetch error:", errorMessage)
+      toast.error(errorMessage)
+    } finally {
+      setLoadingInvoice(false)
+    }
+  }, [])
+
   useEffect(() => {
     if (!projectId) {
+      console.error("Invalid project ID:", projectId)
       toast.error("Invalid project ID")
       setLoading(false)
       return
     }
-    fetchProject()
-  }, [projectId, fetchProject])
+
+    const loadData = async () => {
+      console.log("Starting data load for project ID:", projectId)
+      setLoading(true)
+      const projectData = await fetchProject()
+      setProject(projectData)
+
+      if (projectData) {
+        if (projectData.quotationNumber) {
+          await fetchQuotation(projectData.quotationNumber)
+        } else {
+          console.log("No quotation number found for project")
+        }
+        if (projectData.invoiceId) {
+          await fetchInvoice(projectData.invoiceId)
+        } else {
+          console.log("No invoice ID found for project")
+        }
+      } else {
+        console.log("No project data received")
+      }
+
+      setLoading(false)
+      console.log("Data load complete")
+    }
+
+    loadData().catch((error) => {
+      console.error("Error in loadData:", error)
+      toast.error("Failed to load project data")
+      setLoading(false)
+    })
+  }, [projectId, fetchProject, fetchQuotation, fetchInvoice])
 
   const onPaymentSubmit = async (data: PaymentFormData) => {
     if (!project) {
@@ -120,7 +198,7 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
       toast.success("Payment added successfully!")
       setIsPaymentDialogOpen(false)
       resetForm()
-      fetchProject()
+      await fetchProject()
     } catch (error: unknown) {
       console.error("Add payment error:", error)
       const errorMessage = error instanceof Error ? error.message : "Failed to add payment"
@@ -128,6 +206,44 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
       if (error instanceof Error && "details" in error) {
         ;(error.details as ValidationError[]).forEach((err) => toast.error(`Validation error: ${err.message}`))
       }
+    }
+  }
+
+  const handleDownloadQuotationPDF = async () => {
+    if (!quotation) {
+      toast.error("Quotation data not loaded")
+      return
+    }
+
+    setIsGeneratingPDF(true)
+    try {
+      toast.info("Generating Quotation PDF...")
+      generateQuotationPDF(quotation)
+      toast.success("Quotation PDF downloaded successfully!")
+    } catch (error) {
+      console.error("Error generating Quotation PDF:", error)
+      toast.error("Failed to generate Quotation PDF. Please try again.")
+    } finally {
+      setIsGeneratingPDF(false)
+    }
+  }
+
+  const handleDownloadInvoicePDF = async () => {
+    if (!invoice) {
+      toast.error("Invoice data not loaded")
+      return
+    }
+
+    setIsGeneratingPDF(true)
+    try {
+      toast.info("Generating Invoice PDF...")
+      generateInvoicePDF(invoice)
+      toast.success("Invoice PDF downloaded successfully!")
+    } catch (error) {
+      console.error("Error generating Invoice PDF:", error)
+      toast.error("Failed to generate Invoice PDF. Please try again.")
+    } finally {
+      setIsGeneratingPDF(false)
     }
   }
 
@@ -208,15 +324,59 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
         <div className="flex items-center">
           <h1 className="text-2xl sm:text-3xl font-bold">Project #{project.projectId}</h1>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setIsPaymentDialogOpen(true)}>
-            <DollarSign className="h-4 w-4 mr-1" /> Add Payment
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/dashboard/projects/edit/${projectId}`}>
-              <Edit className="h-4 w-4 mr-1" /> Edit
-            </Link>
-          </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={() => setIsPaymentDialogOpen(true)}>
+                  <DollarSign className="h-4 w-4 mr-1" /> Add Payment
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Add Payment</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/dashboard/projects/edit/${projectId}`}>
+                    <Edit className="h-4 w-4 mr-1" /> Edit
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Edit Project</TooltipContent>
+            </Tooltip>
+            {project.quotationNumber && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDownloadQuotationPDF}
+                    disabled={isGeneratingPDF || loadingQuotation || !quotation}
+                  >
+                    <Download className="h-4 w-4 mr-1" />{" "}
+                    {isGeneratingPDF || loadingQuotation ? "Loading..." : "Download Quotation"}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Download Quotation PDF</TooltipContent>
+              </Tooltip>
+            )}
+            {project.invoiceId && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDownloadInvoicePDF}
+                    disabled={isGeneratingPDF || loadingInvoice || !invoice}
+                  >
+                    <Download className="h-4 w-4 mr-1" />{" "}
+                    {isGeneratingPDF || loadingInvoice ? "Loading..." : "Download Invoice"}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Download Invoice PDF</TooltipContent>
+              </Tooltip>
+            )}
+          </TooltipProvider>
         </div>
       </div>
 

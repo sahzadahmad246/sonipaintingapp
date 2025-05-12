@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useCallback } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Trash2,
   Edit,
@@ -15,12 +15,13 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { toast } from "sonner"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+  Download,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -28,43 +29,45 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
-import Link from "next/link"
+} from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import Link from "next/link";
 
-import { getQuotations, apiFetch } from "@/app/lib/api"
-import type { Quotation, ApiError } from "@/app/types"
+import { getQuotations, apiFetch } from "@/app/lib/api";
+import { generateQuotationPDF } from "@/app/lib/generate-pdf";
+import type { Quotation, ApiError } from "@/app/types";
 
 export default function QuotationList() {
-  const [quotations, setQuotations] = useState<Quotation[]>([])
-  const [filteredQuotations, setFilteredQuotations] = useState<Quotation[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "accepted" | "rejected">("all")
-  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [quotationToDelete, setQuotationToDelete] = useState<string | null>(null)
-  const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const limit = 10
+  const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [filteredQuotations, setFilteredQuotations] = useState<Quotation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "accepted" | "rejected">("all");
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [quotationToDelete, setQuotationToDelete] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isGenerating, setIsGenerating] = useState<string | null>(null);
+  const limit = 10;
 
   const fetchQuotations = useCallback(async () => {
     try {
-      const { quotations, pages } = await getQuotations(page, limit)
-      setQuotations(quotations)
-      setTotalPages(pages)
+      const { quotations, pages } = await getQuotations(page, limit);
+      setQuotations(quotations);
+      setTotalPages(pages);
     } catch (error: unknown) {
-      const apiError = error as ApiError
-      toast.error(apiError.error || "Failed to fetch quotations")
+      const apiError = error as ApiError;
+      toast.error(apiError.error || "Failed to fetch quotations");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [page, limit])
+  }, [page, limit]);
 
   const filterQuotations = useCallback(() => {
-    let filtered = [...quotations]
+    let filtered = [...quotations];
     if (searchTerm) {
       filtered = filtered.filter(
         (q) =>
@@ -72,45 +75,59 @@ export default function QuotationList() {
           q.quotationNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
           q.clientAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
           q.clientNumber.includes(searchTerm),
-      )
+      );
     }
     if (statusFilter !== "all") {
-      filtered = filtered.filter((q) => q.isAccepted === statusFilter)
+      filtered = filtered.filter((q) => q.isAccepted === statusFilter);
     }
     filtered.sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime()
-      const dateB = new Date(b.createdAt).getTime()
-      return sortOrder === "newest" ? dateB - dateA : dateA - dateB
-    })
-    setFilteredQuotations(filtered)
-  }, [quotations, searchTerm, statusFilter, sortOrder])
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return sortOrder === "newest" ? dateB - dateA : dateA - dateB;
+    });
+    setFilteredQuotations(filtered);
+  }, [quotations, searchTerm, statusFilter, sortOrder]);
 
   useEffect(() => {
-    fetchQuotations()
-  }, [fetchQuotations])
+    fetchQuotations();
+  }, [fetchQuotations]);
 
   useEffect(() => {
-    filterQuotations()
-  }, [filterQuotations])
+    filterQuotations();
+  }, [filterQuotations]);
 
   const handleDelete = async (quotationNumber: string) => {
     try {
-      await apiFetch(`/quotations/${quotationNumber}`, { method: "DELETE" })
-      setQuotations((prev) => prev.filter((q) => q.quotationNumber !== quotationNumber))
-      toast.success("Quotation deleted successfully!")
+      await apiFetch(`/quotations/${quotationNumber}`, { method: "DELETE" });
+      setQuotations((prev) => prev.filter((q) => q.quotationNumber !== quotationNumber));
+      toast.success("Quotation deleted successfully!");
     } catch (error: unknown) {
-      const apiError = error as ApiError
-      toast.error(apiError.error || "Failed to delete quotation")
+      const apiError = error as ApiError;
+      toast.error(apiError.error || "Failed to delete quotation");
     } finally {
-      setDeleteDialogOpen(false)
-      setQuotationToDelete(null)
+      setDeleteDialogOpen(false);
+      setQuotationToDelete(null);
     }
-  }
+  };
 
   const confirmDelete = (quotationNumber: string) => {
-    setQuotationToDelete(quotationNumber)
-    setDeleteDialogOpen(true)
-  }
+    setQuotationToDelete(quotationNumber);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDownloadPDF = async (quotation: Quotation) => {
+    try {
+      setIsGenerating(quotation.quotationNumber);
+      toast.info("Generating PDF...");
+      await generateQuotationPDF(quotation);
+      toast.success("Quotation PDF downloaded successfully!");
+    } catch (error: unknown) {
+      console.error("Error generating PDF:", error);
+      toast.error("Failed to generate PDF");
+    } finally {
+      setIsGenerating(null);
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -119,21 +136,21 @@ export default function QuotationList() {
           <Badge className="bg-green-100 text-green-800 border-green-200 flex items-center">
             <CheckCircle className="h-3 w-3 mr-1" /> Accepted
           </Badge>
-        )
+        );
       case "rejected":
         return (
           <Badge className="bg-red-100 text-red-800 border-red-200 flex items-center">
             <XCircle className="h-3 w-3 mr-1" /> Rejected
           </Badge>
-        )
+        );
       default:
         return (
           <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 flex items-center">
             <Clock className="h-3 w-3 mr-1" /> Pending
           </Badge>
-        )
+        );
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -149,7 +166,7 @@ export default function QuotationList() {
           </Card>
         ))}
       </div>
-    )
+    );
   }
 
   if (quotations.length === 0 && page === 1) {
@@ -161,7 +178,7 @@ export default function QuotationList() {
           <p className="text-gray-500 mb-6 text-center">Create your first quotation to get started.</p>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   return (
@@ -210,7 +227,7 @@ export default function QuotationList() {
 
           <AnimatePresence>
             {filteredQuotations.length === 0 ? (
-              <motion.div
+              < motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -294,6 +311,22 @@ export default function QuotationList() {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleDownloadPDF(quotation)}
+                                    disabled={isGenerating === quotation.quotationNumber}
+                                  >
+                                    <Download className="h-4 w-4 mr-1" />
+                                    {isGenerating === quotation.quotationNumber ? "Generating..." : "Download"}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Download as PDF</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
                                     variant="destructive"
                                     size="sm"
                                     onClick={() => confirmDelete(quotation.quotationNumber)}
@@ -347,5 +380,5 @@ export default function QuotationList() {
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }

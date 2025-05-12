@@ -32,11 +32,13 @@ export interface Quotation {
     publicId: string;
     description?: string;
   }[];
+  validity?: string;
 }
 
 export interface Project {
   projectId: string;
   quotationNumber: string;
+  invoiceId: string;
   clientName: string;
   clientAddress: string;
   clientNumber: string;

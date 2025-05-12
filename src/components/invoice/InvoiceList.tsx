@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useCallback } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Trash2,
   Eye,
@@ -14,11 +14,11 @@ import {
   CheckCircle,
   Clock,
   XCircle,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { toast } from "sonner"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -26,45 +26,45 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Badge } from "@/components/ui/badge"
-import Link from "next/link"
-import { getInvoices, apiFetch } from "@/app/lib/api"
-import { generateInvoicePDF } from "@/app/lib/pdf-generator"
-import type { Invoice } from "@/app/types"
+} from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+import { getInvoices, apiFetch } from "@/app/lib/api";
+import { generateInvoicePDF } from "@/app/lib/generate-pdf";
+import type { Invoice } from "@/app/types";
 
 export default function InvoiceList() {
-  const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null)
-  const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [isGenerating, setIsGenerating] = useState<string | null>(null)
-  const limit = 10
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isGenerating, setIsGenerating] = useState<string | null>(null);
+  const limit = 10;
 
   const fetchInvoices = useCallback(async () => {
     try {
-      const { invoices, pages } = await getInvoices(page, limit)
-      setInvoices(invoices)
-      setTotalPages(pages)
+      const { invoices, pages } = await getInvoices(page, limit);
+      setInvoices(invoices);
+      setTotalPages(pages);
     } catch (error: unknown) {
-      console.error("Fetch invoices error:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to fetch invoices"
-      toast.error(errorMessage)
-      setInvoices([])
-      setTotalPages(1)
+      console.error("Fetch invoices error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch invoices";
+      toast.error(errorMessage);
+      setInvoices([]);
+      setTotalPages(1);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [page, limit])
+  }, [page, limit]);
 
   const filterInvoices = useCallback(() => {
-    let filtered = [...invoices]
+    let filtered = [...invoices];
     if (searchTerm) {
       filtered = filtered.filter(
         (i) =>
@@ -72,84 +72,76 @@ export default function InvoiceList() {
           i.invoiceId.toLowerCase().includes(searchTerm.toLowerCase()) ||
           i.clientAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
           i.clientNumber.includes(searchTerm),
-      )
+      );
     }
-    setFilteredInvoices(filtered)
-  }, [invoices, searchTerm])
+    setFilteredInvoices(filtered);
+  }, [invoices, searchTerm]);
 
   useEffect(() => {
-    fetchInvoices()
-  }, [fetchInvoices])
+    fetchInvoices();
+  }, [fetchInvoices]);
 
   useEffect(() => {
-    filterInvoices()
-  }, [filterInvoices])
+    filterInvoices();
+  }, [filterInvoices]);
 
   const handleDelete = async (invoiceId: string) => {
     try {
-      await apiFetch(`/invoices/${invoiceId}`, { method: "DELETE" })
-      setInvoices((prev) => prev.filter((i) => i.invoiceId !== invoiceId))
-      toast.success("Invoice deleted successfully!")
+      await apiFetch(`/invoices/${invoiceId}`, { method: "DELETE" });
+      setInvoices((prev) => prev.filter((i) => i.invoiceId !== invoiceId));
+      toast.success("Invoice deleted successfully!");
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete invoice"
-      toast.error(errorMessage)
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete invoice";
+      toast.error(errorMessage);
     } finally {
-      setDeleteDialogOpen(false)
-      setInvoiceToDelete(null)
+      setDeleteDialogOpen(false);
+      setInvoiceToDelete(null);
     }
-  }
+  };
 
   const confirmDelete = (invoiceId: string) => {
-    setInvoiceToDelete(invoiceId)
-    setDeleteDialogOpen(true)
-  }
+    setInvoiceToDelete(invoiceId);
+    setDeleteDialogOpen(true);
+  };
 
   const handleDownloadPDF = async (invoice: Invoice) => {
     try {
-      setIsGenerating(invoice.invoiceId)
-      const pdfUrl = await generateInvoicePDF(invoice)
-
-      // Create a temporary link element
-      const link = document.createElement("a")
-      link.href = pdfUrl
-      link.download = `Invoice_${invoice.invoiceId}.pdf`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-
-      toast.success("Invoice downloaded successfully!")
-    } catch (error) {
-      console.error("Error generating PDF:", error)
-      toast.error("Failed to generate PDF")
+      setIsGenerating(invoice.invoiceId);
+      toast.info("Generating PDF...");
+      await generateInvoicePDF(invoice);
+      toast.success("Invoice downloaded successfully!");
+    } catch (error: unknown) {
+      console.error("Error generating PDF:", error);
+      toast.error("Failed to generate PDF");
     } finally {
-      setIsGenerating(null)
+      setIsGenerating(null);
     }
-  }
+  };
 
   const getPaymentStatus = (invoice: Invoice) => {
-    const amountDue = invoice.amountDue
-    const grandTotal = invoice.grandTotal
+    const amountDue = invoice.amountDue;
+    const grandTotal = invoice.grandTotal;
 
     if (amountDue <= 0) {
       return (
         <Badge className="bg-green-100 text-green-800 border-green-200 flex items-center">
           <CheckCircle className="h-3 w-3 mr-1" /> Paid
         </Badge>
-      )
+      );
     } else if (amountDue < grandTotal) {
       return (
         <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 flex items-center">
           <Clock className="h-3 w-3 mr-1" /> Partially Paid
         </Badge>
-      )
+      );
     } else {
       return (
         <Badge className="bg-red-100 text-red-800 border-red-200 flex items-center">
           <XCircle className="h-3 w-3 mr-1" /> Unpaid
         </Badge>
-      )
+      );
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -165,7 +157,7 @@ export default function InvoiceList() {
           </Card>
         ))}
       </div>
-    )
+    );
   }
 
   if (invoices.length === 0 && page === 1) {
@@ -177,7 +169,7 @@ export default function InvoiceList() {
           <p className="text-gray-500 mb-6 text-center">Create your first invoice to get started.</p>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   return (
@@ -342,5 +334,5 @@ export default function InvoiceList() {
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }

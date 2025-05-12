@@ -1,14 +1,12 @@
 "use client"
 
 import type React from "react"
-
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
-import Image from "next/image" // Import Image component
+import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { motion, AnimatePresence } from "framer-motion"
 import { useSession, signIn, signOut } from "next-auth/react"
-import { Menu, X, User, LogOut, LogIn, LayoutDashboard } from "lucide-react"
+import { User, LogOut, LogIn, LayoutDashboard } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   NavigationMenu,
@@ -26,7 +24,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-// Define props interface for CustomNavLink
 interface CustomNavLinkProps {
   href: string
   children: React.ReactNode
@@ -56,7 +53,6 @@ const CustomNavLink = ({ href, children, className, ...props }: CustomNavLinkPro
 export default function Navbar() {
   const { data: session } = useSession()
   const [isScrolled, setIsScrolled] = useState(false)
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -66,19 +62,6 @@ export default function Navbar() {
     window.addEventListener("scroll", handleScroll)
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
-
-  useEffect(() => {
-    // Disable body scroll when mobile menu is open
-    if (isMobileMenuOpen) {
-      document.body.style.overflow = "hidden"
-    } else {
-      document.body.style.overflow = "unset"
-    }
-
-    return () => {
-      document.body.style.overflow = "unset"
-    }
-  }, [isMobileMenuOpen])
 
   const navItems = [
     { href: "/", label: "Home" },
@@ -95,12 +78,17 @@ export default function Navbar() {
       )}
     >
       <div className="container mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="text-2xl font-bold text-primary z-10">
-          SoniPainting
+        <Link href="/" className="flex items-center">
+          <Image
+            src="/logo.png"
+            alt="SoniPainting Logo"
+            width={80} // Reduced from 100
+            height={26} // Reduced from 32
+            priority
+          />
         </Link>
 
-        {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center space-x-2">
+        <div className="flex items-center space-x-2">
           <NavigationMenu>
             <NavigationMenuList>
               {navItems.map((item) => (
@@ -171,82 +159,6 @@ export default function Navbar() {
             </Button>
           )}
         </div>
-
-        {/* Mobile Menu Button */}
-        <button className="md:hidden z-10 p-2" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-          {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
-
-        {/* Mobile Menu */}
-        <AnimatePresence>
-          {isMobileMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, x: "100%" }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: "100%" }}
-              transition={{ duration: 0.3 }}
-              className="fixed inset-0 bg-white z-[49] md:hidden flex flex-col"
-            >
-              <div className="flex flex-col items-center justify-center flex-1 p-8">
-                <div className="flex flex-col items-center space-y-6 text-lg">
-                  {navItems.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className="py-2 px-4 hover:text-primary transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
-
-                  {session ? (
-                    <>
-                      <Link
-                        href="/profile"
-                        className="py-2 px-4 hover:text-primary transition-colors"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                      >
-                        Profile
-                      </Link>
-
-                      {session.user.role === "admin" && (
-                        <Link
-                          href="/dashboard"
-                          className="py-2 px-4 hover:text-primary transition-colors"
-                          onClick={() => setIsMobileMenuOpen(false)}
-                        >
-                          Dashboard
-                        </Link>
-                      )}
-
-                      <Button
-                        onClick={() => {
-                          signOut({ callbackUrl: "/" })
-                          setIsMobileMenuOpen(false)
-                        }}
-                        variant="destructive"
-                        className="mt-4"
-                      >
-                        Sign Out
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      onClick={() => {
-                        signIn("google", { callbackUrl: "/profile" })
-                        setIsMobileMenuOpen(false)
-                      }}
-                      className="mt-4"
-                    >
-                      Sign In
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     </header>
   )

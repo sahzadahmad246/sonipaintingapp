@@ -1,7 +1,8 @@
-"use client"
+// InvoiceView.tsx
+"use client";
 
-import { useState, useEffect, useCallback } from "react"
-import { motion } from "framer-motion"
+import { useState, useEffect, useCallback } from "react";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
   FileText,
@@ -10,124 +11,138 @@ import {
   Phone,
   Calendar,
   Download,
-  Printer,
   Share2,
   Clock,
   CheckCircle,
   DollarSign,
   Receipt,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { toast } from "sonner"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
-import Link from "next/link"
-import { apiFetch } from "@/app/lib/api"
-import type { Invoice } from "@/app/types"
-import { generateInvoicePDF } from "@/app/lib/pdf-generator"
-import { PDFViewer } from "../Quotation/pdf-viewer"
+  Clipboard,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import Link from "next/link";
+import { apiFetch } from "@/app/lib/api";
+import type { Invoice } from "@/app/types";
+import { generateInvoicePDF } from "@/app/lib/generate-pdf";
+
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { Badge } from "@/components/ui/badge"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+} from "@/components/ui/breadcrumb";
+import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface InvoiceViewProps {
-  invoiceId: string
-  token?: string
+  invoiceId: string;
+  token?: string;
 }
 
 export default function InvoiceView({ invoiceId, token }: InvoiceViewProps) {
-  const [invoice, setInvoice] = useState<Invoice | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+  const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const fetchInvoice = useCallback(async () => {
     try {
-      const url = `/invoices/${invoiceId}${token ? `?token=${token}` : ""}`
-      console.log("Fetching invoice:", url)
-      const data = await apiFetch<Invoice>(url)
-      console.log("Invoice data received:", data)
-      setInvoice(data)
+      const url = `/invoices/${invoiceId}${token ? `?token=${token}` : ""}`;
+      console.log("Fetching invoice:", url);
+      const data = await apiFetch<Invoice>(url);
+      console.log("Invoice data received:", data);
+      setInvoice(data);
     } catch (error: unknown) {
-      console.error("Fetch invoice error:", error)
+      console.error("Fetch invoice error:", error);
       const errorMessage =
-        error instanceof Error ? error.message : `Failed to fetch invoice: ${error || "Unknown error"}`
-      toast.error(errorMessage)
+        error instanceof Error
+          ? error.message
+          : `Failed to fetch invoice: ${error || "Unknown error"}`;
+      toast.error(errorMessage);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [invoiceId, token])
+  }, [invoiceId, token]);
 
   useEffect(() => {
-    console.log("InvoiceView props:", { invoiceId, token })
+    console.log("InvoiceView props:", { invoiceId, token });
     if (!invoiceId) {
-      console.error("Invalid invoice ID:", invoiceId)
-      toast.error("Invalid invoice ID")
-      setLoading(false)
-      return
+      console.error("Invalid invoice ID:", invoiceId);
+      toast.error("Invalid invoice ID");
+      setLoading(false);
+      return;
     }
-    fetchInvoice()
-  }, [invoiceId, token, fetchInvoice])
+    fetchInvoice();
+  }, [invoiceId, token, fetchInvoice]);
 
-  const handleGeneratePDF = async () => {
-    if (!invoice) return
+  const handleCopyLink = () => {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url);
+    toast.success("Link copied to clipboard!");
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!invoice) return;
+
+    setIsGenerating(true);
     try {
-      setIsGenerating(true)
-      const pdfUrl = await generateInvoicePDF(invoice)
-      setPdfUrl(pdfUrl)
+      toast.info("Generating PDF...");
+      generateInvoicePDF(invoice);
+      toast.success("PDF downloaded successfully!");
     } catch (error) {
-      console.error("Error generating PDF:", error)
-      toast.error("Failed to generate PDF")
+      console.error("Error generating PDF:", error);
+      toast.error("Failed to generate PDF. Please try again.");
     } finally {
-      setIsGenerating(false)
+      setIsGenerating(false);
     }
-  }
-
-  const handlePrint = () => {
-    if (!invoice) return
-    handleGeneratePDF().then(() => {
-      setTimeout(() => {
-        const iframe = document.getElementById("pdf-iframe") as HTMLIFrameElement
-        if (iframe && iframe.contentWindow) {
-          iframe.contentWindow.focus()
-          iframe.contentWindow.print()
-        }
-      }, 1000)
-    })
-  }
+  };
 
   const getPaymentStatus = () => {
-    if (!invoice) return null
+    if (!invoice) return null;
 
-    const amountDue = invoice.amountDue
-    const grandTotal = invoice.grandTotal
+    const amountDue = invoice.amountDue;
+    const grandTotal = invoice.grandTotal;
 
     if (amountDue <= 0) {
       return (
         <Badge className="bg-green-100 text-green-800 border-green-200 flex items-center gap-1">
           <CheckCircle className="h-3 w-3" /> Paid
         </Badge>
-      )
+      );
     } else if (amountDue < grandTotal) {
       return (
         <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 flex items-center gap-1">
           <Clock className="h-3 w-3" /> Partially Paid
         </Badge>
-      )
+      );
     } else {
       return (
         <Badge className="bg-red-100 text-red-800 border-red-200 flex items-center gap-1">
           <Clock className="h-3 w-3" /> Unpaid
         </Badge>
-      )
+      );
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -156,7 +171,7 @@ export default function InvoiceView({ invoiceId, token }: InvoiceViewProps) {
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
   if (!invoice) {
@@ -166,7 +181,7 @@ export default function InvoiceView({ invoiceId, token }: InvoiceViewProps) {
           <CardContent className="flex flex-col items-center justify-center py-12">
             <FileText className="h-16 w-16 text-gray-300 mb-4" />
             <h3 className="text-xl font-medium text-gray-700 mb-2">Invoice Not Found</h3>
-            <p className="text-gray-500 mb-6 text-center">The invoice doesn&apos;t exist or you lack access.</p>
+            <p className="text-gray-500 mb-6 text-center">The invoice does not exist or you lack access.</p>
             <Button asChild>
               <Link href="/">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
@@ -175,7 +190,7 @@ export default function InvoiceView({ invoiceId, token }: InvoiceViewProps) {
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
   return (
@@ -207,31 +222,38 @@ export default function InvoiceView({ invoiceId, token }: InvoiceViewProps) {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={handlePrint}>
-                  <Printer className="h-4 w-4 mr-1" /> Print
+                <Button variant="outline" size="icon" onClick={handleCopyLink}>
+                  <Clipboard className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Print invoice</TooltipContent>
+              <TooltipContent>Copy Link</TooltipContent>
             </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="sm" onClick={handleGeneratePDF} disabled={isGenerating}>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon">
+                      <Share2 className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleCopyLink}>Copy Link</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TooltipTrigger>
+              <TooltipContent>Share invoice</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  disabled={isGenerating}
+                  onClick={handleDownloadPDF}
+                >
                   <Download className="h-4 w-4 mr-1" /> {isGenerating ? "Generating..." : "Download PDF"}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Download as PDF</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Share2 className="h-4 w-4 mr-1" /> Share
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Share invoice</TooltipContent>
+              <TooltipContent>Download PDF</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
@@ -373,13 +395,19 @@ export default function InvoiceView({ invoiceId, token }: InvoiceViewProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {invoice.paymentHistory.map((payment, index) => (
+                        {invoice.paymentHistory.map((payment, index) => (
                         <tr
                           key={index}
-                          className={`border-b last:border-b-0 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"}`}
+                          className={`border-b last:border-b-0 ${
+                            index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                          }`}
                         >
-                          <td className="py-3 px-4">{new Date(payment.date).toLocaleString()}</td>
-                          <td className="text-right py-3 px-4 font-medium">₹{payment.amount.toFixed(2)}</td>
+                          <td className="py-3 px-4">
+                            {new Date(payment.date).toLocaleString()}
+                          </td>
+                          <td className="text-right py-3 px-4 font-medium">
+                            ₹{payment.amount.toFixed(2)}
+                          </td>
                           <td className="py-3 px-4">{payment.note || "-"}</td>
                         </tr>
                       ))}
@@ -440,9 +468,7 @@ export default function InvoiceView({ invoiceId, token }: InvoiceViewProps) {
               {invoice.terms && invoice.terms.length > 0 ? (
                 <ul className="list-disc pl-5 space-y-2">
                   {invoice.terms.map((term, index) => (
-                    <li key={index} className="text-gray-700">
-                      {term}
-                    </li>
+                    <li key={index} className="text-gray-700">{term}</li>
                   ))}
                 </ul>
               ) : (
@@ -483,9 +509,6 @@ export default function InvoiceView({ invoiceId, token }: InvoiceViewProps) {
           </Card>
         </div>
       </motion.div>
-      {pdfUrl && (
-        <PDFViewer pdfUrl={pdfUrl} onClose={() => setPdfUrl(null)} documentTitle={`Invoice #${invoice.invoiceId}`} />
-      )}
     </div>
-  )
+  );
 }

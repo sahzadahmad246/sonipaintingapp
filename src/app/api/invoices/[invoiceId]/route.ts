@@ -44,20 +44,12 @@ export async function GET(
 ) {
   try {
     const { invoiceId } = await context.params;
-    const url = new URL(request.url);
-    const token = url.searchParams.get("token");
-
+    
     await dbConnect();
     const invoice = await Invoice.findOne({ invoiceId });
+    
     if (!invoice) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
-    }
-
-    if (!token || invoice.accessToken !== token) {
-      const session = await getServerSession(authOptions);
-      if (!session || session.user.role !== "admin") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
     }
 
     return NextResponse.json(invoice);
