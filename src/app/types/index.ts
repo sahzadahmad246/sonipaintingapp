@@ -131,12 +131,12 @@ export interface PortfolioInput {
 
 export interface GeneralInfo {
   _id?: string;
-  logoUrl: string;
+  logoUrl?: string;
   publicId?: string;
   siteName: string;
   gstNumber?: string;
-  gstPercent: number;
-  termsAndConditions: string[];
+  gstPercent?: number; // Made optional to handle missing values
+  termsAndConditions?: string[]; // Made optional to handle missing values
   mobileNumber1: string;
   mobileNumber2?: string;
   address: string;

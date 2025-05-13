@@ -1,18 +1,32 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import type React from "react";
+
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { Plus, Trash2, Save, FileText } from "lucide-react";
+import { Plus, Trash2, FileText, Save } from "lucide-react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { apiFetch } from "@/app/lib/api";
 import type { Project, Quotation } from "@/app/types";
 
@@ -55,7 +69,8 @@ interface ApiError {
 export default function ProjectForm({ projectId }: ProjectFormProps) {
   const router = useRouter();
   const params = useParams();
-  const effectiveProjectId = projectId || (typeof params.projectId === "string" ? params.projectId : "");
+  const effectiveProjectId =
+    projectId || (typeof params.projectId === "string" ? params.projectId : "");
 
   const {
     control,
@@ -64,6 +79,7 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
     setValue,
     reset,
     watch,
+    getValues,
   } = useForm<FormData>({
     defaultValues: {
       quotationNumber: "",
@@ -83,12 +99,20 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
     },
   });
 
-  const { fields: itemFields, append: appendItem, remove: removeItem } = useFieldArray({
+  const {
+    fields: itemFields,
+    append: appendItem,
+    remove: removeItem,
+  } = useFieldArray({
     control,
     name: "items",
   });
 
-  const { fields: extraWorkFields, append: appendExtraWork, remove: removeExtraWork } = useFieldArray({
+  const {
+    fields: extraWorkFields,
+    append: appendExtraWork,
+    remove: removeExtraWork,
+  } = useFieldArray({
     control,
     name: "extraWork",
   });
@@ -102,39 +126,96 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
   const extraWork = watch("extraWork");
   const discount = watch("discount");
 
-  // Auto-calculate totals
-  useEffect(() => {
-    items.forEach((item, index) => {
-      const area = item.area ?? null;
-      const rate = item.rate ?? 0;
-      if (area !== null && rate !== null && area > 0 && rate > 0) {
-        const total = area * rate;
+  // Calculate totals function that can be called directly
+  const calculateTotals = useCallback(() => {
+    const currentItems = getValues("items");
+    const currentExtraWork = getValues("extraWork");
+    const currentDiscount = getValues("discount") || 0;
+
+    // Calculate subtotal from items
+    const itemSubtotal = currentItems.reduce((sum, item) => {
+      if (item.total !== null && item.total !== undefined) {
+        return sum + item.total;
+      } else if (
+        item.area !== null &&
+        item.area !== undefined &&
+        item.rate &&
+        item.area > 0 &&
+        item.rate > 0
+      ) {
+        return sum + item.area * item.rate;
+      }
+      return sum;
+    }, 0);
+
+    // Calculate subtotal from extra work
+    const extraWorkSubtotal = currentExtraWork.reduce(
+      (sum, ew) => sum + (ew.total || 0),
+      0
+    );
+
+    // Calculate total subtotal and grand total
+    const subtotal = itemSubtotal + extraWorkSubtotal;
+    const grandTotal = Math.max(0, subtotal - currentDiscount);
+
+    // Update form values
+    setValue("subtotal", subtotal, { shouldValidate: true });
+    setValue("grandTotal", grandTotal, { shouldValidate: true });
+
+    return { subtotal, grandTotal };
+  }, [getValues, setValue]);
+
+  // Update item total when area or rate changes
+  const updateItemTotal = useCallback(
+    (index: number) => {
+      const currentItems = getValues("items");
+      const item = currentItems[index];
+
+      if (
+        item &&
+        item.area !== null &&
+        item.area !== undefined &&
+        item.rate &&
+        item.area > 0 &&
+        item.rate > 0
+      ) {
+        const total = item.area * item.rate;
         setValue(`items.${index}.total`, total, { shouldValidate: true });
-      } else {
-        setValue(`items.${index}.total`, item.total ?? null, { shouldValidate: true });
+      }
+
+      // Recalculate subtotal and grand total
+      calculateTotals();
+    },
+    [getValues, setValue, calculateTotals]
+  );
+
+  // Auto-calculate totals whenever items, extraWork, or discount change
+  useEffect(() => {
+    // Calculate individual item totals
+    items.forEach((item, index) => {
+      if (
+        item.area !== null &&
+        item.area !== undefined &&
+        item.rate &&
+        item.area > 0 &&
+        item.rate > 0
+      ) {
+        const total = item.area * item.rate;
+        setValue(`items.${index}.total`, total, { shouldValidate: true });
       }
     });
 
-    const itemSubtotal = items.reduce((sum: number, item) => {
-      const total =
-        item.total ?? (item.area && item.rate && item.area > 0 && item.rate > 0 ? item.area * item.rate : 0);
-      return sum + (total || 0);
-    }, 0);
-
-    const extraWorkSubtotal = extraWork.reduce((sum: number, ew) => sum + (ew.total || 0), 0);
-
-    const subtotal = itemSubtotal + extraWorkSubtotal;
-    const grandTotal = subtotal - (discount || 0);
-
-    setValue("subtotal", subtotal, { shouldValidate: true });
-    setValue("grandTotal", grandTotal, { shouldValidate: true });
-  }, [items, extraWork, discount, setValue]);
+    // Calculate totals
+    calculateTotals();
+  }, [items, extraWork, discount, setValue, calculateTotals]);
 
   // Fetch quotations and project data
   useEffect(() => {
     const fetchQuotations = async () => {
       try {
-        const { quotations } = await apiFetch<{ quotations: Quotation[] }>("/quotations");
+        const { quotations } = await apiFetch<{ quotations: Quotation[] }>(
+          "/quotations"
+        );
         setQuotations(quotations);
       } catch (error: unknown) {
         const apiError = error as ApiError;
@@ -168,6 +249,11 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
           grandTotal: data.grandTotal ?? 0,
         });
         setImagePreviews(data.siteImages?.map((img) => img.url) || []);
+
+        // Force calculation after data is loaded
+        setTimeout(() => {
+          calculateTotals();
+        }, 0);
       } catch (error: unknown) {
         const apiError = error as ApiError;
         toast.error(apiError.error || "Failed to fetch project");
@@ -176,15 +262,17 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
       }
     };
 
+    fetchQuotations();
     if (effectiveProjectId) {
-      fetchQuotations();
       fetchProject();
+    } else {
+      setLoading(false);
     }
-  }, [effectiveProjectId, reset]);
+  }, [effectiveProjectId, reset, calculateTotals]);
 
   const handleImageChange = (
     e: React.ChangeEvent<HTMLInputElement>,
-    onChange: (value: File[] | null) => void,
+    onChange: (value: File[] | null) => void
   ) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     onChange(files);
@@ -193,37 +281,36 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
   };
 
   const onSubmit = async (data: FormData) => {
-    const formData = new FormData();
-    formData.append("projectId", effectiveProjectId);
-    formData.append("quotationNumber", data.quotationNumber);
-    formData.append("clientName", data.clientName);
-    formData.append("clientAddress", data.clientAddress);
-    formData.append("clientNumber", data.clientNumber);
-    formData.append("date", new Date(data.date).toISOString());
-    formData.append("items", JSON.stringify(data.items));
-    formData.append("extraWork", JSON.stringify(data.extraWork));
-    formData.append("discount", String(data.discount));
-    formData.append("note", data.note || "");
-    formData.append("subtotal", String(data.subtotal));
-    formData.append("grandTotal", String(data.grandTotal));
-    formData.append("existingImages", JSON.stringify(data.existingImages));
-    data.terms.forEach((term, index) => {
-      formData.append(`terms[${index}]`, term);
-    });
-
-    if (data.siteImages?.length) {
-      data.siteImages.forEach((file, index) => {
-        formData.append(`siteImages[${index}]`, file);
-      });
-    }
-
-    // Log FormData contents for debugging
-    console.log("FormData contents:");
-    for (const [key, value] of formData.entries()) {
-      console.log(`${key}:`, value);
-    }
-
     try {
+      // Recalculate totals before submission to ensure accuracy
+      const { subtotal, grandTotal } = calculateTotals();
+      data.subtotal = subtotal;
+      data.grandTotal = grandTotal;
+
+      const formData = new FormData();
+      formData.append("projectId", effectiveProjectId);
+      formData.append("quotationNumber", data.quotationNumber);
+      formData.append("clientName", data.clientName);
+      formData.append("clientAddress", data.clientAddress);
+      formData.append("clientNumber", data.clientNumber);
+      formData.append("date", new Date(data.date).toISOString());
+      formData.append("items", JSON.stringify(data.items));
+      formData.append("extraWork", JSON.stringify(data.extraWork));
+      formData.append("discount", String(data.discount));
+      formData.append("note", data.note || "");
+      formData.append("subtotal", String(data.subtotal));
+      formData.append("grandTotal", String(data.grandTotal));
+      formData.append("existingImages", JSON.stringify(data.existingImages));
+      data.terms.forEach((term, index) => {
+        formData.append(`terms[${index}]`, term);
+      });
+
+      if (data.siteImages?.length) {
+        data.siteImages.forEach((file, index) => {
+          formData.append(`siteImages[${index}]`, file);
+        });
+      }
+
       await apiFetch<Project>(`/projects/${effectiveProjectId}`, {
         method: "PUT",
         body: formData,
@@ -236,7 +323,9 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
       const apiError = error as ApiError;
       toast.error(apiError.error || "Failed to update project");
       if (apiError.details) {
-        apiError.details.forEach((err) => toast.error(`Validation error: ${err.message}`));
+        apiError.details.forEach((err) =>
+          toast.error(`Validation error: ${err.message}`)
+        );
       }
     }
   };
@@ -246,24 +335,31 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
   }
 
   if (loading) {
-    return <div>Loading project data...</div>;
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        <span className="ml-3 text-lg">Loading project data...</span>
+      </div>
+    );
   }
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle className="flex items-center">
-          <FileText className="mr-2 h-6 w-6 text-primary" />
+    <Card className="w-full shadow-md">
+      <CardHeader className="bg-gray-50 border-b">
+        <CardTitle className="flex items-center text-primary">
+          <FileText className="mr-2 h-6 w-6" />
           Edit Project #{effectiveProjectId}
         </CardTitle>
         <CardDescription>Update the project details.</CardDescription>
       </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="quotationNumber">Quotation Number</Label>
+      <CardContent className="p-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="quotationNumber" className="text-base">
+                  Quotation Number
+                </Label>
                 <Controller
                   control={control}
                   name="quotationNumber"
@@ -272,13 +368,16 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                     <select
                       {...field}
                       id="quotationNumber"
-                      className="w-full border rounded-md p-2"
+                      className="w-full border rounded-md p-2 h-10"
                       value={field.value}
                       onChange={(e) => field.onChange(e.target.value)}
                     >
                       <option value="">Select Quotation</option>
                       {quotations.map((q) => (
-                        <option key={q.quotationNumber} value={q.quotationNumber}>
+                        <option
+                          key={q.quotationNumber}
+                          value={q.quotationNumber}
+                        >
                           {q.quotationNumber} - {q.clientName}
                         </option>
                       ))}
@@ -286,94 +385,148 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                   )}
                 />
                 {errors.quotationNumber && (
-                  <p className="text-red-500 text-sm">{errors.quotationNumber.message}</p>
+                  <p className="text-red-500 text-sm">
+                    {errors.quotationNumber.message}
+                  </p>
                 )}
               </div>
-              <div>
-                <Label htmlFor="clientName">Client Name</Label>
+              <div className="space-y-2">
+                <Label htmlFor="clientName" className="text-base">
+                  Client Name
+                </Label>
                 <Controller
                   control={control}
                   name="clientName"
                   rules={{ required: "Client name is required" }}
                   render={({ field }) => (
-                    <Input {...field} id="clientName" placeholder="Enter client name" />
+                    <Input
+                      {...field}
+                      id="clientName"
+                      placeholder="Enter client name"
+                      className="h-10"
+                    />
                   )}
                 />
-                {errors.clientName && <p className="text-red-500 text-sm">{errors.clientName.message}</p>}
+                {errors.clientName && (
+                  <p className="text-red-500 text-sm">
+                    {errors.clientName.message}
+                  </p>
+                )}
               </div>
-              <div>
-                <Label htmlFor="clientAddress">Client Address</Label>
+              <div className="space-y-2">
+                <Label htmlFor="clientAddress" className="text-base">
+                  Client Address
+                </Label>
                 <Controller
                   control={control}
                   name="clientAddress"
                   rules={{ required: "Client address is required" }}
                   render={({ field }) => (
-                    <Textarea {...field} id="clientAddress" placeholder="Enter client address" rows={3} />
+                    <Textarea
+                      {...field}
+                      id="clientAddress"
+                      placeholder="Enter client address"
+                      rows={3}
+                      className="resize-none"
+                    />
                   )}
                 />
-                {errors.clientAddress && <p className="text-red-500 text-sm">{errors.clientAddress.message}</p>}
+                {errors.clientAddress && (
+                  <p className="text-red-500 text-sm">
+                    {errors.clientAddress.message}
+                  </p>
+                )}
               </div>
             </div>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="clientNumber">Client Number</Label>
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="clientNumber" className="text-base">
+                  Client Number
+                </Label>
                 <Controller
                   control={control}
                   name="clientNumber"
                   rules={{ required: "Client number is required" }}
                   render={({ field }) => (
-                    <Input {...field} id="clientNumber" placeholder="Enter client phone number" />
+                    <Input
+                      {...field}
+                      id="clientNumber"
+                      placeholder="Enter client phone number"
+                      className="h-10"
+                    />
                   )}
                 />
-                {errors.clientNumber && <p className="text-red-500 text-sm">{errors.clientNumber.message}</p>}
+                {errors.clientNumber && (
+                  <p className="text-red-500 text-sm">
+                    {errors.clientNumber.message}
+                  </p>
+                )}
               </div>
-              <div>
-                <Label htmlFor="date">Date</Label>
+              <div className="space-y-2">
+                <Label htmlFor="date" className="text-base">
+                  Date
+                </Label>
                 <Controller
                   control={control}
                   name="date"
                   rules={{
                     required: "Date is required",
-                    validate: (value) => !isNaN(Date.parse(value)) || "Invalid date format",
+                    validate: (value) =>
+                      !isNaN(Date.parse(value)) || "Invalid date format",
                   }}
-                  render={({ field }) => <Input {...field} id="date" type="date" />}
+                  render={({ field }) => (
+                    <Input {...field} id="date" type="date" className="h-10" />
+                  )}
                 />
-                {errors.date && <p className="text-red-500 text-sm">{errors.date.message}</p>}
+                {errors.date && (
+                  <p className="text-red-500 text-sm">{errors.date.message}</p>
+                )}
               </div>
             </div>
           </div>
 
-          <div className="mt-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium">Items</h3>
+          <div className="mt-10">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-medium text-gray-800">Items</h3>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       type="button"
-                      onClick={() =>
-                        appendItem({ description: "", area: null, rate: 0, total: null, note: "" })
-                      }
-                      size="sm"
+                      onClick={() => {
+                        appendItem({
+                          description: "",
+                          area: null,
+                          rate: 0,
+                          total: null,
+                          note: "",
+                        });
+                        // Force recalculation after adding item
+                        setTimeout(() => calculateTotals(), 0);
+                      }}
+                      className="bg-primary/90 hover:bg-primary"
                     >
-                      <Plus className="h-4 w-4 mr-1" /> Add Item
+                      <Plus className="h-4 w-4 mr-2" /> Add Item
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Add a new item</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-6">
               {itemFields.map((field, index) => (
                 <motion.div
                   key={field.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="p-4 border rounded-md bg-gray-50"
+                  transition={{ duration: 0.3 }}
+                  className="p-5 border rounded-lg bg-gray-50 shadow-sm"
                 >
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="font-medium">Item {index + 1}</h4>
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="font-medium text-gray-800">
+                      Item {index + 1}
+                    </h4>
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -381,8 +534,13 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                             type="button"
                             variant="destructive"
                             size="sm"
-                            onClick={() => removeItem(index)}
+                            onClick={() => {
+                              removeItem(index);
+                              // Force recalculation after removing item
+                              setTimeout(() => calculateTotals(), 0);
+                            }}
                             disabled={itemFields.length === 1}
+                            className="h-8 w-8 p-0"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -391,21 +549,39 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                       </Tooltip>
                     </TooltipProvider>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     <div className="lg:col-span-2">
-                      <Label htmlFor={`items.${index}.description`}>Description</Label>
+                      <Label
+                        htmlFor={`items.${index}.description`}
+                        className="text-sm font-medium"
+                      >
+                        Description
+                      </Label>
                       <Controller
                         control={control}
                         name={`items.${index}.description`}
                         rules={{ required: "Description is required" }}
-                        render={({ field }) => <Input {...field} placeholder="Item description" />}
+                        render={({ field }) => (
+                          <Input
+                            {...field}
+                            placeholder="Item description"
+                            className="mt-1"
+                          />
+                        )}
                       />
                       {errors.items?.[index]?.description && (
-                        <p className="text-red-500 text-sm">{errors.items[index]?.description?.message}</p>
+                        <p className="text-red-500 text-sm mt-1">
+                          {errors.items[index]?.description?.message}
+                        </p>
                       )}
                     </div>
                     <div>
-                      <Label htmlFor={`items.${index}.area`}>Area (sq.ft)</Label>
+                      <Label
+                        htmlFor={`items.${index}.area`}
+                        className="text-sm font-medium"
+                      >
+                        Area (sq.ft)
+                      </Label>
                       <Controller
                         control={control}
                         name={`items.${index}.area`}
@@ -414,50 +590,81 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                             type="number"
                             placeholder="Area"
                             value={field.value ?? ""}
-                            onChange={(e) =>
-                              field.onChange(e.target.value ? Number(e.target.value) : null)
-                            }
+                            onChange={(e) => {
+                              const value = e.target.value
+                                ? Number(e.target.value)
+                                : null;
+                              field.onChange(value);
+
+                              // Update item total and recalculate totals
+                              setTimeout(() => updateItemTotal(index), 0);
+                            }}
+                            className="mt-1"
                           />
                         )}
                       />
                       {errors.items?.[index]?.area && (
-                        <p className="text-red-500 text-sm">{errors.items[index]?.area?.message}</p>
+                        <p className="text-red-500 text-sm mt-1">
+                          {errors.items[index]?.area?.message}
+                        </p>
                       )}
                     </div>
                     <div>
-                      <Label htmlFor={`items.${index}.rate`}>Rate (₹)</Label>
+                      <Label
+                        htmlFor={`items.${index}.rate`}
+                        className="text-sm font-medium"
+                      >
+                        Rate (₹)
+                      </Label>
                       <Controller
                         control={control}
                         name={`items.${index}.rate`}
                         rules={{
                           required: "Rate is required",
-                          min: { value: 0, message: "Rate must be non-negative" },
+                          min: {
+                            value: 0,
+                            message: "Rate must be non-negative",
+                          },
                         }}
                         render={({ field }) => (
                           <Input
                             type="number"
                             placeholder="Rate"
                             value={field.value ?? ""}
-                            onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                            onChange={(e) => {
+                              const value = Number(e.target.value) || 0;
+                              field.onChange(value);
+
+                              // Update item total and recalculate totals
+                              setTimeout(() => updateItemTotal(index), 0);
+                            }}
+                            className="mt-1"
                           />
                         )}
                       />
                       {errors.items?.[index]?.rate && (
-                        <p className="text-red-500 text-sm">{errors.items[index]?.rate?.message}</p>
+                        <p className="text-red-500 text-sm mt-1">
+                          {errors.items[index]?.rate?.message}
+                        </p>
                       )}
                     </div>
                     <div>
-                      <Label htmlFor={`items.${index}.total`}>Total (₹)</Label>
+                      <Label
+                        htmlFor={`items.${index}.total`}
+                        className="text-sm font-medium"
+                      >
+                        Total (₹)
+                      </Label>
                       <Controller
                         control={control}
                         name={`items.${index}.total`}
                         rules={{
                           validate: (value) =>
-                            (items[index].area == null ||
-                              items[index].rate == null ||
-                              items[index].area === 0 ||
-                              items[index].rate === 0 ||
-                              value != null) ||
+                            items[index].area == null ||
+                            items[index].rate == null ||
+                            items[index].area === 0 ||
+                            items[index].rate === 0 ||
+                            value != null ||
                             "Total is required if area or rate is missing or zero",
                         }}
                         render={({ field }) => (
@@ -465,68 +672,107 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                             type="number"
                             placeholder="Auto-calculated or enter total"
                             value={field.value ?? ""}
-                            onChange={(e) =>
-                              field.onChange(e.target.value ? Number(e.target.value) : null)
-                            }
+                            onChange={(e) => {
+                              const value = e.target.value
+                                ? Number(e.target.value)
+                                : null;
+                              field.onChange(value);
+
+                              // Recalculate totals when manually entering total
+                              setTimeout(() => calculateTotals(), 0);
+                            }}
                             disabled={
                               items[index].area != null &&
                               items[index].rate != null &&
                               items[index].area > 0 &&
                               items[index].rate > 0
                             }
+                            className={`mt-1 ${
+                              items[index].area != null &&
+                              items[index].rate != null &&
+                              items[index].area > 0 &&
+                              items[index].rate > 0
+                                ? "bg-gray-100"
+                                : ""
+                            }`}
                           />
                         )}
                       />
                       {errors.items?.[index]?.total && (
-                        <p className="text-red-500 text-sm">{errors.items[index]?.total?.message}</p>
+                        <p className="text-red-500 text-sm mt-1">
+                          {errors.items[index]?.total?.message}
+                        </p>
                       )}
                     </div>
                   </div>
-                  <div className="mt-3">
-                    <Label htmlFor={`items.${index}.note`}>Note (Optional)</Label>
+                  <div className="mt-4">
+                    <Label
+                      htmlFor={`items.${index}.note`}
+                      className="text-sm font-medium"
+                    >
+                      Note (Optional)
+                    </Label>
                     <Controller
                       control={control}
                       name={`items.${index}.note`}
                       render={({ field }) => (
-                        <Input {...field} placeholder="Additional notes" value={field.value ?? ""} />
+                        <Input
+                          {...field}
+                          placeholder="Additional notes"
+                          value={field.value ?? ""}
+                          className="mt-1"
+                        />
                       )}
                     />
                   </div>
                 </motion.div>
               ))}
             </div>
-            {errors.items && <p className="text-red-500 text-sm">{errors.items.message}</p>}
+            {errors.items && (
+              <p className="text-red-500 text-sm">{errors.items.message}</p>
+            )}
           </div>
 
-          <div className="mt-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium">Extra Work</h3>
+          <div className="mt-10">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-medium text-gray-800">Extra Work</h3>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       type="button"
-                      onClick={() => appendExtraWork({ description: "", total: 0, note: "" })}
-                      size="sm"
+                      onClick={() => {
+                        appendExtraWork({
+                          description: "",
+                          total: 0,
+                          note: "",
+                        });
+                        // Force recalculation after adding extra work
+                        setTimeout(() => calculateTotals(), 0);
+                      }}
+                      className="bg-primary/90 hover:bg-primary"
                     >
-                      <Plus className="h-4 w-4 mr-1" /> Add Extra Work
+                      <Plus className="h-4 w-4 mr-2" /> Add Extra Work
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Add extra work</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-6">
               {extraWorkFields.map((field, index) => (
                 <motion.div
                   key={field.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="p-4 border rounded-md bg-gray-50"
+                  transition={{ duration: 0.3 }}
+                  className="p-5 border rounded-lg bg-gray-50 shadow-sm"
                 >
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="font-medium">Extra Work {index + 1}</h4>
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="font-medium text-gray-800">
+                      Extra Work {index + 1}
+                    </h4>
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -534,7 +780,12 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                             type="button"
                             variant="destructive"
                             size="sm"
-                            onClick={() => removeExtraWork(index)}
+                            onClick={() => {
+                              removeExtraWork(index);
+                              // Force recalculation after removing extra work
+                              setTimeout(() => calculateTotals(), 0);
+                            }}
+                            className="h-8 w-8 p-0"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -543,49 +794,89 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                       </Tooltip>
                     </TooltipProvider>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor={`extraWork.${index}.description`}>Description</Label>
+                      <Label
+                        htmlFor={`extraWork.${index}.description`}
+                        className="text-sm font-medium"
+                      >
+                        Description
+                      </Label>
                       <Controller
                         control={control}
                         name={`extraWork.${index}.description`}
                         rules={{ required: "Description is required" }}
-                        render={({ field }) => <Input {...field} placeholder="Extra work description" />}
+                        render={({ field }) => (
+                          <Input
+                            {...field}
+                            placeholder="Extra work description"
+                            className="mt-1"
+                          />
+                        )}
                       />
                       {errors.extraWork?.[index]?.description && (
-                        <p className="text-red-500 text-sm">{errors.extraWork[index]?.description?.message}</p>
+                        <p className="text-red-500 text-sm mt-1">
+                          {errors.extraWork[index]?.description?.message}
+                        </p>
                       )}
                     </div>
                     <div>
-                      <Label htmlFor={`extraWork.${index}.total`}>Total (₹)</Label>
+                      <Label
+                        htmlFor={`extraWork.${index}.total`}
+                        className="text-sm font-medium"
+                      >
+                        Total (₹)
+                      </Label>
                       <Controller
                         control={control}
                         name={`extraWork.${index}.total`}
                         rules={{
                           required: "Total is required",
-                          min: { value: 0, message: "Total must be non-negative" },
+                          min: {
+                            value: 0,
+                            message: "Total must be non-negative",
+                          },
                         }}
                         render={({ field }) => (
                           <Input
                             type="number"
                             placeholder="Total"
                             value={field.value ?? ""}
-                            onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                            onChange={(e) => {
+                              const value = Number(e.target.value) || 0;
+                              field.onChange(value);
+
+                              // Recalculate totals when extra work total changes
+                              setTimeout(() => calculateTotals(), 0);
+                            }}
+                            className="mt-1"
                           />
                         )}
                       />
                       {errors.extraWork?.[index]?.total && (
-                        <p className="text-red-500 text-sm">{errors.extraWork[index]?.total?.message}</p>
+                        <p className="text-red-500 text-sm mt-1">
+                          {errors.extraWork[index]?.total?.message}
+                        </p>
                       )}
                     </div>
                   </div>
-                  <div className="mt-3">
-                    <Label htmlFor={`extraWork.${index}.note`}>Note (Optional)</Label>
+                  <div className="mt-4">
+                    <Label
+                      htmlFor={`extraWork.${index}.note`}
+                      className="text-sm font-medium"
+                    >
+                      Note (Optional)
+                    </Label>
                     <Controller
                       control={control}
                       name={`extraWork.${index}.note`}
                       render={({ field }) => (
-                        <Input {...field} placeholder="Additional notes" value={field.value ?? ""} />
+                        <Input
+                          {...field}
+                          placeholder="Additional notes"
+                          value={field.value ?? ""}
+                          className="mt-1"
+                        />
                       )}
                     />
                   </div>
@@ -594,53 +885,76 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
             </div>
           </div>
 
-          <div className="mt-8">
-            <Label htmlFor="siteImages">Site Images</Label>
-            <Controller
-              control={control}
-              name="siteImages"
-              render={({ field: { onChange } }) => (
-                <Input
-                  type="file"
-                  id="siteImages"
-                  multiple
-                  accept="image/*"
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleImageChange(e, onChange)}
-                />
-              )}
-            />
-            {errors.siteImages && <p className="text-red-500 text-sm">{errors.siteImages.message}</p>}
-            {imagePreviews.length > 0 && (
-              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-                {imagePreviews.map((preview, index) => (
-                  <Image
-                    key={index}
-                    src={preview}
-                    alt={`Site image preview ${index + 1}`}
-                    width={128}
-                    height={128}
-                    className="w-full h-32 object-cover rounded-md"
+          <div className="mt-10">
+            <div className="space-y-2">
+              <Label htmlFor="siteImages" className="text-base">
+                Site Images
+              </Label>
+              <Controller
+                control={control}
+                name="siteImages"
+                render={({ field: { onChange } }) => (
+                  <Input
+                    type="file"
+                    id="siteImages"
+                    multiple
+                    accept="image/*"
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      handleImageChange(e, onChange)
+                    }
+                    className="mt-1"
                   />
-                ))}
-              </div>
-            )}
+                )}
+              />
+              {errors.siteImages && (
+                <p className="text-red-500 text-sm">
+                  {errors.siteImages.message}
+                </p>
+              )}
+              {imagePreviews.length > 0 && (
+                <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {imagePreviews.map((preview, index) => (
+                    <Image
+                      key={index}
+                      src={preview || "/placeholder.svg"}
+                      alt={`Site image preview ${index + 1}`}
+                      width={128}
+                      height={128}
+                      className="w-full h-32 object-cover rounded-md border shadow-sm"
+                      unoptimized={true}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
             <div>
-              <div className="mb-4">
-                <Label htmlFor="note">Additional Notes</Label>
+              <div className="mb-6">
+                <Label htmlFor="note" className="text-base">
+                  Additional Notes
+                </Label>
                 <Controller
                   control={control}
                   name="note"
                   render={({ field }) => (
-                    <Textarea {...field} id="note" placeholder="Any additional notes" rows={4} value={field.value ?? ""} />
+                    <Textarea
+                      {...field}
+                      id="note"
+                      placeholder="Any additional notes"
+                      rows={4}
+                      value={field.value ?? ""}
+                      className="mt-1 resize-none"
+                    />
                   )}
                 />
               </div>
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <Label htmlFor="terms">Terms & Conditions</Label>
+                  <Label htmlFor="terms" className="text-base">
+                    Terms & Conditions
+                  </Label>
                   <Button
                     type="button"
                     variant="outline"
@@ -668,49 +982,79 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                       placeholder="Enter terms, one per line"
                       rows={6}
                       value={field.value?.join("\n") ?? ""}
-                      onChange={(e) => field.onChange(e.target.value.split("\n").filter((term) => term.trim()))}
+                      onChange={(e) =>
+                        field.onChange(
+                          e.target.value
+                            .split("\n")
+                            .filter((term) => term.trim())
+                        )
+                      }
+                      className="mt-1 resize-none"
                     />
                   )}
                 />
-                <p className="text-sm text-gray-500 mt-1">Enter each term on a new line</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Enter each term on a new line
+                </p>
               </div>
             </div>
 
             <div>
-              <Card className="bg-gray-50">
-                <CardHeader>
-                  <CardTitle className="text-lg">Project Summary</CardTitle>
+              <Card className="bg-gray-50 border shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg text-primary">
+                    Project Summary
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Subtotal:</span>
+                    <span className="text-gray-600 font-medium">Subtotal:</span>
                     <Controller
                       control={control}
                       name="subtotal"
                       render={({ field }) => (
-                        <span className="font-medium">₹{(field.value ?? 0).toFixed(2)}</span>
+                        <span className="font-medium text-lg">
+                          ₹{(field.value ?? 0).toFixed(2)}
+                        </span>
                       )}
                     />
                   </div>
                   <div>
                     <div className="flex justify-between items-center">
-                      <Label htmlFor="discount">Discount:</Label>
+                      <Label
+                        htmlFor="discount"
+                        className="text-gray-600 font-medium"
+                      >
+                        Discount:
+                      </Label>
                       <div className="w-1/3">
                         <Controller
                           control={control}
                           name="discount"
-                          rules={{ min: { value: 0, message: "Discount cannot be negative" } }}
+                          rules={{
+                            min: {
+                              value: 0,
+                              message: "Discount cannot be negative",
+                            },
+                          }}
                           render={({ field }) => (
                             <Input
                               id="discount"
                               type="number"
                               value={field.value ?? ""}
-                              onChange={(e) => field.onChange(Number(e.target.value) || 0)}
-                              className="text-right"
+                              onChange={(e) => {
+                                const value = Number(e.target.value) || 0;
+                                field.onChange(value);
+                              }}
+                              className="text-right h-9"
                             />
                           )}
                         />
-                        {errors.discount && <p className="text-red-500 text-sm">{errors.discount.message}</p>}
+                        {errors.discount && (
+                          <p className="text-red-500 text-sm mt-1">
+                            {errors.discount.message}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -720,7 +1064,9 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                       control={control}
                       name="grandTotal"
                       render={({ field }) => (
-                        <span className="text-lg font-bold text-primary">₹{(field.value ?? 0).toFixed(2)}</span>
+                        <span className="text-xl font-bold text-primary">
+                          ₹{(field.value ?? 0).toFixed(2)}
+                        </span>
                       )}
                     />
                   </div>
@@ -729,13 +1075,19 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
             </div>
           </div>
         </form>
+        <CardFooter className="flex justify-end bg-gray-50 border-t p-6">
+          <Button
+            type="submit"
+            onClick={handleSubmit(onSubmit)}
+            disabled={isSubmitting}
+            className="bg-primary/90 hover:bg-primary"
+            size="lg"
+          >
+            <Save className="mr-2 h-5 w-5" />
+            {isSubmitting ? "Updating..." : "Update Project"}
+          </Button>
+        </CardFooter>
       </CardContent>
-      <CardFooter className="flex justify-end">
-        <Button type="submit" onClick={handleSubmit(onSubmit)} disabled={isSubmitting}>
-          <Save className="mr-2 h-4 w-4" />
-          {isSubmitting ? "Updating..." : "Update Project"}
-        </Button>
-      </CardFooter>
     </Card>
   );
 }

@@ -1,412 +1,485 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
-import { Brush, CheckCircle, Phone, ImageIcon, Star, ArrowRight, PaintBucket, HomeIcon, Palette } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
 import Image from "next/image";
-import { getPortfolio, getProjects } from "@/app/lib/api";
-import type { Portfolio, Project } from "@/app/types";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Check, ArrowRight, Star, Phone, MapPin } from "lucide-react";
+import { getGeneralInfo } from "@/app/lib/api";
+import { GeneralInfo } from "@/app/types";
 import { toast } from "sonner";
 
-const fadeIn = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0 },
-};
-
-const staggerContainer = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.2,
-    },
-  },
-};
-
 export default function HomePage() {
-  const [portfolio, setPortfolio] = useState<Portfolio[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [generalInfo, setGeneralInfo] = useState<GeneralInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch portfolio and project data
-  const fetchData = useCallback(async () => {
-    try {
-      // Fetch portfolio (limit to 10 for performance)
-      const { portfolio: portfolioData } = await getPortfolio(1, 10);
-      setPortfolio(portfolioData || []);
-
-      // Fetch projects (limit to 3 for recent projects section)
-      const { projects: projectData } = await getProjects(1, 3);
-      setProjects(projectData || []);
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to fetch data";
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    const fetchGeneralInfo = async () => {
+      try {
+        const data = await getGeneralInfo();
+        // Validate and transform data to match GeneralInfo with only required fields
+        const validatedData: GeneralInfo = {
+          siteName: data.siteName || "SoniPainting",
+          mobileNumber1: data.mobileNumber1 || "+91 98765 43210",
+          mobileNumber2: data.mobileNumber2,
+          address: data.address || "123 Main Street, New Delhi, India 110001",
+          logoUrl: data.logoUrl || "/logo.png",
+        };
+        setGeneralInfo(validatedData);
+      } catch {
+        toast.error("Failed to load business information");
+        // Set fallback data if API fails
+        setGeneralInfo({
+          siteName: "SoniPainting",
+          mobileNumber1: "+91 98765 43210",
+          mobileNumber2: undefined,
+          address: "123 Main Street, New Delhi, India 110001",
+          logoUrl: "/logo.png",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchGeneralInfo();
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  if (loading) {
+    return <div className="flex min-h-screen items-center justify-center">Loading...</div>;
+  }
 
-  // Function to get a random portfolio image URL
-  const getRandomPortfolioImage = () => {
-    if (portfolio.length === 0) return "/placeholder.svg?height=600&width=800";
-    const randomIndex = Math.floor(Math.random() * portfolio.length);
-    return portfolio[randomIndex].imageUrl;
-  };
-
-  const services = [
-    {
-      icon: <Brush className="h-10 w-10 text-primary" />,
-      title: "Interior Painting",
-      description: "Transform your living spaces with our premium interior painting services.",
-    },
-    {
-      icon: <PaintBucket className="h-10 w-10 text-primary" />,
-      title: "Exterior Painting",
-      description: "Enhance your home curb appeal with durable, weather-resistant exterior painting.",
-    },
-    {
-      icon: <Palette className="h-10 w-10 text-primary" />,
-      title: "Color Consultation",
-      description: "Get expert advice on color schemes that match your style and preferences.",
-    },
-    {
-      icon: <HomeIcon className="h-10 w-10 text-primary" />,
-      title: "Residential & Commercial",
-      description: "We handle projects of all sizes, from homes to commercial buildings.",
-    },
-  ];
-
-  const testimonials = [
-    {
-      name: "Rahul Sharma",
-      role: "Homeowner",
-      content:
-        "SoniPainting transformed our home completely. The attention to detail and quality of work was exceptional.",
-      rating: 5,
-    },
-    {
-      name: "Priya Patel",
-      role: "Interior Designer",
-      content:
-        "As a designer, I have high standards. SoniPainting exceeded my expectations with their professionalism and skill.",
-      rating: 5,
-    },
-    {
-      name: "Amit Verma",
-      role: "Business Owner",
-      content: "Our office looks brand new after SoniPainting  work. Clean, efficient, and professional service.",
-      rating: 4,
-    },
-  ];
+  // Fallback values (should not be needed due to validation, but kept for safety)
+  const {
+    siteName = "SoniPainting",
+    mobileNumber1 = "+91 98765 43210",
+    mobileNumber2 = "",
+    address = "123 Main Street, New Delhi, India 110001",
+    logoUrl = "/logo.png",
+  } = generalInfo || {};
 
   return (
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
-      <section className="relative h-[80vh] flex items-center overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-black/40 z-10" />
-        <div className="absolute inset-0">
+      <section className="relative w-full h-[80vh] flex items-center">
+        <div className="absolute inset-0 z-0">
           <Image
-            src={getRandomPortfolioImage()}
-            alt="Painting Services"
+            src="/images/painting.jpg"
+            alt="Interior painting"
             fill
-            className="object-cover"
+            className="object-cover brightness-[0.7]"
             priority
           />
+          {/* Gradient overlay for dark shade on the left */}
+          <div
+            className="absolute inset-0 z-10"
+            style={{
+              backgroundImage:
+                "linear-gradient(to right, rgba(0, 0, 0, 0.7), transparent)",
+            }}
+          />
         </div>
-        <div className="container mx-auto relative z-20 px-4 sm:px-6 lg:px-8">
-          <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="max-w-2xl text-white">
-            <motion.h1 variants={fadeIn} className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4">
-              Transform Your Space With Professional Painting
-            </motion.h1>
-            <motion.p variants={fadeIn} className="text-lg md:text-xl mb-8 text-gray-200">
-              Premium painting services for residential and commercial properties. Quality that speaks for itself.
-            </motion.p>
-            <motion.div variants={fadeIn} className="flex flex-wrap gap-4">
-              <Button size="lg" asChild>
-                <Link href="/contact">Get a Free Quote</Link>
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="max-w-3xl">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4">
+              Transform Your Space with Professional Painting
+            </h1>
+            <p className="text-xl text-white/90 mb-8">
+              Premium interior painting, POP, carpentry, and tiling services for
+              your home or business
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Button asChild size="lg" className="text-base">
+                <Link href="/services">Our Services</Link>
               </Button>
-              <Button size="lg" variant="outline" className="text-white border-white hover:bg-white/10" asChild>
-                <Link href="/portfolio">View Our Work</Link>
+              <Button
+                asChild
+                variant="outline"
+                size="lg"
+                className="bg-white/10 backdrop-blur-sm text-white border-white/20 hover:bg-white/20 text-base"
+              >
+                <Link href={`tel:${mobileNumber1}`}>Call Now</Link>
               </Button>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         </div>
       </section>
 
       {/* Services Section */}
       <section className="py-20 bg-gray-50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            variants={staggerContainer}
-            className="text-center mb-16"
-          >
-            <motion.h2 variants={fadeIn} className="text-3xl md:text-4xl font-bold mb-4">
-              Our Services
-            </motion.h2>
-            <motion.p variants={fadeIn} className="text-lg text-gray-600 max-w-2xl mx-auto">
-              We offer a wide range of painting and decorating services to meet all your needs
-            </motion.p>
-          </motion.div>
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              Our Professional Services
+            </h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              We offer a wide range of interior services to transform your space
+              into something beautiful and functional
+            </p>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {services.map((service, index) => (
-              <motion.div
+            {[
+              {
+                title: "Interior Painting",
+                description:
+                  "Professional painting services with premium paints and finishes",
+                image: "/images/painting.jpg",
+              },
+              {
+                title: "POP Work",
+                description:
+                  "Custom POP designs for ceilings, walls, and decorative elements",
+                image: "/images/pop.jpg",
+              },
+              {
+                title: "Carpentry",
+                description:
+                  "Custom woodwork, furniture, and cabinetry for your home",
+                image: "/images/carpentry.jpg",
+              },
+              {
+                title: "Tiling",
+                description:
+                  "Expert tiling services for floors, walls, and backsplashes",
+                image: "/images/tiles.jpg",
+              },
+            ].map((service, index) => (
+              <Card
                 key={index}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true, margin: "-50px" }}
-                variants={{
-                  hidden: { opacity: 0, y: 20 },
-                  visible: {
-                    opacity: 1,
-                    y: 0,
-                    transition: { delay: index * 0.1 },
-                  },
-                }}
-                className="bg-white p-8 rounded-lg shadow-md hover:shadow-lg transition-shadow"
+                className="overflow-hidden transition-all duration-300 hover:shadow-lg"
               >
-                <div className="mb-4">{service.icon}</div>
-                <h3 className="text-xl font-semibold mb-2">{service.title}</h3>
-                <p className="text-gray-600">{service.description}</p>
-              </motion.div>
+                <div className="relative h-48">
+                  <Image
+                    src={service.image || "/placeholder.svg"}
+                    alt={service.title}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+                <CardHeader>
+                  <CardTitle>{service.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-600">{service.description}</p>
+                </CardContent>
+                <CardFooter>
+                  <Button variant="ghost" className="gap-1" asChild>
+                    <Link href="/services">
+                      Learn More <ArrowRight className="h-4 w-4 ml-1" />
+                    </Link>
+                  </Button>
+                </CardFooter>
+              </Card>
             ))}
           </div>
         </div>
       </section>
 
       {/* Why Choose Us Section */}
-      <section className="py-20 bg-white">
+      <section className="py-20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: "-100px" }}
-              variants={staggerContainer}
-            >
-              <motion.h2 variants={fadeIn} className="text-3xl md:text-4xl font-bold mb-6">
-                Why Choose SoniPainting?
-              </motion.h2>
+            <div>
+              <h2 className="text-3xl md:text-4xl font-bold mb-6">
+                Why Choose {siteName}?
+              </h2>
+              <p className="text-lg text-gray-600 mb-8">
+                With years of experience and a commitment to quality, we deliver
+                exceptional results that exceed your expectations.
+              </p>
 
-              {[
-                "Professional and experienced team",
-                "Premium quality materials",
-                "Attention to detail",
-                "Timely project completion",
-                "Clean and efficient work process",
-                "Competitive pricing",
-              ].map((item, index) => (
-                <motion.div key={index} variants={fadeIn} className="flex items-start mb-4">
-                  <CheckCircle className="h-6 w-6 text-primary mr-3 flex-shrink-0 mt-0.5" />
-                  <p className="text-gray-700">{item}</p>
-                </motion.div>
-              ))}
+              <div className="space-y-4">
+                {[
+                  "Professional and experienced team",
+                  "Premium quality materials",
+                  "Attention to detail",
+                  "On-time project completion",
+                  "Competitive pricing",
+                  "Clean and safe work environment",
+                ].map((item, index) => (
+                  <div key={index} className="flex items-start">
+                    <div className="flex-shrink-0 mt-1">
+                      <Check className="h-5 w-5 text-primary" />
+                    </div>
+                    <p className="ml-3 text-gray-600">{item}</p>
+                  </div>
+                ))}
+              </div>
 
-              <motion.div variants={fadeIn} className="mt-8">
-                <Button asChild>
-                  <Link href="/services">
-                    Learn More About Our Services <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-              </motion.div>
-            </motion.div>
+              <Button asChild className="mt-8">
+                <Link href="/contact">Contact Us Today</Link>
+              </Button>
+            </div>
 
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 0.5 }}
-              className="relative h-[400px] md:h-[500px] rounded-lg overflow-hidden shadow-xl"
-            >
+            <div className="relative h-[400px] lg:h-[500px] rounded-lg overflow-hidden shadow-xl">
               <Image
-                src={getRandomPortfolioImage()}
-                alt="Professional Painting"
+                src="/images/tiles.jpg"
+                alt="Our work"
                 fill
                 className="object-cover"
               />
-            </motion.div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Testimonials Section */}
+      {/* Testimonials */}
       <section className="py-20 bg-gray-50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            variants={staggerContainer}
-            className="text-center mb-16"
-          >
-            <motion.h2 variants={fadeIn} className="text-3xl md:text-4xl font-bold mb-4">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
               What Our Clients Say
-            </motion.h2>
-            <motion.p variants={fadeIn} className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Don not just take our word for it. Here is what our satisfied customers have to say.
-            </motion.p>
-          </motion.div>
+            </h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Do not just take our word for it. Here is what our satisfied
+              customers have to say about our services.
+            </p>
+          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <motion.div
-                key={index}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true, margin: "-50px" }}
-                variants={{
-                  hidden: { opacity: 0, y: 20 },
-                  visible: {
-                    opacity: 1,
-                    y: 0,
-                    transition: { delay: index * 0.1 },
-                  },
-                }}
-                className="bg-white p-8 rounded-lg shadow-md"
-              >
-                <div className="flex mb-4">
-                  {[...Array(5)].map((_, i) => (
-                    <Star
-                      key={i}
-                      className={`h-5 w-5 ${i < testimonial.rating ? "text-yellow-500 fill-yellow-500" : "text-gray-300"}`}
-                    />
-                  ))}
-                </div>
-                <p className="text-gray-700 mb-6">{testimonial.content}</p>
-                <div>
-                  <p className="font-semibold">{testimonial.name}</p>
-                  <p className="text-gray-500 text-sm">{testimonial.role}</p>
-                </div>
-              </motion.div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[
+              {
+                name: "Rahul Sharma",
+                role: "Homeowner",
+                content:
+                  `${siteName} transformed our living room with their exceptional painting service. The team was professional, punctual, and the quality of work was outstanding.`,
+              },
+              {
+                name: "Priya Patel",
+                role: "Interior Designer",
+                content:
+                  `I have worked with ${siteName} on multiple projects, and they consistently deliver high-quality results. Their attention to detail and craftsmanship is impressive.`,
+              },
+              {
+                name: "Amit Verma",
+                role: "Business Owner",
+                content:
+                  `We hired ${siteName} for our office renovation, and they exceeded our expectations. The team was efficient, and the finished work looks amazing.`,
+              },
+            ].map((testimonial, index) => (
+              <Card key={index} className="bg-white">
+                <CardHeader>
+                  <div className="flex items-center gap-1 text-yellow-400 mb-4">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="h-4 w-4 fill-current" />
+                    ))}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-600 italic mb-4">
+                    &quot;{testimonial.content}&quot;
+                  </p>
+                  <div className="flex items-center">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
+                      {testimonial.name.charAt(0)}
+                    </div>
+                    <div className="ml-3">
+                      <p className="font-medium">{testimonial.name}</p>
+                      <p className="text-sm text-gray-500">
+                        {testimonial.role}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 bg-primary">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            variants={staggerContainer}
-            className="text-center text-white"
+      <section className="py-20 bg-primary text-white">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold mb-6">
+            Ready to Transform Your Space?
+          </h2>
+          <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto">
+            Contact us today for a free consultation and quote. Let us bring your
+            vision to life!
+          </p>
+          <Button
+            asChild
+            size="lg"
+            variant="outline"
+            className="bg-white text-primary hover:bg-white/90 border-none"
           >
-            <motion.h2 variants={fadeIn} className="text-3xl md:text-4xl font-bold mb-4">
-              Ready to Transform Your Space?
-            </motion.h2>
-            <motion.p variants={fadeIn} className="text-lg mb-8 max-w-2xl mx-auto opacity-90">
-              Contact us today for a free consultation and quote. Let us bring your vision to life!
-            </motion.p>
-            <motion.div variants={fadeIn}>
-              <Button size="lg" variant="secondary" asChild>
-                <Link href="/contact">
-                  <Phone className="mr-2 h-5 w-5" /> Contact Us Now
-                </Link>
-              </Button>
-            </motion.div>
-          </motion.div>
+            <Link href={`tel:${mobileNumber1}`}>Call Now</Link>
+          </Button>
         </div>
       </section>
 
-      {/* Recent Projects Section */}
-      <section className="py-20 bg-white">
+      {/* Contact Panel */}
+      <section className="py-16 bg-gray-100">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            variants={staggerContainer}
-            className="text-center mb-16"
-          >
-            <motion.h2 variants={fadeIn} className="text-3xl md:text-4xl font-bold mb-4">
-              Recent Projects
-            </motion.h2>
-            <motion.p variants={fadeIn} className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Take a look at some of our recent transformations
-            </motion.p>
-          </motion.div>
-
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map((item) => (
-                <div key={item} className="h-80 rounded-lg bg-gray-200 animate-pulse" />
-              ))}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="flex flex-col items-center text-center p-6 bg-white rounded-lg shadow-sm">
+              <Phone className="h-10 w-10 text-primary mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Call Us</h3>
+              <p className="text-gray-600">
+                <a href={`tel:${mobileNumber1}`}>{mobileNumber1}</a>
+              </p>
+              <p className="text-gray-600">Mon-Sat: 9am - 6pm</p>
             </div>
-          ) : projects.length === 0 ? (
-            <div className="text-center py-12">
-              <ImageIcon className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-              <p className="text-lg text-gray-600">No recent projects found.</p>
+            <div className="flex flex-col items-center text-center p-6 bg-white rounded-lg shadow-sm">
+              <Phone className="h-10 w-10 text-primary mb-4" />
+              <h3 className="text-lg font-semibold mb-2">WhatsApp</h3>
+              {mobileNumber2 ? (
+                <p className="text-gray-600">
+                  <a
+                    href={`https://wa.me/${mobileNumber2.replace(/\D/g, "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    +91 {mobileNumber2}
+                  </a>
+                </p>
+              ) : (
+                <p className="text-gray-600">WhatsApp not available</p>
+              )}
+              <p className="text-gray-600">Available 24/7</p>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {projects.map((project, index) => (
-                <motion.div
-                  key={project.projectId}
-                  initial="hidden"
-                  whileInView="visible"
-                  viewport={{ once: true, margin: "-50px" }}
-                  variants={{
-                    hidden: { opacity: 0, scale: 0.9 },
-                    visible: {
-                      opacity: 1,
-                      scale: 1,
-                      transition: { delay: index * 0.1 },
-                    },
-                  }}
-                  className="relative h-80 rounded-lg overflow-hidden shadow-md"
-                >
-                  <Image
-                    src={
-                      project.siteImages?.length > 0
-                        ? project.siteImages[0].url
-                        : getRandomPortfolioImage()
-                    }
-                    alt={`Project ${project.projectId}`}
-                    fill
-                    className="object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end">
-                    <div className="p-6 text-white">
-                      <h3 className="text-xl font-semibold mb-2">Project #{project.projectId}</h3>
-                      <p className="text-sm text-gray-200">
-                        Client: {project.clientName || "N/A"}
-                      </p>
-                      <p className="text-sm text-gray-200">
-                        Status: {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
-                      </p>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
+            <div className="flex flex-col items-center text-center p-6 bg-white rounded-lg shadow-sm">
+              <MapPin className="h-10 w-10 text-primary mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Visit Us</h3>
+              <p className="text-gray-600">{address}</p>
             </div>
-          )}
-
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            variants={fadeIn}
-            className="text-center mt-12"
-          >
-            <Button variant="outline" asChild>
-              <Link href="/portfolio">
-                <ImageIcon className="mr-2 h-5 w-5" /> View All Projects
-              </Link>
-            </Button>
-          </motion.div>
+          </div>
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-12">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div>
+              <div className="flex items-center mb-4">
+                <Image
+                  src={logoUrl}
+                  alt={`${siteName} Logo`}
+                  width={40}
+                  height={30}
+                  className="w-[40px] h-auto brightness-0 invert"
+                />
+                <span className="ml-2 font-bold text-lg">{siteName}</span>
+              </div>
+              <p className="text-gray-400 mb-4">
+                Premium interior painting and renovation services for homes and
+                businesses.
+              </p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+              <ul className="space-y-2">
+                <li>
+                  <Link
+                    href="/"
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    Home
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/services"
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    Services
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/portfolio"
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    Portfolio
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/contact"
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    Contact
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Services</h3>
+              <ul className="space-y-2">
+                <li>
+                  <Link
+                    href="/services"
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    Interior Painting
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/services"
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    POP Work
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/services"
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    Carpentry
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/services"
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    Tiling
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Contact</h3>
+              <ul className="space-y-2 text-gray-400">
+                <li className="flex items-start">
+                  <MapPin className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+                  <span>{address}</span>
+                </li>
+                <li className="flex items-center">
+                  <Phone className="h-5 w-5 mr-2 flex-shrink-0" />
+                  <a href={`tel:${mobileNumber1}`}>{mobileNumber1}</a>
+                </li>
+                {mobileNumber2 && (
+                  <li className="flex items-center">
+                    <Phone className="h-5 w-5 mr-2 flex-shrink-0" />
+                    <a
+                      href={`https://wa.me/${mobileNumber2.replace(/\D/g, "")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      WhatsApp: +91 {mobileNumber2}
+                    </a>
+                  </li>
+                )}
+              </ul>
+            </div>
+          </div>
+          <div className="border-t border-gray-800 mt-12 pt-8 text-center text-gray-400">
+            <p>
+              © {new Date().getFullYear()} {siteName}. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -1,37 +1,27 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
+import type React from "react"
+import type { Metadata } from "next"
+import { Inter } from "next/font/google"
+import "./globals.css"
 
-import Navbar from "@/components/home/Navbar";
-import MobileNav from "@/components/home/mobile-nav";
+import ClientWrapper from "@/components/helpers/ClientWrapper"
 
-import { Toaster } from "@/components/ui/sonner";
-import SessionWrapper from "@/components/helpers/SessionWrapper";
-
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "PaintPro - Interior Contractor",
+  title: "Soni Painting- Interior Contractor",
   description: "Interior painting, POP, carpentry, and tiling services",
-};
+}
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: React.ReactNode
 }>) {
   return (
     <html lang="en">
       <body className={inter.className}>
-        <SessionWrapper>
-          
-            <Navbar />
-            <main>{children}</main>
-            <MobileNav />
-            <Toaster position="top-right" richColors />
-          
-        </SessionWrapper>
+        <ClientWrapper>{children}</ClientWrapper>
       </body>
     </html>
-  );
+  )
 }
