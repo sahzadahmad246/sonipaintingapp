@@ -636,23 +636,11 @@ export async function GET(
   context: { params: Promise<{ quotationNumber: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    if (!session.user.id) {
-      return NextResponse.json(
-        { error: "User ID not found in session" },
-        { status: 401 }
-      );
-    }
-
     const { quotationNumber } = await context.params;
     await dbConnect();
 
     const quotation = await Quotation.findOne({
       quotationNumber,
-      createdBy: session.user.id,
     });
     if (!quotation) {
       return NextResponse.json(
