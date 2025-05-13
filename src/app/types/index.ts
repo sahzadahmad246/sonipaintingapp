@@ -151,6 +151,38 @@ export interface AuditLog {
   createdAt: string;
 }
 
+export interface StaticData {
+  hero: {
+    title: string;
+    subtitle: string;
+    cta: string;
+  };
+  services: Array<{
+    title: string;
+    description: string;
+  }>;
+  about: {
+    title: string;
+    description: string;
+  };
+  contact: {
+    title: string;
+    tagline: string;
+    call: {
+      phone: string;
+      hours: string;
+    };
+    whatsapp: {
+      phone: string;
+      hours: string;
+    };
+    address: {
+      line1: string;
+      line2: string;
+    };
+    logo: string;
+  };
+}
 export interface ApiError {
   error: string;
   details?: { message: string }[];

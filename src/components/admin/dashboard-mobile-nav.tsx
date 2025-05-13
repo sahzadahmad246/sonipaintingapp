@@ -1,54 +1,77 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { motion } from "framer-motion"
-import { signOut } from "next-auth/react"
-import { LayoutDashboard, FileText, Briefcase, Camera, Settings, LogOut, MoreHorizontal, Plus } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { Badge } from "@/components/ui/badge"
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
+import { signOut } from "next-auth/react";
+import {
+  LayoutDashboard,
+  FileText,
+  Briefcase,
+  Camera,
+  Settings,
+  LogOut,
+  MoreHorizontal,
+  Plus,
+  DollarSign
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Badge } from "@/components/ui/badge";
 
 interface DashboardMobileNavProps {
-  pendingQuotations?: number
+  pendingQuotations?: number;
 }
 
-export default function DashboardMobileNav({ pendingQuotations = 0 }: DashboardMobileNavProps) {
-  const pathname = usePathname()
-  const [isVisible, setIsVisible] = useState(true)
-  const [lastScrollY, setLastScrollY] = useState(0)
+export default function DashboardMobileNav({
+  pendingQuotations = 0,
+}: DashboardMobileNavProps) {
+  const pathname = usePathname();
+  const [isVisible, setIsVisible] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
 
   useEffect(() => {
     const handleScroll = () => {
-      const currentScrollY = window.scrollY
+      const currentScrollY = window.scrollY;
 
       // Hide on scroll down, show on scroll up
       if (currentScrollY > lastScrollY && currentScrollY > 100) {
-        setIsVisible(false)
+        setIsVisible(false);
       } else {
-        setIsVisible(true)
+        setIsVisible(true);
       }
 
-      setLastScrollY(currentScrollY)
-    }
+      setLastScrollY(currentScrollY);
+    };
 
-    window.addEventListener("scroll", handleScroll)
-    return () => window.removeEventListener("scroll", handleScroll)
-  }, [lastScrollY])
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [lastScrollY]);
 
   const navItems = [
-    { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-5 w-5" /> },
+    {
+      href: "/dashboard",
+      label: "Dashboard",
+      icon: <LayoutDashboard className="h-5 w-5" />,
+    },
     {
       href: "/dashboard/quotations",
       label: "Quotations",
       icon: <FileText className="h-5 w-5" />,
       badge: pendingQuotations > 0 ? pendingQuotations : undefined,
     },
-    { href: "/dashboard/quotations/create", label: "Create", icon: <Plus className="h-5 w-5" /> },
-    { href: "/dashboard/projects", label: "Projects", icon: <Briefcase className="h-5 w-5" /> },
-    
-  ]
+    {
+      href: "/dashboard/quotations/create",
+      label: "Create",
+      icon: <Plus className="h-5 w-5" />,
+    },
+    {
+      href: "/dashboard/projects",
+      label: "Projects",
+      icon: <Briefcase className="h-5 w-5" />,
+    },
+  ];
 
   return (
     <motion.div
@@ -64,7 +87,9 @@ export default function DashboardMobileNav({ pendingQuotations = 0 }: DashboardM
             href={item.href}
             className={cn(
               "flex flex-col items-center justify-center py-2 px-1 rounded-md transition-colors relative",
-              pathname === item.href ? "text-primary" : "text-gray-500 hover:text-primary hover:bg-gray-50",
+              pathname === item.href
+                ? "text-primary"
+                : "text-gray-500 hover:text-primary hover:bg-gray-50"
             )}
           >
             {item.icon}
@@ -84,15 +109,31 @@ export default function DashboardMobileNav({ pendingQuotations = 0 }: DashboardM
           </SheetTrigger>
           <SheetContent side="bottom" className="h-[50vh]">
             <div className="grid grid-cols-1 gap-4 pt-6">
-              <Link href="/dashboard/portfolio" className="flex items-center p-3 rounded-md hover:bg-gray-100">
+              <Link
+                href="/dashboard/invoices"
+                className="flex items-center p-3 rounded-md hover:bg-gray-100"
+              >
+                <DollarSign className="h-5 w-5 mr-3" />
+                <span className="text-base font-medium">Invoices</span>
+              </Link>
+              <Link
+                href="/dashboard/portfolio"
+                className="flex items-center p-3 rounded-md hover:bg-gray-100"
+              >
                 <Camera className="h-5 w-5 mr-3" />
                 <span className="text-base font-medium">Portfolio</span>
               </Link>
-              <Link href="/dashboard/settings" className="flex items-center p-3 rounded-md hover:bg-gray-100">
+              <Link
+                href="/dashboard/settings"
+                className="flex items-center p-3 rounded-md hover:bg-gray-100"
+              >
                 <Settings className="h-5 w-5 mr-3" />
                 <span className="text-base font-medium">Settings</span>
               </Link>
-              <Link href="/dashboard/audit-logs" className="flex items-center p-3 rounded-md hover:bg-gray-100">
+              <Link
+                href="/dashboard/audit-logs"
+                className="flex items-center p-3 rounded-md hover:bg-gray-100"
+              >
                 <Badge className="h-5 w-5 mr-3" />
                 <span className="text-base font-medium">Audit Logs</span>
               </Link>
@@ -109,5 +150,5 @@ export default function DashboardMobileNav({ pendingQuotations = 0 }: DashboardM
         </Sheet>
       </div>
     </motion.div>
-  )
+  );
 }

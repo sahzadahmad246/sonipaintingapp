@@ -51,7 +51,11 @@ export default function HomePage() {
   }, []);
 
   if (loading) {
-    return <div className="flex min-h-screen items-center justify-center">Loading...</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        Loading...
+      </div>
+    );
   }
 
   // Fallback values (should not be needed due to validation, but kept for safety)
@@ -247,20 +251,17 @@ export default function HomePage() {
               {
                 name: "Rahul Sharma",
                 role: "Homeowner",
-                content:
-                  `${siteName} transformed our living room with their exceptional painting service. The team was professional, punctual, and the quality of work was outstanding.`,
+                content: `${siteName} transformed our living room with their exceptional painting service. The team was professional, punctual, and the quality of work was outstanding.`,
               },
               {
                 name: "Priya Patel",
                 role: "Interior Designer",
-                content:
-                  `I have worked with ${siteName} on multiple projects, and they consistently deliver high-quality results. Their attention to detail and craftsmanship is impressive.`,
+                content: `I have worked with ${siteName} on multiple projects, and they consistently deliver high-quality results. Their attention to detail and craftsmanship is impressive.`,
               },
               {
                 name: "Amit Verma",
                 role: "Business Owner",
-                content:
-                  `We hired ${siteName} for our office renovation, and they exceeded our expectations. The team was efficient, and the finished work looks amazing.`,
+                content: `We hired ${siteName} for our office renovation, and they exceeded our expectations. The team was efficient, and the finished work looks amazing.`,
               },
             ].map((testimonial, index) => (
               <Card key={index} className="bg-white">
@@ -300,8 +301,8 @@ export default function HomePage() {
             Ready to Transform Your Space?
           </h2>
           <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto">
-            Contact us today for a free consultation and quote. Let us bring your
-            vision to life!
+            Contact us today for a free consultation and quote. Let us bring
+            your vision to life!
           </p>
           <Button
             asChild
@@ -406,6 +407,14 @@ export default function HomePage() {
                     className="text-gray-400 hover:text-white transition-colors"
                   >
                     Contact
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/about"
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    About
                   </Link>
                 </li>
               </ul>

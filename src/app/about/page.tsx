@@ -1,24 +1,23 @@
-import ServicesDisplay from "@/components/services/ServicesDisplay";
+import About from "@/components/services/About";
 import { Metadata } from "next";
-import { services } from "../lib/servicesData";
 
 // Define metadata for SEO
 export const metadata: Metadata = {
-  title: "Soni Painting Services - Interior Contracting in Mumbai & Thane",
+  title: "About Soni Painting - Interior Contractor in Mumbai & Thane",
   description:
-    "Explore Soni Painting's premium interior contracting services in Mumbai and Thane, including painting, carpentry, POP, tiles, wood polish, waterproofing, and false ceilings. Transform your space with our expert team.",
+    "Learn about Soni Painting, founded by Omprakash Gupta with 7 years of experience, offering premium interior contracting services in Mumbai and Thane, including painting, carpentry, POP, tiles, and more.",
   openGraph: {
-    title: "Soni Painting Services - Interior Contracting in Mumbai & Thane",
+    title: "About Soni Painting - Interior Contractor in Mumbai & Thane",
     description:
-      "Premium interior services in Mumbai and Thane: painting, carpentry, POP, tiles, wood polish, waterproofing, and false ceilings by Soni Painting.",
-    url: "https://www.sonipainting.com/services",
+      "Discover Soni Painting, led by Omprakash Gupta, providing expert interior services in Mumbai and Thane: painting, carpentry, POP, tiles, and more.",
+    url: "https://www.sonipainting.com/about",
     siteName: "Soni Painting",
     images: [
       {
         url: "/images/painting.jpg",
         width: 1200,
         height: 630,
-        alt: "Soni Painting Services",
+        alt: "Soni Painting About",
       },
     ],
     locale: "en_US",
@@ -26,17 +25,20 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Soni Painting Services - Interior Contracting in Mumbai & Thane",
+    title: "About Soni Painting - Interior Contractor in Mumbai & Thane",
     description:
-      "Premium interior services in Mumbai and Thane: painting, carpentry, POP, tiles, wood polish, waterproofing, and false ceilings.",
+      "Soni Painting, founded by Omprakash Gupta, offers premium interior services in Mumbai and Thane.",
     images: ["/images/painting.jpg"],
   },
   alternates: {
-    canonical: "https://www.sonipainting.com/services",
+    canonical: "https://www.sonipainting.com/about",
     languages: {
-      en: "https://www.sonipainting.com/services",
-      "x-default": "https://www.sonipainting.com/services",
+      en: "https://www.sonipainting.com/about",
+      "x-default": "https://www.sonipainting.com/about",
     },
+  },
+  icons: {
+    icon: "/logo.png", // Favicon from public/
   },
 };
 
@@ -46,7 +48,7 @@ const jsonLd = {
   "@type": "LocalBusiness",
   name: "Soni Painting",
   description:
-    "Premium interior contracting services in Mumbai and Thane, including painting, carpentry, POP, tiles, wood polish, waterproofing, and false ceilings.",
+    "Premium interior contracting services in Mumbai and Thane, founded by Omprakash Gupta with 7 years of experience, specializing in painting, carpentry, POP, tiles, wood polish, waterproofing, and false ceilings.",
   url: "https://www.sonipainting.com",
   telephone: "+919022846640",
   contactPoint: [
@@ -55,7 +57,7 @@ const jsonLd = {
       telephone: "+919022846640",
       contactType: "Customer Service",
       availableLanguage: ["English", "Hindi"],
-      areaServed: "IN",
+      areaServed: ["Mumbai", "Thane"],
       hoursAvailable: {
         "@type": "OpeningHoursSpecification",
         dayOfWeek: [
@@ -76,7 +78,7 @@ const jsonLd = {
       contactType: "Customer Service",
       contactOption: "WhatsApp",
       availableLanguage: ["English", "Hindi"],
-      areaServed: "IN",
+      areaServed: ["Mumbai", "Thane"],
       hoursAvailable: {
         "@type": "OpeningHoursSpecification",
         dayOfWeek: [
@@ -113,39 +115,24 @@ const jsonLd = {
     "https://www.instagram.com/sonipainting",
     "https://www.linkedin.com/company/sonipainting",
   ],
-  hasOfferCatalog: {
-    "@type": "OfferCatalog",
-    name: "Interior Contracting Services",
-    itemListElement: services.map((service) => ({
-      "@type": "Service",
-      name: service.title,
-      description: service.description,
-      url: `https://www.sonipainting.com/services#${service.slug}`,
-      image: `https://www.sonipainting.com${service.image}`,
-      areaServed: ["Mumbai", "Thane"],
-    })),
+  founder: {
+    "@type": "Person",
+    name: "Omprakash Gupta",
+    jobTitle: "Founder",
+    description:
+      "Omprakash Gupta has 7 years of experience in interior contracting, leading Soni Painting to deliver premium services in Mumbai and Thane.",
   },
 };
 
-export default function ServicesPage() {
+export default function AboutPage() {
   return (
-    <section className="py-16 bg-background">
+    <div className="min-h-screen bg-gray-50">
       {/* JSON-LD Structured Data */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <div className="container mx-auto px-4">
-        <h1 className="text-4xl font-bold text-center mb-8">
-          Our Services in Mumbai & Thane
-        </h1>
-        <p className="text-center text-muted-foreground mb-12 max-w-2xl mx-auto">
-          Discover Soni Painting’s premium interior contracting services,
-          tailored for homes and offices in Mumbai and Thane. From painting to
-          false ceilings, we deliver quality and excellence.
-        </p>
-        <ServicesDisplay />
-      </div>
-    </section>
+      <About />
+    </div>
   );
 }

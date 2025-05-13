@@ -863,25 +863,6 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                   )}
                 />
               </div>
-              <div className="mb-6">
-                <Label htmlFor="note" className="text-base">
-                  Additional Notes
-                </Label>
-                <Controller
-                  control={control}
-                  name="note"
-                  render={({ field }) => (
-                    <Textarea
-                      {...field}
-                      id="note"
-                      placeholder="Any additional notes"
-                      rows={4}
-                      value={field.value ?? ""}
-                      className="mt-1 resize-none"
-                    />
-                  )}
-                />
-              </div>
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <Label htmlFor="terms" className="text-base">
