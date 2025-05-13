@@ -64,6 +64,9 @@ export async function GET(
   }
 }
 
+
+
+
 export async function PUT(
   request: Request,
   context: { params: Promise<{ projectId: string }> }
@@ -142,7 +145,7 @@ export async function PUT(
 
     const siteImages: { url: string; publicId: string }[] = data.existingImages || [];
     for (const [key, value] of formData.entries()) {
-      if (key.startsWith("siteImages[")) {
+      if (key.startsWith("siteImages[") && !key.includes(".description")) {
         const file = value as File;
         if (file && file.size > 0) {
           const bytes = await file.arrayBuffer();
@@ -192,35 +195,33 @@ export async function PUT(
     const updateData: UpdateProjectData = {};
     const changedFields: string[] = [];
 
-    // Helper functions to format details
     const formatItem = (item: IProject["items"][number]): string => {
       const parts: string[] = [`${item.description}`];
-      if (item.area != null) parts.push(`area ${item.area} m`);
-      parts.push(`rate ${item.rate}`);
-      if (item.total != null) parts.push(`total ${item.total}`);
-      if (item.note) parts.push(`note: ${item.note}`);
+      if (item.area != null) parts.push(`Area: ${item.area} sq.ft`);
+      if (item.rate != null) parts.push(`Rate: ₹${item.rate.toFixed(2)}`);
+      if (item.total != null) parts.push(`Total: ₹${item.total.toFixed(2)}`);
+      if (item.note) parts.push(`Note: ${item.note}`);
       return parts.join(", ");
     };
 
     const formatExtraWork = (item: IProject["extraWork"][number]): string => {
       const parts: string[] = [`${item.description}`];
-      parts.push(`total ${item.total}`);
-      if (item.note) parts.push(`note: ${item.note}`);
+      if (item.total != null) parts.push(`Total: ₹${item.total.toFixed(2)}`);
+      if (item.note) parts.push(`Note: ${item.note}`);
       return parts.join(", ");
     };
 
     const formatSiteImage = (image: { url: string; publicId: string }): string => {
-      return `url: ${image.url}, publicId: ${image.publicId}`;
+      return `URL: ${image.url}, PublicID: ${image.publicId}`;
     };
 
     const formatPayment = (payment: { amount: number; date?: string; note?: string }): string => {
-      const parts: string[] = [`amount ${payment.amount}`];
-      if (payment.date) parts.push(`date ${payment.date}`);
-      if (payment.note) parts.push(`note: ${payment.note}`);
+      const parts: string[] = [`Amount: ₹${payment.amount.toFixed(2)}`];
+      if (payment.date) parts.push(`Date: ${payment.date}`);
+      if (payment.note) parts.push(`Note: ${payment.note}`);
       return parts.join(", ");
     };
 
-    // Transform items to convert null to undefined
     let transformedItems: IProject["items"] | undefined;
     if (parsed.data.items) {
       transformedItems = parsed.data.items.map(item => ({
@@ -232,7 +233,6 @@ export async function PUT(
       }));
     }
 
-    // Detect changes
     if (parsed.data) {
       if (
         parsed.data.quotationNumber !== undefined &&
@@ -267,14 +267,14 @@ export async function PUT(
         new Date(parsed.data.date).toISOString() !== new Date(existingProject.date).toISOString()
       ) {
         updateData.date = new Date(parsed.data.date);
-        changedFields.push(`Date changed from "${existingProject.date.toISOString()}" to "${parsed.data.date}"`);
+        changedFields.push(`Date changed from "${existingProject.date.toISOString()}" to "${new Date(parsed.data.date).toISOString()}"`);
       }
       if (transformedItems !== undefined) {
         const oldItems: IProject["items"] = existingProject.items || [];
         const newItems: IProject["items"] = transformedItems || [];
         const addedItems = newItems.filter(
-          (newItem: IProject["items"][number]) => !oldItems.some(
-            (oldItem: IProject["items"][number]) => 
+          (newItem) => !oldItems.some(
+            (oldItem) => 
               oldItem.description === newItem.description &&
               (oldItem.area ?? undefined) === (newItem.area ?? undefined) &&
               oldItem.rate === newItem.rate &&
@@ -283,21 +283,21 @@ export async function PUT(
           )
         );
         const removedItems = oldItems.filter(
-          (oldItem: IProject["items"][number]) => !newItems.some(
-            (newItem: IProject["items"][number]) => 
+          (oldItem) => !newItems.some(
+            (newItem) => 
               newItem.description === oldItem.description &&
               (newItem.area ?? undefined) === (oldItem.area ?? undefined) &&
               newItem.rate === oldItem.rate &&
-              (newItem.total ?? undefined) === (oldItem.total ?? undefined) &&
+              (newItem.total ?? undefined) === (newItem.total ?? undefined) &&
               (newItem.note ?? '') === (newItem.note ?? '')
           )
         );
         if (addedItems.length > 0 || removedItems.length > 0) {
           updateData.items = transformedItems;
-          addedItems.forEach((item: IProject["items"][number]) => {
+          addedItems.forEach((item) => {
             changedFields.push(`New item added: ${formatItem(item)}`);
           });
-          removedItems.forEach((item: IProject["items"][number]) => {
+          removedItems.forEach((item) => {
             changedFields.push(`Item removed: ${formatItem(item)}`);
           });
         }
@@ -306,27 +306,27 @@ export async function PUT(
         const oldExtraWork: IProject["extraWork"] = existingProject.extraWork || [];
         const newExtraWork: IProject["extraWork"] = parsed.data.extraWork || [];
         const addedExtraWork = newExtraWork.filter(
-          (newItem: IProject["extraWork"][number]) => !oldExtraWork.some(
-            (oldItem: IProject["extraWork"][number]) => 
+          (newItem) => !oldExtraWork.some(
+            (oldItem) => 
               oldItem.description === newItem.description &&
               oldItem.total === newItem.total &&
               (oldItem.note ?? '') === (newItem.note ?? '')
           )
         );
         const removedExtraWork = oldExtraWork.filter(
-          (oldItem: IProject["extraWork"][number]) => !newExtraWork.some(
-            (newItem: IProject["extraWork"][number]) => 
+          (oldItem) => !newExtraWork.some(
+            (newItem) => 
               newItem.description === oldItem.description &&
               newItem.total === oldItem.total &&
-              (newItem.note ?? '') === (oldItem.note ?? '')
+              (newItem.note ?? '') === (newItem.note ?? '')
           )
         );
         if (addedExtraWork.length > 0 || removedExtraWork.length > 0) {
           updateData.extraWork = newExtraWork;
-          addedExtraWork.forEach((item: IProject["extraWork"][number]) => {
+          addedExtraWork.forEach((item) => {
             changedFields.push(`New extra work added: ${formatExtraWork(item)}`);
           });
-          removedExtraWork.forEach((item: IProject["extraWork"][number]) => {
+          removedExtraWork.forEach((item) => {
             changedFields.push(`Extra work removed: ${formatExtraWork(item)}`);
           });
         }
@@ -355,14 +355,14 @@ export async function PUT(
       if (parsed.data.terms !== undefined) {
         const oldTerms: string[] = existingProject.terms || [];
         const newTerms: string[] = parsed.data.terms || [];
-        const addedTerms = newTerms.filter((term: string) => !oldTerms.includes(term));
-        const removedTerms = oldTerms.filter((term: string) => !newTerms.includes(term));
+        const addedTerms = newTerms.filter((term) => !oldTerms.includes(term));
+        const removedTerms = oldTerms.filter((term) => !newTerms.includes(term));
         if (addedTerms.length > 0 || removedTerms.length > 0) {
           updateData.terms = newTerms;
-          addedTerms.forEach((term: string) => {
+          addedTerms.forEach((term) => {
             changedFields.push(`Term added: "${term}"`);
           });
-          removedTerms.forEach((term: string) => {
+          removedTerms.forEach((term) => {
             changedFields.push(`Term removed: "${term}"`);
           });
         }
@@ -378,22 +378,25 @@ export async function PUT(
         const oldImages: { url: string; publicId: string }[] = existingProject.siteImages || [];
         const newImages: { url: string; publicId: string }[] = parsed.data.siteImages || [];
         const addedImages = newImages.filter(
-          (newImage: { url: string; publicId: string }) => !oldImages.some(
-            (oldImage: { url: string; publicId: string }) => oldImage.publicId === newImage.publicId
+          (newImage) => !oldImages.some(
+            (oldImage) => oldImage.publicId === newImage.publicId
           )
         );
         const removedImages = oldImages.filter(
-          (oldImage: { url: string; publicId: string }) => !newImages.some(
-            (newImage: { url: string; publicId: string }) => newImage.publicId === oldImage.publicId
+          (oldImage) => !newImages.some(
+            (newImage) => newImage.publicId === oldImage.publicId
           )
         );
         if (addedImages.length > 0 || removedImages.length > 0) {
           updateData.siteImages = newImages;
-          addedImages.forEach((image: { url: string; publicId: string }) => {
+          addedImages.forEach((image) => {
             changedFields.push(`New site image added: ${formatSiteImage(image)}`);
           });
-          removedImages.forEach((image: { url: string; publicId: string }) => {
+          removedImages.forEach((image) => {
             changedFields.push(`Site image removed: ${formatSiteImage(image)}`);
+            cloudinary.uploader.destroy(image.publicId).catch((err) => {
+              console.error(`Failed to delete image ${image.publicId} from Cloudinary:`, err);
+            });
           });
         }
       }
@@ -409,7 +412,6 @@ export async function PUT(
     }
     updateData.lastUpdated = new Date();
 
-    // Calculate total payments and amount due
     const currentTotalPayments = existingProject.paymentHistory?.reduce(
       (sum: number, payment: { amount: number }) => sum + payment.amount,
       0
@@ -419,19 +421,16 @@ export async function PUT(
     const grandTotal = parsed.data.grandTotal || existingProject.grandTotal || 0;
     updateData.amountDue = grandTotal - totalPayments;
 
-    // Update status based on amountDue
     const oldStatus = existingProject.status;
     updateData.status = updateData.amountDue === 0 ? "completed" : "ongoing";
     if (oldStatus !== updateData.status) {
       changedFields.push(`Status changed from "${oldStatus}" to "${updateData.status}"`);
     }
 
-    // Validate total payments
     if (totalPayments > grandTotal) {
       return NextResponse.json({ error: "Total payments exceed grand total" }, { status: 400 });
     }
 
-    // Update updateHistory
     if (changedFields.length > 0) {
       updateData.updateHistory = [
         ...(existingProject.updateHistory || []),
@@ -495,22 +494,56 @@ export async function PUT(
 
     await session.commitTransaction();
 
+    // Send notifications
     if (parsed.data.newPayment && parsed.data.newPayment.amount > 0) {
       const invoiceUrl = `${process.env.NEXT_PUBLIC_FRONTEND_URL}/invoice/${invoice?.invoiceId || projectId}?token=${invoice?.accessToken || ""}`;
-      const whatsappMessage = `Dear ${project.clientName}, we have received a payment of ₹${parsed.data.newPayment.amount.toFixed(2)} towards Quotation #${project.quotationNumber}. Total Paid: ₹${totalPayments.toFixed(2)}. Amount Due: ₹${(project.amountDue || 0).toFixed(2)}. View invoice: ${invoiceUrl}`;
+      const templateVariables: Record<string, string> = {
+        "1": project.clientName, // Dear {{1}}
+        "2": parsed.data.newPayment.amount.toFixed(2), // Payment amount {{2}}
+        "3": project.quotationNumber || projectId, // Quotation #{{3}}
+        "4": (project.amountDue || 0).toFixed(2), // Amount Due {{4}}
+        "5": invoiceUrl, // View invoice {{5}}
+      };
+      const whatsappMessage = `Dear ${project.clientName}, we have received a payment of ₹${parsed.data.newPayment.amount.toFixed(2)} towards Quotation #${project.quotationNumber || projectId}. Amount Due: ₹${(project.amountDue || 0).toFixed(2)}. View invoice: ${invoiceUrl}`;
 
       try {
         await sendNotification({
           to: project.clientNumber,
           message: whatsappMessage,
           action: "payment_received",
+          templateVariables,
         });
         console.log(`WhatsApp notification sent for payment on project ${projectId}`);
       } catch (whatsappError: unknown) {
         console.error(`WhatsApp Error for project ${projectId}:`, whatsappError);
         return NextResponse.json({
           project,
-          warning: "Project updated, but failed to send notification",
+          warning: "Project updated, but failed to send payment notification",
+        });
+      }
+    } else if (changedFields.length > 0) {
+      const projectUrl = `${process.env.NEXT_PUBLIC_FRONTEND_URL}/projects/${projectId}`;
+      const templateVariables: Record<string, string> = {
+        "1": project.clientName, // Dear {{1}}
+        "2": projectId, // Project #{{2}}
+        "3": (project.grandTotal?.toFixed(2) || "0.00"), // Grand Total {{3}}
+        "4": projectUrl, // View details {{4}}
+      };
+      const whatsappMessage = `Dear ${project.clientName}, your Project #${projectId} has been updated. Grand Total: ₹${project.grandTotal?.toFixed(2) || "0.00"}. View details: ${projectUrl}`;
+
+      try {
+        await sendNotification({
+          to: project.clientNumber,
+          message: whatsappMessage,
+          action: "project_updated",
+          templateVariables,
+        });
+        console.log(`WhatsApp notification sent for project update ${projectId}`);
+      } catch (whatsappError: unknown) {
+        console.error(`WhatsApp Error for project ${projectId}:`, whatsappError);
+        return NextResponse.json({
+          project,
+          warning: "Project updated, but failed to send update notification",
         });
       }
     }

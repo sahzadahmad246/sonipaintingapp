@@ -1,28 +1,46 @@
-import twilio from "twilio";
+import twilio, { Twilio } from "twilio";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { setTimeout } from "timers/promises";
 import { Redis } from "@upstash/redis";
 
-const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+const client: Twilio = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const redis = new Redis({
   url: process.env.REDIS_URL!,
   token: process.env.REDIS_TOKEN!,
 });
 
+export type NotificationAction =
+  | "quotation_created"
+  | "quotation_accepted"
+  | "quotation_rejected"
+  | "quotation_updated"
+  | "payment_received"
+  | "project_updated";
+
+const TEMPLATE_SIDS: Record<NotificationAction, string | undefined> = {
+  quotation_created: process.env.TWILIO_QUOTATION_CREATED_SID,
+  quotation_accepted: process.env.TWILIO_QUOTATION_ACCEPTED_SID,
+  quotation_rejected: process.env.TWILIO_QUOTATION_REJECTED_SID,
+  quotation_updated: process.env.TWILIO_QUOTATION_UPDATED_SID,
+  payment_received: process.env.TWILIO_PAYMENT_RECEIVED_SID,
+  project_updated: process.env.TWILIO_PROJECT_UPDATED_SID,
+};
+
 export async function sendNotification({
   to,
   message,
-  action = "default",
+  action = "quotation_created",
   retries = 3,
-  debounceSeconds = 3600,
+  debounceSeconds = 5,
+  templateVariables,
 }: {
   to: string;
   message: string;
-  action?: string;
+  action?: NotificationAction;
   retries?: number;
   debounceSeconds?: number;
-}) {
-  // Sanitize input: remove spaces and non-digit characters except +
+  templateVariables?: Record<string, string>;
+}): Promise<boolean> {
   const sanitizedNumber = to.replace(/\s+/g, "").replace(/[^+\d]/g, "");
   const phoneNumber = parsePhoneNumberFromString(sanitizedNumber, "IN");
 
@@ -30,11 +48,9 @@ export async function sendNotification({
     throw new Error(`Invalid phone number: ${sanitizedNumber}`);
   }
 
-  // Use E.164 format (e.g., +917355109388)
   const formattedNumber = phoneNumber.format("E.164");
   console.log("Attempting to send WhatsApp notification to:", formattedNumber, "Action:", action);
 
-  // Use action-specific lock key
   const lockKey = `notification:${formattedNumber}:whatsapp:${action}`;
   const lock = await redis.get(lockKey);
   if (lock) {
@@ -43,20 +59,54 @@ export async function sendNotification({
     return false;
   }
 
+  const lastInteractionKey = `last_interaction:${formattedNumber}`;
+  const lastInteraction = await redis.get(lastInteractionKey);
+  const isWithinSessionWindow = lastInteraction
+    ? (Date.now() - Number(lastInteraction)) / 1000 / 3600 < 24
+    : false;
+
+  const contentSid = TEMPLATE_SIDS[action];
+
   for (let i = 0; i < retries; i++) {
     try {
-      await client.messages.create({
-        body: message,
+      const messageOptions: {
+        from: string;
+        to: string;
+        body?: string;
+        contentSid?: string;
+        contentVariables?: string;
+      } = {
         from: `whatsapp:${process.env.TWILIO_PHONE_NUMBER}`,
         to: `whatsapp:${formattedNumber}`,
-      });
+      };
+
+      if (isWithinSessionWindow) {
+        messageOptions.body = message;
+      } else if (contentSid && templateVariables) {
+        messageOptions.contentSid = contentSid;
+        messageOptions.contentVariables = JSON.stringify(templateVariables);
+      } else {
+        throw new Error(`No template configured for action '${action}' or missing template variables`);
+      }
+
+      const messageInstance = await client.messages.create(messageOptions);
       await redis.set(lockKey, "locked", { ex: debounceSeconds });
-      console.log(`WhatsApp notification sent to ${formattedNumber} (action: ${action})`);
+      console.log(
+        `WhatsApp notification sent to ${formattedNumber} (action: ${action}, SID: ${messageInstance.sid})`
+      );
       return true;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes("63016")) {
+        console.error(
+          `Error 63016: Freeform message blocked for ${formattedNumber}. Ensure template for '${action}' is used.`
+        );
+      }
       if (i === retries - 1) {
-        console.error(`Failed to send WhatsApp notification to ${formattedNumber} (action: ${action}):`, errorMessage);
+        console.error(
+          `Failed to send WhatsApp notification to ${formattedNumber} (action: ${action}):`,
+          errorMessage
+        );
         throw new Error(`Failed to send WhatsApp notification: ${errorMessage}`);
       }
       await setTimeout(1000 * Math.pow(2, i));

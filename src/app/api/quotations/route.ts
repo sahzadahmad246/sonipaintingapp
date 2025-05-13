@@ -86,7 +86,6 @@ export async function POST(request: Request) {
         const file = value as File;
         console.log(`Processing siteImage: ${key}`, { name: file.name, size: file.size, type: file.type });
         if (file && file.size > 0) {
-          // Validate file type and size
           const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
           if (!allowedTypes.includes(file.type)) {
             console.log(`Invalid file type for ${key}: ${file.type}`);
@@ -113,7 +112,6 @@ export async function POST(request: Request) {
             });
             console.log("Cloudinary upload result:", result);
 
-            // Correct description key
             const descriptionKey = `${key}.description`;
             const description = sanitizeToString(formData.get(descriptionKey));
             console.log(`Sanitized description for ${descriptionKey}:`, description);
@@ -179,25 +177,23 @@ export async function POST(request: Request) {
     });
     console.log("Audit log created");
 
-    const itemDetails = quotation.items
-      .map((item: IQuotation["items"][number], index: number) => {
-        const area = item.area ? `Area: ${item.area} sq.ft` : "";
-        const rate = item.rate ? `Rate: ₹${item.rate.toFixed(2)}` : "";
-        const total = item.total
-          ? `Total: ₹${item.total.toFixed(2)}`
-          : `Total: ₹${item.rate.toFixed(2)}`;
-        return `${index + 1}. ${item.description}${area ? `, ${area}` : ""}${rate ? `, ${rate}` : ""}, ${total}`;
-      })
-      .join("; ");
-    const discountText = quotation.discount > 0 ? `, Discount: ₹${quotation.discount.toFixed(2)}` : "";
-    const imagesText = quotation.siteImages?.length ? `, Images: ${quotation.siteImages.length} attached` : "";
-    const whatsappMessage = `Dear ${quotation.clientName}, your Quotation #${quotationNumber} has been created. Items: ${itemDetails}. Subtotal: ₹${quotation.subtotal?.toFixed(2) || "0.00"}${discountText}${imagesText}, Grand Total: ₹${quotation.grandTotal?.toFixed(2) || "0.00"}. View details: ${process.env.NEXT_PUBLIC_FRONTEND_URL}/quotations/${quotationNumber}`;
-    console.log("WhatsApp message:", whatsappMessage);
+    // Prepare template variables for quotation_created template
+    const templateVariables = {
+      "1": quotation.clientName, // Dear {{1}}
+      "2": quotationNumber, // Quotation #{{2}}
+      "3": (quotation.grandTotal?.toFixed(2) || "0.00"), // Grand Total: ₹{{3}}
+      "4": `${process.env.NEXT_PUBLIC_FRONTEND_URL}/quotations/${quotationNumber}`, // View details: {{4}}
+    };
+
+    // Fallback freeform message (for session window)
+    const whatsappMessage = `Dear ${quotation.clientName}, your Quotation #${quotationNumber} has been created. Grand Total: ₹${quotation.grandTotal?.toFixed(2) || "0.00"}. View details: ${process.env.NEXT_PUBLIC_FRONTEND_URL}/quotations/${quotationNumber}`;
 
     try {
       await sendNotification({
         to: quotation.clientNumber,
         message: whatsappMessage,
+        action: "quotation_created",
+        templateVariables,
       });
       console.log("Notification sent successfully");
     } catch (error) {
@@ -217,6 +213,7 @@ export async function POST(request: Request) {
     return handleError(error, "Failed to create quotation");
   }
 }
+
 
 export async function GET(request: Request) {
   try {
