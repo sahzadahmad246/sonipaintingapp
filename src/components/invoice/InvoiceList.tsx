@@ -45,6 +45,8 @@ export default function InvoiceList() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
+  // New state for deletion loading
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const limit = 10;
 
   const fetchInvoices = useCallback(async () => {
@@ -87,6 +89,7 @@ export default function InvoiceList() {
 
   const handleDelete = async (invoiceId: string) => {
     try {
+      setIsDeleting(invoiceId); // Set deletion loading state
       await apiFetch(`/invoices/${invoiceId}`, { method: "DELETE" });
       setInvoices((prev) => prev.filter((i) => i.invoiceId !== invoiceId));
       toast.success("Invoice deleted successfully!");
@@ -94,6 +97,7 @@ export default function InvoiceList() {
       const errorMessage = error instanceof Error ? error.message : "Failed to delete invoice";
       toast.error(errorMessage);
     } finally {
+      setIsDeleting(null); // Reset deletion loading state
       setDeleteDialogOpen(false);
       setInvoiceToDelete(null);
     }
@@ -285,8 +289,10 @@ export default function InvoiceList() {
                                   variant="destructive"
                                   size="sm"
                                   onClick={() => confirmDelete(invoice.invoiceId)}
+                                  disabled={isDeleting === invoice.invoiceId}
                                 >
-                                  <Trash2 className="h-4 w-4 mr-1" /> Delete
+                                  <Trash2 className="h-4 w-4 mr-1" />
+                                  {isDeleting === invoice.invoiceId ? "Deleting..." : "Delete"}
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent>Delete this invoice</TooltipContent>
@@ -327,8 +333,12 @@ export default function InvoiceList() {
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={() => invoiceToDelete && handleDelete(invoiceToDelete)}>
-              Delete
+            <Button
+              variant="destructive"
+              onClick={() => invoiceToDelete && handleDelete(invoiceToDelete)}
+              disabled={isDeleting !== null}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

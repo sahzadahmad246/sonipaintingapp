@@ -22,11 +22,6 @@ export interface IQuotation extends Document {
   createdAt: Date;
   lastUpdated?: Date;
   isAccepted?: "pending" | "accepted" | "rejected";
-  updateHistory?: {
-    updatedAt: Date;
-    updatedBy: string;
-    changes: string[];
-  }[];
   siteImages?: {
     url: string;
     publicId: string;
@@ -62,13 +57,6 @@ const QuotationSchema: Schema = new Schema({
     enum: ["pending", "accepted", "rejected"],
     default: "pending",
   },
-  updateHistory: [
-    {
-      updatedAt: { type: Date, required: true },
-      updatedBy: { type: String, required: true },
-      changes: [{ type: String, required: true }],
-    },
-  ],
   siteImages: [
     {
       url: { type: String, required: true },

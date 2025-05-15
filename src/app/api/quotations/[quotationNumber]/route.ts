@@ -82,7 +82,7 @@ export async function PUT(
       date: sanitizeToString(formData.get("date"))
         ? new Date(sanitizeToString(formData.get("date"))!)
         : undefined,
-      discount: formData.get("discount")
+      discount: formData.get("formData")
         ? Number(formData.get("discount")) || 0
         : undefined,
       note: sanitizeToString(formData.get("note")),
@@ -205,27 +205,6 @@ export async function PUT(
     }
 
     const updateData: Partial<IQuotation> = {};
-    let isStatusUpdate = false;
-    const changedFields: string[] = [];
-
-    const formatItem = (item: IQuotation["items"][number]): string => {
-      const parts: string[] = [`${item.description}`];
-      if (item.area != null) parts.push(`Area: ${item.area} sq.ft`);
-      if (item.rate != null) parts.push(`Rate: ₹${item.rate.toFixed(2)}`);
-      if (item.total != null) parts.push(`Total: ₹${item.total.toFixed(2)}`);
-      if (item.note) parts.push(`Note: ${item.note}`);
-      return parts.join(", ");
-    };
-
-    const formatImage = (img: {
-      url: string;
-      publicId: string;
-      description?: string;
-    }): string => {
-      const parts: string[] = [`url: ${img.url}, publicId: ${img.publicId}`];
-      if (img.description) parts.push(`description: ${img.description}`);
-      return parts.join(", ");
-    };
 
     if (parsed.data) {
       // Only process non-status fields if this is not a status-only update
@@ -235,36 +214,24 @@ export async function PUT(
           parsed.data.clientName !== existingQuotation.clientName
         ) {
           updateData.clientName = parsed.data.clientName;
-          changedFields.push(
-            `Client name changed from "${existingQuotation.clientName}" to "${parsed.data.clientName}"`
-          );
         }
         if (
           parsed.data.clientAddress !== undefined &&
           parsed.data.clientAddress !== existingQuotation.clientAddress
         ) {
           updateData.clientAddress = parsed.data.clientAddress;
-          changedFields.push(
-            `Client address changed from "${existingQuotation.clientAddress}" to "${parsed.data.clientAddress}"`
-          );
         }
         if (
           parsed.data.clientNumber !== undefined &&
           parsed.data.clientNumber !== existingQuotation.clientNumber
         ) {
           updateData.clientNumber = parsed.data.clientNumber;
-          changedFields.push(
-            `Client number changed from "${existingQuotation.clientNumber}" to "${parsed.data.clientNumber}"`
-          );
         }
         if (
           parsed.data.date !== undefined &&
           parsed.data.date?.toISOString() !== existingQuotation.date?.toISOString()
         ) {
           updateData.date = parsed.data.date;
-          changedFields.push(
-            `Date changed from "${existingQuotation.date?.toISOString()}" to "${parsed.data.date?.toISOString()}"`
-          );
         }
         if (parsed.data.items !== undefined) {
           const oldItems: IQuotation["items"] = existingQuotation.items || [];
@@ -293,12 +260,6 @@ export async function PUT(
           );
           if (addedItems.length > 0 || removedItems.length > 0) {
             updateData.items = newItems;
-            addedItems.forEach((item) => {
-              changedFields.push(`New item added: ${formatItem(item)}`);
-            });
-            removedItems.forEach((item) => {
-              changedFields.push(`Item removed: ${formatItem(item)}`);
-            });
           }
         }
         if (
@@ -306,27 +267,18 @@ export async function PUT(
           parsed.data.subtotal !== existingQuotation.subtotal
         ) {
           updateData.subtotal = parsed.data.subtotal;
-          changedFields.push(
-            `Subtotal changed from ${existingQuotation.subtotal || 0} to ${parsed.data.subtotal}`
-          );
         }
         if (
           parsed.data.discount !== undefined &&
           parsed.data.discount !== existingQuotation.discount
         ) {
           updateData.discount = parsed.data.discount;
-          changedFields.push(
-            `Discount changed from ${existingQuotation.discount || 0} to ${parsed.data.discount}`
-          );
         }
         if (
           parsed.data.grandTotal !== undefined &&
           parsed.data.grandTotal !== existingQuotation.grandTotal
         ) {
           updateData.grandTotal = parsed.data.grandTotal;
-          changedFields.push(
-            `Grand total changed from ${existingQuotation.grandTotal || 0} to ${parsed.data.grandTotal}`
-          );
         }
         if (parsed.data.terms !== undefined) {
           const oldTerms: string[] = existingQuotation.terms || [];
@@ -335,12 +287,6 @@ export async function PUT(
           const removedTerms = oldTerms.filter((term) => !newTerms.includes(term));
           if (addedTerms.length > 0 || removedTerms.length > 0) {
             updateData.terms = newTerms;
-            addedTerms.forEach((term) => {
-              changedFields.push(`Term added: "${term}"`);
-            });
-            removedTerms.forEach((term) => {
-              changedFields.push(`Term removed: "${term}"`);
-            });
           }
         }
         if (
@@ -348,9 +294,6 @@ export async function PUT(
           parsed.data.note !== existingQuotation.note
         ) {
           updateData.note = parsed.data.note;
-          changedFields.push(
-            `Note changed from "${existingQuotation.note || ""}" to "${parsed.data.note}"`
-          );
         }
         if (parsed.data.siteImages !== undefined) {
           const oldImages: {
@@ -371,11 +314,7 @@ export async function PUT(
           );
           if (addedImages.length > 0 || removedImages.length > 0) {
             updateData.siteImages = newImages;
-            addedImages.forEach((img) => {
-              changedFields.push(`Image added: ${formatImage(img)}`);
-            });
             removedImages.forEach((img) => {
-              changedFields.push(`Image removed: ${formatImage(img)}`);
               cloudinary.uploader.destroy(img.publicId).catch((err) => {
                 console.error(`Failed to delete image ${img.publicId} from Cloudinary:`, err);
               });
@@ -390,33 +329,15 @@ export async function PUT(
         parsed.data.isAccepted !== existingQuotation.isAccepted
       ) {
         updateData.isAccepted = parsed.data.isAccepted;
-        isStatusUpdate = true;
-        changedFields.push(
-          `Status changed from "${existingQuotation.isAccepted}" to "${parsed.data.isAccepted}"`
-        );
       } else if (
         !isStatusOnlyUpdate && // Only reset pending status for admin updates
         existingQuotation.isAccepted !== "pending" &&
-        changedFields.length > 0
+        Object.keys(updateData).length > 0
       ) {
         updateData.isAccepted = "pending";
-        changedFields.push(
-          `Status changed from "${existingQuotation.isAccepted}" to "pending"`
-        );
       }
     }
     updateData.lastUpdated = new Date();
-
-    if (changedFields.length > 0) {
-      updateData.updateHistory = [
-        ...(existingQuotation.updateHistory || []),
-        {
-          updatedAt: new Date(),
-          updatedBy: userId,
-          changes: changedFields,
-        },
-      ];
-    }
 
     const updatedQuotation = await Quotation.findOneAndUpdate(
       { quotationNumber },
@@ -451,27 +372,6 @@ export async function PUT(
           note: updatedQuotation.note,
           lastUpdated: new Date(),
           status: "ongoing",
-          updateHistory: [
-            ...(existingProject.updateHistory || []),
-            {
-              updatedAt: new Date(),
-              updatedBy: userId,
-              changes: [
-                "clientName",
-                "clientAddress",
-                "clientNumber",
-                "date",
-                "items",
-                "subtotal",
-                "discount",
-                "grandTotal",
-                "amountDue",
-                "terms",
-                "note",
-                "status",
-              ],
-            },
-          ],
         };
         const updatedProject = await Project.findOneAndUpdate(
           { quotationNumber, createdBy: userId },
@@ -531,7 +431,9 @@ export async function PUT(
           clientNumber: updatedQuotation.clientNumber,
           date: updatedQuotation.date,
           items: updatedQuotation.items,
-          extraWork: [],
+         
+
+ extraWork: [],
           subtotal: updatedQuotation.subtotal,
           discount: updatedQuotation.discount,
           grandTotal: updatedQuotation.grandTotal,
@@ -543,13 +445,6 @@ export async function PUT(
           createdAt: new Date(),
           createdBy: userId,
           status: "ongoing",
-          updateHistory: [
-            {
-              updatedAt: new Date(),
-              updatedBy: userId,
-              changes: ["Project created"],
-            },
-          ],
         };
         const newProject = await Project.create([projectData], { session });
         if (!newProject || newProject.length === 0) {
@@ -598,11 +493,12 @@ export async function PUT(
     await AuditLog.create(
       [
         {
-          action: isStatusUpdate
+          action: parsed.data.isAccepted !== undefined &&
+            parsed.data.isAccepted !== existingQuotation.isAccepted
             ? "update_quotation_status"
             : "update_quotation",
           userId: userId,
-          details: { quotationNumber, changes: changedFields },
+          details: { quotationNumber },
           createdAt: new Date(),
         },
       ],
@@ -616,7 +512,8 @@ export async function PUT(
     let templateVariables: Record<string, string>;
     let action: NotificationAction;
 
-    if (isStatusUpdate) {
+    if (parsed.data.isAccepted !== undefined &&
+        parsed.data.isAccepted !== existingQuotation.isAccepted) {
       action =
         updatedQuotation.isAccepted === "accepted"
           ? "quotation_accepted"

@@ -35,11 +35,6 @@ export interface IProject extends Document {
   createdBy: string;
   lastUpdated?: Date;
   status: "ongoing" | "completed";
-  updateHistory?: {
-    updatedAt: Date;
-    updatedBy: string;
-    changes: string[];
-  }[];
 }
 
 const ProjectSchema: Schema = new Schema({
@@ -87,13 +82,6 @@ const ProjectSchema: Schema = new Schema({
     enum: ["ongoing", "completed"],
     default: "ongoing",
   },
-  updateHistory: [
-    {
-      updatedAt: { type: Date, required: true },
-      updatedBy: { type: String, required: true },
-      changes: [{ type: String, required: true }],
-    },
-  ],
 });
 
 ProjectSchema.index({ projectId: 1 });

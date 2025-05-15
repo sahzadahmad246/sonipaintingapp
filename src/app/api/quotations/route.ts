@@ -159,7 +159,6 @@ export async function POST(request: Request) {
       note: parsed.data.note,
       createdBy: session.user.id,
       isAccepted: "pending",
-      updateHistory: [],
       siteImages: parsed.data.siteImages || [],
     };
 
@@ -227,13 +226,11 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get("limit") || "10");
 
     await dbConnect();
-    const quotations = await Quotation.find({ createdBy: session.user.id })
+    const quotations = await Quotation.find({})
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
-    const total = await Quotation.countDocuments({
-      createdBy: session.user.id,
-    });
+    const total = await Quotation.countDocuments({});
 
     return NextResponse.json({
       quotations,

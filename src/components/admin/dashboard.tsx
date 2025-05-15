@@ -1,10 +1,10 @@
-"use client"
+"use client";
 
-import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
-import { motion } from "framer-motion"
-import Link from "next/link"
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import Link from "next/link";
 import {
   FileText,
   PlusCircle,
@@ -12,21 +12,27 @@ import {
   Calendar,
   Loader2,
   Briefcase,
-  Camera,
   Bell,
   DollarSign,
   CheckCircle,
   XCircle,
   Clock,
   ChevronRight,
-} from "lucide-react"
+} from "lucide-react";
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
-import { apiFetch } from "@/app/lib/api"
-import type { Quotation, Project, Invoice, ApiError } from "@/app/types"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "@/components/ui/card";
+import { apiFetch } from "@/app/lib/api";
+import type { Quotation, Project, Invoice, ApiError } from "@/app/types";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,11 +40,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
 
 export default function Dashboard() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [stats, setStats] = useState({
     totalQuotations: 0,
     pendingQuotations: 0,
@@ -46,10 +52,11 @@ export default function Dashboard() {
     rejectedQuotations: 0,
     totalProjects: 0,
     totalInvoices: 0,
-  })
-  const [recentQuotations, setRecentQuotations] = useState<Quotation[]>([])
-  const [recentProjects, setRecentProjects] = useState<Project[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  });
+  const [recentQuotations, setRecentQuotations] = useState<Quotation[]>([]);
+  const [recentProjects, setRecentProjects] = useState<Project[]>([]);
+  const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (session?.user.role === "admin") {
@@ -59,41 +66,70 @@ export default function Dashboard() {
             apiFetch<{ quotations: Quotation[] }>("/quotations"),
             apiFetch<{ projects: Project[] }>("/projects"),
             apiFetch<{ invoices: Invoice[] }>("/invoices"),
-          ])
+          ]);
 
-          const quotations = quotationsRes.quotations || []
-          const projects = projectsRes.projects || []
-          const invoices = invoicesRes.invoices || []
+          const quotations = quotationsRes.quotations || [];
+          const projects = projectsRes.projects || [];
+          const invoices = invoicesRes.invoices || [];
 
           setStats({
             totalQuotations: quotations.length,
-            pendingQuotations: quotations.filter((q) => q.isAccepted === "pending").length,
-            acceptedQuotations: quotations.filter((q) => q.isAccepted === "accepted").length,
-            rejectedQuotations: quotations.filter((q) => q.isAccepted === "rejected").length,
+            pendingQuotations: quotations.filter(
+              (q) => q.isAccepted === "pending"
+            ).length,
+            acceptedQuotations: quotations.filter(
+              (q) => q.isAccepted === "accepted"
+            ).length,
+            rejectedQuotations: quotations.filter(
+              (q) => q.isAccepted === "rejected"
+            ).length,
             totalProjects: projects.length,
             totalInvoices: invoices.length,
-          })
+          });
 
-          // Get recent quotations and projects
+          // Get recent quotations, projects, and invoices
           setRecentQuotations(
-            quotations.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3),
-          )
+            quotations
+              .sort(
+                (a, b) =>
+                  new Date(b.createdAt).getTime() -
+                  new Date(a.createdAt).getTime()
+              )
+              .slice(0, 3)
+          );
 
           setRecentProjects(
             projects
-              .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
-              .slice(0, 3),
-          )
+              .sort(
+                (a, b) =>
+                  new Date(b.createdAt || 0).getTime() -
+                  new Date(a.createdAt || 0).getTime()
+              )
+              .slice(0, 3)
+          );
+
+          setRecentInvoices(
+            invoices
+              .sort(
+                (a, b) =>
+                  new Date(b.createdAt).getTime() -
+                  new Date(a.createdAt).getTime()
+              )
+              .slice(0, 3)
+          );
         } catch (error: unknown) {
-          const apiError = error as ApiError
-          console.error("Failed to fetch data:", apiError.error || "Unknown error")
+          const apiError = error as ApiError;
+          console.error(
+            "Failed to fetch data:",
+            apiError.error || "Unknown error"
+          );
         } finally {
-          setIsLoading(false)
+          setIsLoading(false);
         }
-      }
-      fetchData()
+      };
+      fetchData();
     }
-  }, [session])
+  }, [session]);
 
   if (status === "loading") {
     return (
@@ -103,37 +139,62 @@ export default function Dashboard() {
           <p className="text-lg text-gray-600">Loading dashboard...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (!session || session.user.role !== "admin") {
-    router.push("/")
-    return null
+    router.push("/");
+    return null;
   }
 
   const getStatusBadge = (status: string | undefined) => {
-    const badgeStatus = status || "pending"
+    const badgeStatus = status || "pending";
     switch (badgeStatus) {
       case "accepted":
         return (
           <Badge className="bg-green-100 text-green-800 border-green-200 flex items-center gap-1">
             <CheckCircle className="h-3 w-3" /> Accepted
           </Badge>
-        )
+        );
       case "rejected":
         return (
           <Badge className="bg-red-100 text-red-800 border-red-200 flex items-center gap-1">
             <XCircle className="h-3 w-3" /> Rejected
           </Badge>
-        )
+        );
       default:
         return (
           <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 flex items-center gap-1">
             <Clock className="h-3 w-3" /> Pending
           </Badge>
-        )
+        );
     }
-  }
+  };
+
+  const getPaymentStatus = (invoice: Invoice) => {
+    const amountDue = invoice.amountDue;
+    const grandTotal = invoice.grandTotal;
+
+    if (amountDue <= 0) {
+      return (
+        <Badge className="bg-green-100 text-green-800 border-green-200 flex items-center gap-1">
+          <CheckCircle className="h-3 w-3" /> Paid
+        </Badge>
+      );
+    } else if (amountDue < grandTotal) {
+      return (
+        <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 flex items-center gap-1">
+          <Clock className="h-3 w-3" /> Partially Paid
+        </Badge>
+      );
+    } else {
+      return (
+        <Badge className="bg-red-100 text-red-800 border-red-200 flex items-center gap-1">
+          <XCircle className="h-3 w-3" /> Unpaid
+        </Badge>
+      );
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
@@ -149,10 +210,16 @@ export default function Dashboard() {
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full md:hidden">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full md:hidden"
+                >
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={session.user.image || ""} />
-                    <AvatarFallback>{session.user.name?.charAt(0) || "A"}</AvatarFallback>
+                    <AvatarFallback>
+                      {session.user.name?.charAt(0) || "A"}
+                    </AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
@@ -163,13 +230,18 @@ export default function Dashboard() {
                   <Link href="/profile" className="flex items-center">
                     <Avatar className="h-4 w-4 mr-2">
                       <AvatarImage src={session.user.image || ""} />
-                      <AvatarFallback>{session.user.name?.charAt(0) || "A"}</AvatarFallback>
+                      <AvatarFallback>
+                        {session.user.name?.charAt(0) || "A"}
+                      </AvatarFallback>
                     </Avatar>
                     <span>Profile</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/dashboard/settings" className="flex items-center">
+                  <Link
+                    href="/dashboard/settings"
+                    className="flex items-center"
+                  >
                     <DollarSign className="mr-2 h-4 w-4" />
                     <span>Settings</span>
                   </Link>
@@ -185,8 +257,12 @@ export default function Dashboard() {
         <div className="mb-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
-              <h2 className="text-2xl font-bold">Welcome back, {session.user.name || "Admin"}</h2>
-              <p className="text-gray-500">Here is what is happening with your business today.</p>
+              <h2 className="text-2xl font-bold">
+                Welcome back, {session.user.name || "Admin"}
+              </h2>
+              <p className="text-gray-500">
+                Here is what is happening with your business today.
+              </p>
             </div>
             <Button asChild>
               <Link href="/dashboard/quotations/create">
@@ -201,7 +277,7 @@ export default function Dashboard() {
                 <Card key={i} className="shadow-sm">
                   <CardHeader className="pb-2">
                     <CardDescription>
-                      <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="rii h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -224,7 +300,9 @@ export default function Dashboard() {
                 <CardContent>
                   <div className="flex items-center">
                     <FileText className="h-5 w-5 text-primary mr-2" />
-                    <span className="text-2xl font-bold">{stats.totalQuotations}</span>
+                    <span className="text-2xl font-bold">
+                      {stats.totalQuotations}
+                    </span>
                   </div>
                 </CardContent>
               </Card>
@@ -235,7 +313,9 @@ export default function Dashboard() {
                 <CardContent>
                   <div className="flex items-center">
                     <Calendar className="h-5 w-5 text-yellow-500 mr-2" />
-                    <span className="text-2xl font-bold">{stats.pendingQuotations}</span>
+                    <span className="text-2xl font-bold">
+                      {stats.pendingQuotations}
+                    </span>
                   </div>
                 </CardContent>
               </Card>
@@ -246,7 +326,9 @@ export default function Dashboard() {
                 <CardContent>
                   <div className="flex items-center">
                     <Users className="h-5 w-5 text-green-500 mr-2" />
-                    <span className="text-2xl font-bold">{stats.acceptedQuotations}</span>
+                    <span className="text-2xl font-bold">
+                      {stats.acceptedQuotations}
+                    </span>
                   </div>
                 </CardContent>
               </Card>
@@ -257,7 +339,9 @@ export default function Dashboard() {
                 <CardContent>
                   <div className="flex items-center">
                     <Briefcase className="h-5 w-5 text-blue-500 mr-2" />
-                    <span className="text-2xl font-bold">{stats.totalProjects}</span>
+                    <span className="text-2xl font-bold">
+                      {stats.totalProjects}
+                    </span>
                   </div>
                 </CardContent>
               </Card>
@@ -265,7 +349,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg flex items-center justify-between">
@@ -281,7 +365,10 @@ export default function Dashboard() {
               {isLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div
+                      key={i}
+                      className="flex items-center justify-between p-3 border rounded-lg"
+                    >
                       <div className="space-y-1">
                         <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
                         <div className="h-3 w-24 bg-gray-200 rounded animate-pulse"></div>
@@ -301,7 +388,9 @@ export default function Dashboard() {
                       <div className="flex items-center justify-between p-3 border rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
                         <div>
                           <p className="font-medium">{quotation.clientName}</p>
-                          <p className="text-sm text-gray-500">{new Date(quotation.date).toLocaleDateString()}</p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(quotation.date).toLocaleDateString()}
+                          </p>
                         </div>
                         {getStatusBadge(quotation.isAccepted)}
                       </div>
@@ -314,13 +403,6 @@ export default function Dashboard() {
                 </div>
               )}
             </CardContent>
-            <CardFooter className="border-t pt-4">
-              <Button variant="outline" size="sm" asChild className="w-full">
-                <Link href="/dashboard/quotations/create">
-                  <PlusCircle className="h-4 w-4 mr-2" /> Create New Quotation
-                </Link>
-              </Button>
-            </CardFooter>
           </Card>
 
           <Card className="shadow-sm">
@@ -338,7 +420,10 @@ export default function Dashboard() {
               {isLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div
+                      key={i}
+                      className="flex items-center justify-between p-3 border rounded-lg"
+                    >
                       <div className="space-y-1">
                         <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
                         <div className="h-3 w-24 bg-gray-200 rounded animate-pulse"></div>
@@ -351,29 +436,43 @@ export default function Dashboard() {
                 <div className="space-y-2">
                   {recentProjects.map((project) => {
                     const totalPayments = Array.isArray(project.paymentHistory)
-                      ? project.paymentHistory.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0)
-                      : 0
-                    const grandTotal = Number(project.grandTotal) || 0
-                    const paymentPercentage = grandTotal > 0 ? (totalPayments / grandTotal) * 100 : 0
+                      ? project.paymentHistory.reduce(
+                          (sum, payment) => sum + (Number(payment.amount) || 0),
+                          0
+                        )
+                      : 0;
+                    const grandTotal = Number(project.grandTotal) || 0;
+                    const paymentPercentage =
+                      grandTotal > 0 ? (totalPayments / grandTotal) * 100 : 0;
 
                     return (
-                      <Link key={project.projectId} href={`/dashboard/projects/${project.projectId}`} className="block">
+                      <Link
+                        key={project.projectId}
+                        href={`/dashboard/projects/${project.projectId}`}
+                        className="block"
+                      >
                         <div className="flex items-center justify-between p-3 border rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
                           <div>
                             <p className="font-medium">{project.clientName}</p>
                             <p className="text-sm text-gray-500">
-                              {project.status?.charAt(0).toUpperCase() + project.status?.slice(1) || "In Progress"}
+                              {project.status?.charAt(0).toUpperCase() +
+                                project.status?.slice(1) || "In Progress"}
                             </p>
                           </div>
                           <div className="flex flex-col items-end">
                             <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
-                              <div className="h-full bg-primary" style={{ width: `${paymentPercentage}%` }}></div>
+                              <div
+                                className="h-full bg-primary"
+                                style={{ width: `${paymentPercentage}%` }}
+                              ></div>
                             </div>
-                            <span className="text-xs text-gray-500 mt-1">{paymentPercentage.toFixed(0)}%</span>
+                            <span className="text-xs text-gray-500 mt-1">
+                              {paymentPercentage.toFixed(0)}%
+                            </span>
                           </div>
                         </div>
                       </Link>
-                    )
+                    );
                   })}
                 </div>
               ) : (
@@ -383,40 +482,63 @@ export default function Dashboard() {
               )}
             </CardContent>
           </Card>
-        </div>
 
-        <div className="mt-6">
           <Card className="shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg">Quick Actions</CardTitle>
-              <CardDescription>Common tasks you might want to perform</CardDescription>
+              <CardTitle className="text-lg flex items-center justify-between">
+                <span>Recent Invoices</span>
+                <Button variant="ghost" size="sm" asChild className="text-xs">
+                  <Link href="/dashboard/invoices">
+                    View all <ChevronRight className="ml-1 h-4 w-4" />
+                  </Link>
+                </Button>
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                <Button asChild variant="outline" className="h-auto py-4 flex flex-col items-center justify-center">
-                  <Link href="/dashboard/quotations/create">
-                    <FileText className="h-6 w-6 mb-2" />
-                    <span>New Quotation</span>
-                  </Link>
-                </Button>
-
-                <Button asChild variant="outline" className="h-auto py-4 flex flex-col items-center justify-center">
-                  <Link href="/dashboard/portfolio/create">
-                    <Camera className="h-6 w-6 mb-2" />
-                    <span>Add Portfolio</span>
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" className="h-auto py-4 flex flex-col items-center justify-center">
-                  <Link href="/dashboard/settings">
-                    <DollarSign className="h-6 w-6 mb-2" />
-                    <span>Settings</span>
-                  </Link>
-                </Button>
-              </div>
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between p-3 border rounded-lg"
+                    >
+                      <div className="space-y-1">
+                        <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+                        <div className="h-3 w-24 bg-gray-200 rounded animate-pulse"></div>
+                      </div>
+                      <div className="h-6 w-16 bg-gray-200 rounded animate-pulse"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : recentInvoices.length > 0 ? (
+                <div className="space-y-2">
+                  {recentInvoices.map((invoice) => (
+                    <Link
+                      key={invoice.invoiceId}
+                      href={`/invoice/${invoice.invoiceId}`}
+                      className="block"
+                    >
+                      <div className="flex items-center justify-between p-3 border rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                        <div>
+                          <p className="font-medium">{invoice.clientName}</p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(invoice.date).toLocaleDateString()}
+                          </p>
+                        </div>
+                        {getPaymentStatus(invoice)}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <p className="text-gray-500">No invoices available</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
       </main>
     </div>
-  )
+  );
 }

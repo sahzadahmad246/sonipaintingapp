@@ -51,6 +51,8 @@ export default function QuotationList() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
+  // New state for deletion loading
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const limit = 10;
 
   const fetchQuotations = useCallback(async () => {
@@ -98,6 +100,7 @@ export default function QuotationList() {
 
   const handleDelete = async (quotationNumber: string) => {
     try {
+      setIsDeleting(quotationNumber); // Set deletion loading state
       await apiFetch(`/quotations/${quotationNumber}`, { method: "DELETE" });
       setQuotations((prev) => prev.filter((q) => q.quotationNumber !== quotationNumber));
       toast.success("Quotation deleted successfully!");
@@ -105,6 +108,7 @@ export default function QuotationList() {
       const apiError = error as ApiError;
       toast.error(apiError.error || "Failed to delete quotation");
     } finally {
+      setIsDeleting(null); // Reset deletion loading state
       setDeleteDialogOpen(false);
       setQuotationToDelete(null);
     }
@@ -227,7 +231,7 @@ export default function QuotationList() {
 
           <AnimatePresence>
             {filteredQuotations.length === 0 ? (
-              < motion.div
+              <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -330,8 +334,10 @@ export default function QuotationList() {
                                     variant="destructive"
                                     size="sm"
                                     onClick={() => confirmDelete(quotation.quotationNumber)}
+                                    disabled={isDeleting === quotation.quotationNumber}
                                   >
-                                    <Trash2 className="h-4 w-4 mr-1" /> Delete
+                                    <Trash2 className="h-4 w-4 mr-1" />
+                                    {isDeleting === quotation.quotationNumber ? "Deleting..." : "Delete"}
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Delete this quotation</TooltipContent>
@@ -373,8 +379,12 @@ export default function QuotationList() {
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={() => quotationToDelete && handleDelete(quotationToDelete)}>
-              Delete
+            <Button
+              variant="destructive"
+              onClick={() => quotationToDelete && handleDelete(quotationToDelete)}
+              disabled={isDeleting !== null}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

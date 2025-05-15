@@ -876,8 +876,10 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                       const defaultTerms = [
                         "50% advance payment required to start work, 30% due at 70% project completion, and 20% within 7 days of completion.",
                         "Quotations are valid for 30 days from issuance.",
-                        "Additional work requires a separate quotation and written approval.",
-                        "1-year warranty on workmanship; material warranties per manufacturer terms.",
+                        "Additional work requested by the customer that is not included in the original scope of work will be priced separately and agreed upon in writing before proceeding.",
+                        "Painting work covers surface finishing only, issues like dampness, leakage, or plaster damage are not included.",
+                        "The Sony Painting will be responsible for thoroughly cleaning the work area after completion, leaving no debris behind.",
+                        "We will provide regular updates on progress and will communicate any delays or changes to the timeline in a timely manner.",
                         "Accepting the quotation and paying the deposit confirms agreement to these terms.",
                       ];
                       setValue("terms", defaultTerms);

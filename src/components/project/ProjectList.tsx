@@ -30,6 +30,8 @@ export default function ProjectList() {
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  // New state for deletion loading
+  const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const limit = 10
 
   const fetchProjects = useCallback(async () => {
@@ -75,6 +77,7 @@ export default function ProjectList() {
 
   const handleDelete = async (projectId: string) => {
     try {
+      setIsDeleting(projectId) // Set deletion loading state
       await apiFetch(`/projects/${projectId}`, { method: "DELETE" })
       setProjects((prev) => prev.filter((p) => p.projectId !== projectId))
       toast.success("Project deleted successfully!")
@@ -82,6 +85,7 @@ export default function ProjectList() {
       const errorMessage = error instanceof Error ? error.message : "Failed to delete project"
       toast.error(errorMessage)
     } finally {
+      setIsDeleting(null) // Reset deletion loading state
       setDeleteDialogOpen(false)
       setProjectToDelete(null)
     }
@@ -239,7 +243,7 @@ export default function ProjectList() {
                                   <TooltipTrigger asChild>
                                     <Button variant="outline" size="sm" asChild>
                                       <Link href={`/dashboard/projects/${project.projectId}`}>
-                                        <Eye className="h-4 w-4 mr-1" /> View
+                                        <Eye className="hwiggle" /> View
                                       </Link>
                                     </Button>
                                   </TooltipTrigger>
@@ -265,8 +269,10 @@ export default function ProjectList() {
                                       variant="destructive"
                                       size="sm"
                                       onClick={() => confirmDelete(project.projectId)}
+                                      disabled={isDeleting === project.projectId}
                                     >
-                                      <Trash2 className="h-4 w-4 mr-1" /> Delete
+                                      <Trash2 className="h-4 w-4 mr-1" />
+                                      {isDeleting === project.projectId ? "Deleting..." : "Delete"}
                                     </Button>
                                   </TooltipTrigger>
                                   <TooltipContent>Delete this project</TooltipContent>
@@ -309,8 +315,12 @@ export default function ProjectList() {
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={() => projectToDelete && handleDelete(projectToDelete)}>
-              Delete
+            <Button
+              variant="destructive"
+              onClick={() => projectToDelete && handleDelete(projectToDelete)}
+              disabled={isDeleting !== null}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
