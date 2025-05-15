@@ -242,3 +242,55 @@ export async function GET(request: Request) {
     return handleError(error, "Failed to fetch quotations");
   }
 }
+
+
+export async function DELETE(request: Request) {
+  try {
+    // Check authentication and admin role
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== "admin") {
+      console.log("Unauthorized access attempt", { user: session?.user });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    await dbConnect();
+
+    const { quotationNumbers } = await request.json();
+    if (!Array.isArray(quotationNumbers) || quotationNumbers.length === 0) {
+      return NextResponse.json({ error: "Invalid or empty quotationNumbers array" }, { status: 400 });
+    }
+
+    // Sanitize and validate quotationNumbers
+    const sanitizedQuotationNumbers = quotationNumbers
+      .map((num: unknown) => (typeof num === "string" ? num.trim() : null))
+      .filter((num: string | null) => num !== null);
+    if (sanitizedQuotationNumbers.length === 0) {
+      return NextResponse.json({ error: "No valid quotation numbers provided" }, { status: 400 });
+    }
+
+    const filter = {
+      quotationNumber: { $in: sanitizedQuotationNumbers },
+    };
+
+    const result = await Quotation.deleteMany(filter);
+    console.log(`Deleted ${result.deletedCount} quotations`);
+
+    await AuditLog.create({
+      action: "bulk_delete_quotations",
+      userId: session.user.id, // Use authenticated user's ID
+      details: {
+        deletedCount: result.deletedCount,
+        quotationNumbers: sanitizedQuotationNumbers,
+      },
+    });
+    console.log("Audit log created for bulk deletion");
+
+    return NextResponse.json({
+      message: `Deleted ${result.deletedCount} quotations`,
+      deletedCount: result.deletedCount,
+    }, { status: 200 });
+  } catch (error: unknown) {
+    console.error("Error in DELETE handler:", error);
+    return handleError(error, "Failed to delete quotations");
+  }
+}
