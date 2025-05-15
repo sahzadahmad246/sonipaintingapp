@@ -27,7 +27,6 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  CardFooter,
 } from "@/components/ui/card";
 import { apiFetch } from "@/app/lib/api";
 import type { Quotation, Project, Invoice, ApiError } from "@/app/types";
