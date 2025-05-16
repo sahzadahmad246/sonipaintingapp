@@ -120,3 +120,14 @@
     @apply bg-background text-foreground;
   }
 }
+.mainContent {
+  margin-bottom: 60px;
+  padding-bottom: env(safe-area-inset-bottom); 
+}
+
+@media (min-width: 768px) {
+  .mainContent {
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+}

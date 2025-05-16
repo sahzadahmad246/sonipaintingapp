@@ -64,9 +64,6 @@ export async function GET(
   }
 }
 
-
-
-
 export async function PUT(
   request: Request,
   context: { params: Promise<{ projectId: string }> }
@@ -118,7 +115,7 @@ export async function PUT(
         : undefined;
       data.existingImages = formData.get("existingImages")
         ? JSON.parse(sanitizeToString(formData.get("existingImages")) ?? "[]")
-        : [];
+        : undefined;
       data.newPayment = formData.get("newPayment")
         ? JSON.parse(sanitizeToString(formData.get("newPayment")) ?? "{}")
         : undefined;
@@ -186,9 +183,9 @@ export async function PUT(
 
     await dbConnect();
 
-    const existingProject = await Project.findOne({ projectId, createdBy: authSession.user.id }).session(session);
+    const existingProject = await Project.findOne({ projectId }).session(session);
     if (!existingProject) {
-      console.log(`Project not found for projectId: ${projectId}, userId: ${authSession.user.id}`);
+      console.log(`Project not found for projectId: ${projectId}`);
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
@@ -241,7 +238,7 @@ export async function PUT(
         const newItems: IProject["items"] = transformedItems || [];
         const addedItems = newItems.filter(
           (newItem) => !oldItems.some(
-            (existingItem) => // Renamed oldItem to existingItem for clarity
+            (existingItem) =>
               existingItem.description === newItem.description &&
               (existingItem.area ?? undefined) === (newItem.area ?? undefined) &&
               existingItem.rate === newItem.rate &&
@@ -250,7 +247,7 @@ export async function PUT(
           )
         );
         const removedItems = oldItems.filter(
-          (existingItem) => !newItems.some( // Renamed oldItem to existingItem
+          (existingItem) => !newItems.some(
             (newItem) =>
               newItem.description === existingItem.description &&
               (newItem.area ?? undefined) === (existingItem.area ?? undefined) &&
@@ -268,17 +265,17 @@ export async function PUT(
         const newExtraWork: IProject["extraWork"] = parsed.data.extraWork || [];
         const addedExtraWork = newExtraWork.filter(
           (newItem) => !oldExtraWork.some(
-            (existingItem) => // Renamed oldItem to existingItem
+            (existingItem) =>
               existingItem.description === newItem.description &&
               existingItem.total === newItem.total &&
               (existingItem.note ?? '') === (newItem.note ?? '')
           )
         );
         const removedExtraWork = oldExtraWork.filter(
-          (existingItem) => !newExtraWork.some( // Renamed oldItem to existingItem
+          (existingItem) => !newExtraWork.some(
             (newItem) =>
               newItem.description === existingItem.description &&
-              newItem.total === existingItem.total &&
+              newItem.total === newItem.total &&
               (newItem.note ?? '') === (existingItem.note ?? '')
           )
         );
@@ -361,7 +358,6 @@ export async function PUT(
     const grandTotal = parsed.data.grandTotal || existingProject.grandTotal || 0;
     updateData.amountDue = grandTotal - totalPayments;
 
-    // Removed unused oldStatus variable
     updateData.status = updateData.amountDue === 0 ? "completed" : "ongoing";
 
     if (totalPayments > grandTotal) {
@@ -369,7 +365,7 @@ export async function PUT(
     }
 
     const project = await Project.findOneAndUpdate(
-      { projectId, createdBy: authSession.user.id },
+      { projectId },
       updateData,
       { new: true, session }
     );
@@ -483,7 +479,6 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ projectId: string }> }
 ) {
- 
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
@@ -494,10 +489,9 @@ export async function DELETE(
 
     const { projectId } = await context.params;
     await dbConnect();
-    const project = await Project.findOne({ projectId, createdBy: authSession.user.id }).session(session);
+    const project = await Project.findOne({ projectId }).session(session);
 
     if (!project) {
-     
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
@@ -505,7 +499,7 @@ export async function DELETE(
       await cloudinary.uploader.destroy(image.publicId);
     }
 
-    await Project.findOneAndDelete({ projectId, createdBy: authSession.user.id }, { session });
+    await Project.findOneAndDelete({ projectId }, { session });
     await Invoice.findOneAndDelete({ projectId }, { session });
 
     await AuditLog.create(

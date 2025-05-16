@@ -26,8 +26,6 @@ interface UpdateQuotationData extends Partial<IQuotation> {
   existingImages?: { url: string; publicId: string; description?: string }[];
 }
 
-
-
 export async function PUT(
   request: Request,
   context: { params: Promise<{ quotationNumber: string }> }
@@ -52,9 +50,11 @@ export async function PUT(
       | "accepted"
       | "rejected"
       | undefined;
-    
-    const isStatusOnlyUpdate = isAcceptedValue !== undefined && 
-      Array.from(formData.keys()).filter(key => key !== "isAccepted").length === 0;
+
+    const isStatusOnlyUpdate =
+      isAcceptedValue !== undefined &&
+      Array.from(formData.keys()).filter((key) => key !== "isAccepted")
+        .length === 0;
 
     // If it's not a status-only update, perform authentication check
     let userId: string;
@@ -127,7 +127,7 @@ export async function PUT(
       publicId: string;
       description?: string;
     }[] = data.existingImages || [];
-    
+
     // Only process image uploads for admin users
     if (!isStatusOnlyUpdate) {
       for (const [key, value] of formData.entries()) {
@@ -152,7 +152,9 @@ export async function PUT(
               );
 
               const descriptionKey = `${key}.description`;
-              const description = sanitizeToString(formData.get(descriptionKey));
+              const description = sanitizeToString(
+                formData.get(descriptionKey)
+              );
 
               siteImages.push({
                 url: result.secure_url,
@@ -177,12 +179,10 @@ export async function PUT(
 
     await dbConnect();
 
-    // Find the quotation without filtering by user ID for status-only updates
-    const findQuery = isStatusOnlyUpdate 
-      ? { quotationNumber }
-      : { quotationNumber, createdBy: userId };
-    
-    const existingQuotation = await Quotation.findOne(findQuery).session(session);
+    // Find the quotation using only quotationNumber
+    const existingQuotation = await Quotation.findOne({
+      quotationNumber,
+    }).session(session);
     if (!existingQuotation) {
       return NextResponse.json(
         { error: "Quotation not found" },
@@ -195,13 +195,10 @@ export async function PUT(
       // Ensure userId is always a string, not undefined
       userId = existingQuotation.createdBy;
     }
-    
+
     // Safeguard against undefined userId
     if (!userId) {
-      return NextResponse.json(
-        { error: "User ID not found" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "User ID not found" }, { status: 401 });
     }
 
     const updateData: Partial<IQuotation> = {};
@@ -229,7 +226,8 @@ export async function PUT(
         }
         if (
           parsed.data.date !== undefined &&
-          parsed.data.date?.toISOString() !== existingQuotation.date?.toISOString()
+          parsed.data.date?.toISOString() !==
+            existingQuotation.date?.toISOString()
         ) {
           updateData.date = parsed.data.date;
         }
@@ -283,8 +281,12 @@ export async function PUT(
         if (parsed.data.terms !== undefined) {
           const oldTerms: string[] = existingQuotation.terms || [];
           const newTerms: string[] = parsed.data.terms || [];
-          const addedTerms = newTerms.filter((term) => !oldTerms.includes(term));
-          const removedTerms = oldTerms.filter((term) => !newTerms.includes(term));
+          const addedTerms = newTerms.filter(
+            (term) => !oldTerms.includes(term)
+          );
+          const removedTerms = oldTerms.filter(
+            (term) => !newTerms.includes(term)
+          );
           if (addedTerms.length > 0 || removedTerms.length > 0) {
             updateData.terms = newTerms;
           }
@@ -307,16 +309,21 @@ export async function PUT(
             description?: string;
           }[] = parsed.data.siteImages || [];
           const addedImages = newImages.filter(
-            (newImg) => !oldImages.some((oldImg) => oldImg.publicId === newImg.publicId)
+            (newImg) =>
+              !oldImages.some((oldImg) => oldImg.publicId === newImg.publicId)
           );
           const removedImages = oldImages.filter(
-            (oldImg) => !newImages.some((newImg) => newImg.publicId === oldImg.publicId)
+            (oldImg) =>
+              !newImages.some((newImg) => newImg.publicId === oldImg.publicId)
           );
           if (addedImages.length > 0 || removedImages.length > 0) {
             updateData.siteImages = newImages;
             removedImages.forEach((img) => {
               cloudinary.uploader.destroy(img.publicId).catch((err) => {
-                console.error(`Failed to delete image ${img.publicId} from Cloudinary:`, err);
+                console.error(
+                  `Failed to delete image ${img.publicId} from Cloudinary:`,
+                  err
+                );
               });
             });
           }
@@ -355,7 +362,6 @@ export async function PUT(
     if (parsed.data?.isAccepted === "accepted") {
       const existingProject = await Project.findOne({
         quotationNumber,
-        createdBy: userId,
       }).session(session);
       if (existingProject) {
         const projectUpdate: Partial<IProject> = {
@@ -374,7 +380,7 @@ export async function PUT(
           status: "ongoing",
         };
         const updatedProject = await Project.findOneAndUpdate(
-          { quotationNumber, createdBy: userId },
+          { quotationNumber },
           { $set: projectUpdate },
           { new: true, session }
         );
@@ -392,7 +398,8 @@ export async function PUT(
         if (invoice) {
           const totalPayments =
             existingProject.paymentHistory?.reduce(
-              (sum: number, payment: { amount: number }) => sum + payment.amount,
+              (sum: number, payment: { amount: number }) =>
+                sum + payment.amount,
               0
             ) || 0;
           const invoiceUpdate: Partial<IInvoice> = {
@@ -431,9 +438,7 @@ export async function PUT(
           clientNumber: updatedQuotation.clientNumber,
           date: updatedQuotation.date,
           items: updatedQuotation.items,
-         
-
- extraWork: [],
+          extraWork: [],
           subtotal: updatedQuotation.subtotal,
           discount: updatedQuotation.discount,
           grandTotal: updatedQuotation.grandTotal,
@@ -493,10 +498,11 @@ export async function PUT(
     await AuditLog.create(
       [
         {
-          action: parsed.data.isAccepted !== undefined &&
+          action:
+            parsed.data.isAccepted !== undefined &&
             parsed.data.isAccepted !== existingQuotation.isAccepted
-            ? "update_quotation_status"
-            : "update_quotation",
+              ? "update_quotation_status"
+              : "update_quotation",
           userId: userId,
           details: { quotationNumber },
           createdAt: new Date(),
@@ -512,8 +518,10 @@ export async function PUT(
     let templateVariables: Record<string, string>;
     let action: NotificationAction;
 
-    if (parsed.data.isAccepted !== undefined &&
-        parsed.data.isAccepted !== existingQuotation.isAccepted) {
+    if (
+      parsed.data.isAccepted !== undefined &&
+      parsed.data.isAccepted !== existingQuotation.isAccepted
+    ) {
       action =
         updatedQuotation.isAccepted === "accepted"
           ? "quotation_accepted"
@@ -531,10 +539,12 @@ export async function PUT(
       templateVariables = {
         "1": updatedQuotation.clientName, // Dear {{1}}
         "2": quotationNumber, // Quotation #{{2}}
-        "3": (updatedQuotation.grandTotal?.toFixed(2) || "0.00"), // Grand Total: ₹{{3}}
+        "3": updatedQuotation.grandTotal?.toFixed(2) || "0.00", // Grand Total: ₹{{3}}
         "4": quotationUrl, // View details: {{4}}
       };
-      whatsappMessage = `Dear ${updatedQuotation.clientName}, your Quotation #${quotationNumber} has been updated. Grand Total: ₹${
+      whatsappMessage = `Dear ${
+        updatedQuotation.clientName
+      }, your Quotation #${quotationNumber} has been updated. Grand Total: ₹${
         updatedQuotation.grandTotal?.toFixed(2) || "0.00"
       }. You can now accept or reject it. View details: ${quotationUrl}`;
     }
@@ -569,6 +579,7 @@ export async function PUT(
     session.endSession();
   }
 }
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ quotationNumber: string }> }
@@ -614,7 +625,7 @@ export async function DELETE(
     const { quotationNumber } = await context.params;
     await dbConnect();
     const quotation = await Quotation.findOneAndDelete(
-      { quotationNumber, createdBy: authSession.user.id },
+      { quotationNumber },
       { session }
     );
 
@@ -638,7 +649,7 @@ export async function DELETE(
     }
 
     const project = await Project.findOneAndDelete(
-      { quotationNumber, createdBy: authSession.user.id },
+      { quotationNumber },
       { session }
     );
     if (project) {
