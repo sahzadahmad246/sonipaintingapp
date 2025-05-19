@@ -135,8 +135,8 @@ export interface GeneralInfo {
   publicId?: string;
   siteName: string;
   gstNumber?: string;
-  gstPercent?: number; // Made optional to handle missing values
-  termsAndConditions?: string[]; // Made optional to handle missing values
+  gstPercent?: number; 
+  termsAndConditions?: string[]; 
   mobileNumber1: string;
   mobileNumber2?: string;
   address: string;

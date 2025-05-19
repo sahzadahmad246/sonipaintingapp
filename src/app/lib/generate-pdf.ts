@@ -157,47 +157,78 @@ export const generateQuotationPDF = (quotation: Quotation) => {
   });
 
   // Get the last Y position after the table
-  const finalY = doc.lastAutoTable.finalY + 10;
+  let finalY = doc.lastAutoTable.finalY + 10;
+
+  // Check if totals section will fit on current page
+  const totalsHeight = (quotation.discount ?? 0) > 0 ? 30 : 23;
+  if (finalY + totalsHeight > 220) {
+    doc.addPage();
+    finalY = 20;
+  }
 
   // Add totals with better alignment and styling
   const totalLabelX = 140;
   const totalValueX = 190;
 
-  // Create a box for totals
+  // Create a box for totals with dynamic height
   doc.setFillColor(248, 249, 250);
   doc.setDrawColor(230, 230, 230);
-  doc.roundedRect(totalLabelX - 5, finalY - 5, totalValueX - totalLabelX + 10, 30, 2, 2, "FD");
+  doc.roundedRect(
+    totalLabelX - 5,
+    finalY - 5,
+    totalValueX - totalLabelX + 10,
+    totalsHeight,
+    2,
+    2,
+    "FD"
+  );
 
+  let currentTotalY = finalY;
   if (quotation.subtotal) {
     doc.setFont("helvetica", "normal");
-    doc.text("Subtotal:", totalLabelX, finalY);
-    doc.text(formatCurrency(quotation.subtotal), totalValueX, finalY, {
+    doc.text("Subtotal:", totalLabelX, currentTotalY);
+    doc.text(formatCurrency(quotation.subtotal), totalValueX, currentTotalY, {
       align: "right",
     });
+    currentTotalY += 7;
   }
 
-  doc.setFont("helvetica", "normal");
-  doc.text("Discount:", totalLabelX, finalY + 7);
-  doc.text(formatCurrency(quotation.discount || 0), totalValueX, finalY + 7, {
-    align: "right",
-  });
+  // Only show discount if defined and greater than 0
+  if ((quotation.discount ?? 0) > 0) {
+    doc.setFont("helvetica", "normal");
+    doc.text("Discount:", totalLabelX, currentTotalY);
+    doc.text(formatCurrency(quotation.discount!), totalValueX, currentTotalY, {
+      align: "right",
+    });
+    currentTotalY += 7;
+  }
 
   if (quotation.grandTotal) {
     doc.setDrawColor(0, 102, 204);
     doc.setLineWidth(0.5);
-    doc.line(totalLabelX - 5, finalY + 12, totalValueX + 5, finalY + 12);
+    doc.line(
+      totalLabelX - 5,
+      currentTotalY - 2,
+      totalValueX + 5,
+      currentTotalY - 2
+    );
 
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0, 102, 204);
-    doc.text("Grand Total: ", totalLabelX, finalY + 18);
-    doc.text(formatCurrency(quotation.grandTotal), totalValueX, finalY + 18, {
-      align: "right",
-    });
+    doc.text("Grand Total: ", totalLabelX, currentTotalY + 4);
+    doc.text(
+      formatCurrency(quotation.grandTotal),
+      totalValueX,
+      currentTotalY + 4,
+      {
+        align: "right",
+      }
+    );
     doc.setTextColor(0, 0, 0);
   }
 
   // Start position for additional content
-  let currentY = finalY + 30;
+  let currentY = finalY + totalsHeight + 10;
 
   // Add note if exists
   if (quotation.note) {
@@ -307,7 +338,15 @@ export const generateQuotationPDF = (quotation: Quotation) => {
       // Add a border and shadow effect for images
       doc.setFillColor(255, 255, 255);
       doc.setDrawColor(200, 200, 200);
-      doc.roundedRect(x - 1, y - 1, imageWidth + 2, imageHeight + 2, 2, 2, "FD");
+      doc.roundedRect(
+        x - 1,
+        y - 1,
+        imageWidth + 2,
+        imageHeight + 2,
+        2,
+        2,
+        "FD"
+      );
 
       if (quotation.siteImages[i].url) {
         try {
@@ -348,7 +387,8 @@ export const generateQuotationPDF = (quotation: Quotation) => {
 
     // Update currentY after images
     currentY +=
-      Math.ceil(quotation.siteImages.length / imagesPerRow) * (imageHeight + 20) +
+      Math.ceil(quotation.siteImages.length / imagesPerRow) *
+        (imageHeight + 20) +
       10;
   }
 
@@ -547,62 +587,100 @@ export const generateInvoicePDF = (invoice: Invoice) => {
     finalY = doc.lastAutoTable.finalY + 10;
   }
 
+  // Check if totals section will fit on current page
+  const totalsHeight =
+    (invoice.discount ?? 0) > 0
+      ? paymentStatus === "Paid"
+        ? 37
+        : 44
+      : paymentStatus === "Paid"
+      ? 30
+      : 37;
+  if (finalY + totalsHeight > 220) {
+    doc.addPage();
+    finalY = 20;
+  }
+
   // Add totals with better styling
   const totalLabelX = 140;
   const totalValueX = 190;
 
-  // Adjust box height based on payment status (exclude Advance for Paid)
-  const totalsBoxHeight = paymentStatus === "Paid" ? 37 : 44;
+  // Create totals box with dynamic height
   doc.setFillColor(248, 249, 250);
   doc.setDrawColor(230, 230, 230);
-  doc.roundedRect(totalLabelX - 5, finalY - 5, totalValueX - totalLabelX + 10, totalsBoxHeight, 2, 2, "FD");
+  doc.roundedRect(
+    totalLabelX - 5,
+    finalY - 5,
+    totalValueX - totalLabelX + 10,
+    totalsHeight,
+    2,
+    2,
+    "FD"
+  );
 
+  let currentTotalY = finalY;
   doc.setFont("helvetica", "normal");
-  doc.text("Subtotal:", totalLabelX, finalY);
-  doc.text(formatCurrency(invoice.subtotal), totalValueX, finalY, { align: "right" });
-
-  doc.text("Discount:", totalLabelX, finalY + 7);
-  doc.text(formatCurrency(invoice.discount), totalValueX, finalY + 7, {
+  doc.text("Subtotal:", totalLabelX, currentTotalY);
+  doc.text(formatCurrency(invoice.subtotal), totalValueX, currentTotalY, {
     align: "right",
   });
+  currentTotalY += 7;
+
+  // Only show discount if defined and greater than 0
+  if ((invoice.discount ?? 0) > 0) {
+    doc.text("Discount:", totalLabelX, currentTotalY);
+    doc.text(formatCurrency(invoice.discount!), totalValueX, currentTotalY, {
+      align: "right",
+    });
+    currentTotalY += 7;
+  }
 
   doc.setDrawColor(0, 102, 204);
   doc.setLineWidth(0.5);
-  doc.line(totalLabelX - 5, finalY + 12, totalValueX + 5, finalY + 12);
+  doc.line(
+    totalLabelX - 5,
+    currentTotalY - 2,
+    totalValueX + 5,
+    currentTotalY - 2
+  );
 
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 102, 204);
-  doc.text("Grand Total: ", totalLabelX, finalY + 18);
-  doc.text(formatCurrency(invoice.grandTotal), totalValueX, finalY + 18, {
+  doc.text("Grand Total: ", totalLabelX, currentTotalY + 4);
+  doc.text(formatCurrency(invoice.grandTotal), totalValueX, currentTotalY + 4, {
     align: "right",
   });
 
   // Calculate total advance for use in totals section or payment history
-  const totalAdvance = invoice.paymentHistory?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
+  const totalAdvance =
+    invoice.paymentHistory?.reduce(
+      (sum, payment) => sum + (payment.amount || 0),
+      0
+    ) || 0;
 
+  currentTotalY += 11;
   // Show Advance only if not Paid
   if (paymentStatus !== "Paid") {
     doc.setTextColor(0, 128, 0); // Green for advance
     doc.setFont("helvetica", "bold");
-    doc.text("Advance:", totalLabelX, finalY + 25);
-    doc.text(formatCurrency(totalAdvance), totalValueX, finalY + 25, {
+    doc.text("Advance:", totalLabelX, currentTotalY);
+    doc.text(formatCurrency(totalAdvance), totalValueX, currentTotalY, {
       align: "right",
     });
+    currentTotalY += 7;
   }
 
   doc.setTextColor(220, 53, 69); // Red for amount due
   doc.setFont("helvetica", "bold");
-  // Adjust Amount Due position based on whether Advance is shown
-  const amountDueY = paymentStatus === "Paid" ? finalY + 25 : finalY + 32;
-  doc.text("Amount Due:", totalLabelX, amountDueY);
-  doc.text(formatCurrency(invoice.amountDue), totalValueX, amountDueY, {
+  doc.text("Amount Due:", totalLabelX, currentTotalY);
+  doc.text(formatCurrency(invoice.amountDue), totalValueX, currentTotalY, {
     align: "right",
   });
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "normal");
 
   // Start position for additional content
-  let currentY = paymentStatus === "Paid" ? finalY + 45 : finalY + 52;
+  let currentY = finalY + totalsHeight + 10;
 
   // Add payment history if available
   if (invoice.paymentHistory && invoice.paymentHistory.length > 0) {
@@ -622,7 +700,10 @@ export const generateInvoicePDF = (invoice: Invoice) => {
     // Display "Fully Paid" or "Total Advance" based on payment status
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    const statusText = paymentStatus === "Paid" ? "Fully Paid" : `Total Advance: ${formatCurrency(totalAdvance)}`;
+    const statusText =
+      paymentStatus === "Paid"
+        ? "Fully Paid"
+        : `Total Advance: ${formatCurrency(totalAdvance)}`;
     doc.text(statusText, 100, currentY);
     currentY += 5;
 
