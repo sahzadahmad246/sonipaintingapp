@@ -2,6 +2,7 @@
 
 import type React from "react";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 import { ThemeProvider } from "@/components/helpers/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import SessionWrapper from "@/components/helpers/SessionWrapper";
@@ -9,10 +10,21 @@ import Navbar from "../home/Navbar";
 import MobileNav from "@/components/home/mobile-nav";
 import DashboardSidebar from "../admin/dashboard-sidebar";
 import DashboardMobileNav from "../admin/dashboard-mobile-nav";
+import { initializeAccessibility } from "@/lib/accessibility";
 
 export default function ClientWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isDashboardRoute = pathname?.startsWith("/dashboard");
+
+  // Initialize accessibility features
+  useEffect(() => {
+    initializeAccessibility({
+      skipToContent: true,
+      focusManagement: true,
+      keyboardNavigation: true,
+      screenReaderSupport: true,
+    });
+  }, []);
 
   return (
     <SessionWrapper>

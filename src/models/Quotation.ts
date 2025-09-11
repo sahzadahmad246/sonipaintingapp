@@ -67,7 +67,6 @@ const QuotationSchema: Schema = new Schema({
 });
 
 // Add indexes
-QuotationSchema.index({ quotationNumber: 1 });
 QuotationSchema.index({ createdBy: 1, createdAt: -1 });
 
 export default mongoose.models.Quotation ||

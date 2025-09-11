@@ -1,6 +1,6 @@
 # Soni Painting App
 
-![Soni Painting Logo](https://sonipainting.com/assets/logo-bOB18bgY.png) 
+![Soni Painting Logo](./public/logo.png) 
 
 Soni Painting App is a comprehensive web application designed for painting contractors to manage their business operations efficiently. It enables contractors to generate quotations, create invoices, and track projects (including payments and extra work), while providing clients with a portal to view their quotations, invoices, and learn about Soni Painting’s services.
 

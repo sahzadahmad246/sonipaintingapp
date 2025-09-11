@@ -84,8 +84,6 @@ const ProjectSchema: Schema = new Schema({
   },
 });
 
-ProjectSchema.index({ projectId: 1 });
-ProjectSchema.index({ quotationNumber: 1 });
 ProjectSchema.index({ createdBy: 1, createdAt: -1 });
 
 export default mongoose.models.Project || mongoose.model<IProject>("Project", ProjectSchema);

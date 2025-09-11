@@ -14,7 +14,9 @@ import {
   LogOut,
   MoreHorizontal,
   Plus,
-  DollarSign
+  DollarSign,
+  MessageSquare,
+  Star
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -129,6 +131,20 @@ export default function DashboardMobileNav({
               >
                 <Settings className="h-5 w-5 mr-3" />
                 <span className="text-base font-medium">Settings</span>
+              </Link>
+              <Link
+                href="/dashboard/contact"
+                className="flex items-center p-3 rounded-md hover:bg-gray-100"
+              >
+                <MessageSquare className="h-5 w-5 mr-3" />
+                <span className="text-base font-medium">Contact Messages</span>
+              </Link>
+              <Link
+                href="/dashboard/reviews"
+                className="flex items-center p-3 rounded-md hover:bg-gray-100"
+              >
+                <Star className="h-5 w-5 mr-3" />
+                <span className="text-base font-medium">Reviews</span>
               </Link>
               <Link
                 href="/dashboard/audit-logs"

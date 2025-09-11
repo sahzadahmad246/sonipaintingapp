@@ -81,15 +81,15 @@ export default function GeneralInfoForm() {
       if (logoFile){
         formData.append("logo", logoFile);
       }
-      formData.append("siteName", data.siteName);
+      formData.append("siteName", data.siteName || "");
       formData.append("gstNumber", data.gstNumber || "");
-      formData.append("gstPercent", data.gstPercent.toString());
+      formData.append("gstPercent", (data.gstPercent || 0).toString());
       formData.append("termsAndConditions", JSON.stringify(data.termsAndConditions?.filter((term) => term.trim()) || []));
-      formData.append("mobileNumber1", data.mobileNumber1);
+      formData.append("mobileNumber1", data.mobileNumber1 || "");
       if (data.mobileNumber2) {
         formData.append("mobileNumber2", data.mobileNumber2);
       }
-      formData.append("address", data.address);
+      formData.append("address", data.address || "");
 
       await apiFetch<GeneralInfo>("/general-info", {
         method: "PUT",

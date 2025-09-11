@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import dbConnect from "@/lib/mongodb";
 import GeneralInfo, { IGeneralInfo } from "@/models/GeneralInfo";
@@ -7,7 +7,8 @@ import { authOptions } from "@/lib/auth";
 import { handleError } from "@/lib/errorHandler";
 import { sanitizeInput } from "@/lib/security";
 import { updateGeneralInfoSchema } from "@/lib/validators";
-import { Redis } from "@upstash/redis";
+import { cacheManager, CacheKeys, CacheTTL } from "@/lib/cache";
+import { apiRateLimiter } from "@/lib/rateLimiter";
 import cloudinary from "@/lib/cloudinary";
 
 // Define Cloudinary upload result type
@@ -16,15 +17,16 @@ interface CloudinaryUploadResult {
   public_id: string;
 }
 
-const redis = new Redis({
-  url: process.env.REDIS_URL!,
-  token: process.env.REDIS_TOKEN!,
-});
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const cacheKey = "general_info";
-    const cached = await redis.get(cacheKey);
+    // Apply rate limiting
+    const rateLimitResponse = await apiRateLimiter(request);
+    if (rateLimitResponse.status !== 200) {
+      return rateLimitResponse;
+    }
+
+    // Try to get from cache first
+    const cached = await cacheManager.get(CacheKeys.GENERAL_INFO);
     if (cached) {
       return NextResponse.json(cached);
     }
@@ -35,14 +37,19 @@ export async function GET() {
       return NextResponse.json({ error: "General info not found" }, { status: 404 });
     }
 
-    await redis.set(cacheKey, generalInfo, { ex: 3600 });
+    // Cache the result
+    await cacheManager.set(CacheKeys.GENERAL_INFO, generalInfo, {
+      ttl: CacheTTL.LONG,
+      tags: ["general_info"],
+    });
+
     return NextResponse.json(generalInfo);
   } catch (error: unknown) {
     return handleError(error, "Failed to fetch general info");
   }
 }
 
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || session.user.role !== "admin") {
@@ -104,7 +111,6 @@ export async function PUT(request: Request) {
       publicId,
       siteName: parsed.data.siteName,
       gstNumber: parsed.data.gstNumber,
-      gstPercent: parsed.data.gstPercent,
       termsAndConditions: parsed.data.termsAndConditions,
       mobileNumber1: parsed.data.mobileNumber1,
       mobileNumber2: parsed.data.mobileNumber2,
@@ -124,7 +130,8 @@ export async function PUT(request: Request) {
       details: { changes: Object.keys(updateData), publicId: publicId || null },
     });
 
-    await redis.del("general_info");
+    // Invalidate cache
+    await cacheManager.delete(CacheKeys.GENERAL_INFO);
     return NextResponse.json(generalInfo);
   } catch (error: unknown) {
     return handleError(error, "Failed to update general info");

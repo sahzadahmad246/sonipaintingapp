@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import dbConnect from "@/lib/mongodb";
 import Quotation, { IQuotation } from "@/models/Quotation";
@@ -6,10 +6,11 @@ import AuditLog from "@/models/AuditLog";
 import { authOptions } from "@/lib/auth";
 import { handleError } from "@/lib/errorHandler";
 import { sanitizeInput } from "@/lib/security";
-import { createQuotationSchema } from "@/lib/validators";
+import { createQuotationSchema, validateFileUpload } from "@/lib/validators";
 import { sendNotification } from "@/lib/notifications";
 import { generateQuotationNumber } from "@/lib/generateQuotationNumber";
 import cloudinary from "@/lib/cloudinary";
+import { apiRateLimiter } from "@/lib/rateLimiter";
 
 interface CloudinaryUploadResult {
   secure_url: string;
@@ -20,11 +21,16 @@ interface UpdateQuotationData extends Partial<IQuotation> {
   existingImages?: { url: string; publicId: string; description?: string }[];
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // Apply rate limiting
+    const rateLimitResponse = await apiRateLimiter(request);
+    if (rateLimitResponse.status !== 200) {
+      return rateLimitResponse;
+    }
+
     const session = await getServerSession(authOptions);
     if (!session || session.user.role !== "admin") {
-      console.log("Unauthorized access attempt", { user: session?.user });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -86,13 +92,13 @@ export async function POST(request: Request) {
         const file = value as File;
         console.log(`Processing siteImage: ${key}`, { name: file.name, size: file.size, type: file.type });
         if (file && file.size > 0) {
-          const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
-          if (!allowedTypes.includes(file.type)) {
-            console.log(`Invalid file type for ${key}: ${file.type}`);
-            continue;
-          }
-          if (file.size > 5 * 1024 * 1024) {
-            console.log(`File too large for ${key}: ${file.size} bytes`);
+          try {
+            validateFileUpload(file, {
+              maxSize: 5 * 1024 * 1024, // 5MB
+              allowedTypes: ["image/jpeg", "image/png", "image/webp"]
+            });
+          } catch (error) {
+            console.log(`File validation failed for ${key}:`, error);
             continue;
           }
 
@@ -197,13 +203,8 @@ export async function POST(request: Request) {
       console.log("Notification sent successfully");
     } catch (error) {
       console.error("Failed to send notification:", error);
-      return NextResponse.json(
-        {
-          quotation,
-          warning: "Quotation created, but failed to send notification",
-        },
-        { status: 201 }
-      );
+      // Don't fail the entire request if WhatsApp fails, just log the error
+      // The quotation was created successfully, so we should return success
     }
 
     return NextResponse.json(quotation, { status: 201 });
@@ -214,7 +215,7 @@ export async function POST(request: Request) {
 }
 
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || session.user.role !== "admin") {
@@ -244,7 +245,7 @@ export async function GET(request: Request) {
 }
 
 
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
     // Check authentication and admin role
     const session = await getServerSession(authOptions);

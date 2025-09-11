@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -40,6 +41,71 @@ import Image from "next/image"
 import { apiFetch } from "@/app/lib/api"
 import type { Quotation, ApiError } from "@/app/types"
 
+// Country codes for phone numbers
+const COUNTRY_CODES = [
+  { code: "+91", country: "India", flag: "🇮🇳" },
+  { code: "+1", country: "USA/Canada", flag: "🇺🇸" },
+  { code: "+44", country: "UK", flag: "🇬🇧" },
+  { code: "+61", country: "Australia", flag: "🇦🇺" },
+  { code: "+971", country: "UAE", flag: "🇦🇪" },
+  { code: "+966", country: "Saudi Arabia", flag: "🇸🇦" },
+  { code: "+974", country: "Qatar", flag: "🇶🇦" },
+  { code: "+965", country: "Kuwait", flag: "🇰🇼" },
+  { code: "+973", country: "Bahrain", flag: "🇧🇭" },
+  { code: "+968", country: "Oman", flag: "🇴🇲" },
+  { code: "+60", country: "Malaysia", flag: "🇲🇾" },
+  { code: "+65", country: "Singapore", flag: "🇸🇬" },
+  { code: "+66", country: "Thailand", flag: "🇹🇭" },
+  { code: "+63", country: "Philippines", flag: "🇵🇭" },
+  { code: "+62", country: "Indonesia", flag: "🇮🇩" },
+  { code: "+84", country: "Vietnam", flag: "🇻🇳" },
+  { code: "+86", country: "China", flag: "🇨🇳" },
+  { code: "+81", country: "Japan", flag: "🇯🇵" },
+  { code: "+82", country: "South Korea", flag: "🇰🇷" },
+  { code: "+49", country: "Germany", flag: "🇩🇪" },
+  { code: "+33", country: "France", flag: "🇫🇷" },
+  { code: "+39", country: "Italy", flag: "🇮🇹" },
+  { code: "+34", country: "Spain", flag: "🇪🇸" },
+  { code: "+31", country: "Netherlands", flag: "🇳🇱" },
+  { code: "+41", country: "Switzerland", flag: "🇨🇭" },
+  { code: "+43", country: "Austria", flag: "🇦🇹" },
+  { code: "+46", country: "Sweden", flag: "🇸🇪" },
+  { code: "+47", country: "Norway", flag: "🇳🇴" },
+  { code: "+45", country: "Denmark", flag: "🇩🇰" },
+  { code: "+358", country: "Finland", flag: "🇫🇮" },
+  { code: "+7", country: "Russia", flag: "🇷🇺" },
+  { code: "+55", country: "Brazil", flag: "🇧🇷" },
+  { code: "+54", country: "Argentina", flag: "🇦🇷" },
+  { code: "+56", country: "Chile", flag: "🇨🇱" },
+  { code: "+57", country: "Colombia", flag: "🇨🇴" },
+  { code: "+52", country: "Mexico", flag: "🇲🇽" },
+  { code: "+27", country: "South Africa", flag: "🇿🇦" },
+  { code: "+234", country: "Nigeria", flag: "🇳🇬" },
+  { code: "+20", country: "Egypt", flag: "🇪🇬" },
+  { code: "+90", country: "Turkey", flag: "🇹🇷" },
+  { code: "+98", country: "Iran", flag: "🇮🇷" },
+  { code: "+92", country: "Pakistan", flag: "🇵🇰" },
+  { code: "+880", country: "Bangladesh", flag: "🇧🇩" },
+  { code: "+94", country: "Sri Lanka", flag: "🇱🇰" },
+  { code: "+977", country: "Nepal", flag: "🇳🇵" },
+  { code: "+975", country: "Bhutan", flag: "🇧🇹" },
+  { code: "+93", country: "Afghanistan", flag: "🇦🇫" },
+  { code: "+998", country: "Uzbekistan", flag: "🇺🇿" },
+  { code: "+7", country: "Kazakhstan", flag: "🇰🇿" },
+  { code: "+996", country: "Kyrgyzstan", flag: "🇰🇬" },
+  { code: "+992", country: "Tajikistan", flag: "🇹🇯" },
+  { code: "+993", country: "Turkmenistan", flag: "🇹🇲" },
+  { code: "+374", country: "Armenia", flag: "🇦🇲" },
+  { code: "+995", country: "Georgia", flag: "🇬🇪" },
+  { code: "+994", country: "Azerbaijan", flag: "🇦🇿" },
+  { code: "+996", country: "Kyrgyzstan", flag: "🇰🇬" },
+  { code: "+992", country: "Tajikistan", flag: "🇹🇯" },
+  { code: "+993", country: "Turkmenistan", flag: "🇹🇲" },
+  { code: "+374", country: "Armenia", flag: "🇦🇲" },
+  { code: "+995", country: "Georgia", flag: "🇬🇪" },
+  { code: "+994", country: "Azerbaijan", flag: "🇦🇿" },
+]
+
 interface QuotationFormProps {
   quotationNumber?: string
 }
@@ -48,6 +114,7 @@ interface FormData {
   clientName: string
   clientAddress: string
   clientNumber: string
+  countryCode: string
   date: string
   items: {
     description: string
@@ -109,6 +176,7 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
       clientName: "",
       clientAddress: "",
       clientNumber: "",
+      countryCode: "+91",
       date: new Date().toISOString().split("T")[0],
       items: [
         {
@@ -275,6 +343,7 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
         clientName: draft.clientName || "",
         clientAddress: draft.clientAddress || "",
         clientNumber: draft.clientNumber || "",
+        countryCode: draft.countryCode || "+91",
         date: draft.date || new Date().toISOString().split("T")[0],
         items: draft.items || [{ description: "", area: undefined, rate: 0, total: undefined, note: "" }],
         discount: draft.discount || 0,
@@ -328,7 +397,8 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
           reset({
             clientName: data.clientName,
             clientAddress: data.clientAddress,
-            clientNumber: data.clientNumber,
+            clientNumber: data.clientNumber.replace(/^\+\d+/, '') || "",
+            countryCode: data.clientNumber.match(/^\+\d+/)?.[0] || "+91",
             date: new Date(data.date).toISOString().split("T")[0],
             items: data.items.map((item) => ({
               description: item.description,
@@ -377,7 +447,7 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
       const formData = new FormData()
       formData.append("clientName", data.clientName)
       formData.append("clientAddress", data.clientAddress)
-      formData.append("clientNumber", data.clientNumber)
+      formData.append("clientNumber", `${data.countryCode}${data.clientNumber}`)
       formData.append("date", data.date)
       formData.append("items", JSON.stringify(data.items))
       formData.append("discount", data.discount.toString())
@@ -428,8 +498,14 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
     } catch (error: unknown) {
       const apiError = error as ApiError
       toast.error(apiError.error || (isEditMode ? "Failed to update quotation" : "Failed to create quotation"))
-      if (apiError.details) {
-        apiError.details.forEach((err: { message: string }) => toast.error(err.message))
+      if (apiError.details && Array.isArray(apiError.details)) {
+        apiError.details.forEach((err: { message?: string } | string) => {
+          if (typeof err === 'object' && err.message) {
+            toast.error(err.message)
+          } else if (typeof err === 'string') {
+            toast.error(err)
+          }
+        })
       }
     }
   }
@@ -571,7 +647,13 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                         <Controller
                           control={control}
                           name="clientAddress"
-                          rules={{ required: "Client address is required" }}
+                          rules={{ 
+                            required: "Client address is required",
+                            minLength: {
+                              value: 10,
+                              message: "Address must be at least 10 characters long"
+                            }
+                          }}
                           render={({ field }) => (
                             <div className="relative">
                               <MapPin className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -593,22 +675,45 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                         <Label htmlFor="clientNumber" className="text-base flex items-center">
                           Client Number <span className="text-red-500 ml-1">*</span>
                         </Label>
-                        <Controller
-                          control={control}
-                          name="clientNumber"
-                          rules={{ required: "Client number is required" }}
-                          render={({ field }) => (
-                            <div className="relative">
-                              <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                              <Input
-                                {...field}
-                                id="clientNumber"
-                                placeholder="Enter client phone number"
-                                className="h-10 pl-10"
-                              />
-                            </div>
-                          )}
-                        />
+                        <div className="flex gap-2">
+                          <Controller
+                            control={control}
+                            name="countryCode"
+                            render={({ field }) => (
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <SelectTrigger className="w-32">
+                                  <SelectValue placeholder="Code" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {COUNTRY_CODES.map((country) => (
+                                    <SelectItem key={country.code} value={country.code}>
+                                      <span className="flex items-center gap-2">
+                                        <span>{country.flag}</span>
+                                        <span>{country.code}</span>
+                                      </span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                          <Controller
+                            control={control}
+                            name="clientNumber"
+                            rules={{ required: "Client number is required" }}
+                            render={({ field }) => (
+                              <div className="relative flex-1">
+                                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <Input
+                                  {...field}
+                                  id="clientNumber"
+                                  placeholder="Enter phone number"
+                                  className="h-10 pl-10"
+                                />
+                              </div>
+                            )}
+                          />
+                        </div>
                         {errors.clientNumber && <p className="text-red-500 text-sm">{errors.clientNumber.message}</p>}
                       </div>
                       <div className="space-y-2">

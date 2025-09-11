@@ -99,10 +99,17 @@ export default function Contact() {
         method: "POST",
         body: JSON.stringify(data),
       });
-      toast.success("Your message has been sent successfully!");
+      toast.success("Your message has been sent successfully! We'll get back to you soon.");
       reset();
-    } catch {
-      toast.error("Failed to send message. Please try again.");
+    } catch (error: unknown) {
+      const err = error as { status?: number; error?: string };
+      if (err.status === 429) {
+        toast.error("Too many requests. Please wait before submitting again.");
+      } else if (err.error === "Duplicate submission detected. Please wait before submitting again.") {
+        toast.error("You've already sent this message recently. Please wait before submitting again.");
+      } else {
+        toast.error("Failed to send message. Please try again.");
+      }
     }
   };
 

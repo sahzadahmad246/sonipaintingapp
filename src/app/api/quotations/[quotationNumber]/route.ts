@@ -226,10 +226,10 @@ export async function PUT(
         }
         if (
           parsed.data.date !== undefined &&
-          parsed.data.date?.toISOString() !==
-            existingQuotation.date?.toISOString()
+          new Date(parsed.data.date).toISOString() !==
+            new Date(existingQuotation.date).toISOString()
         ) {
-          updateData.date = parsed.data.date;
+          updateData.date = new Date(parsed.data.date);
         }
         if (parsed.data.items !== undefined) {
           const oldItems: IQuotation["items"] = existingQuotation.items || [];

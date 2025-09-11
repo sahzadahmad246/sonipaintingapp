@@ -77,7 +77,6 @@ const InvoiceSchema: Schema = new Schema({
   lastUpdated: { type: Date },
 });
 
-InvoiceSchema.index({ invoiceId: 1 });
 InvoiceSchema.index({ projectId: 1 });
 InvoiceSchema.index({ quotationNumber: 1 });
 

@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 
 import ClientWrapper from "@/components/helpers/ClientWrapper";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -27,7 +28,13 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className}>
-        <ClientWrapper>{children}</ClientWrapper>
+        <ErrorBoundary>
+          <ClientWrapper>
+            <main id="main-content" className="min-h-screen">
+              {children}
+            </main>
+          </ClientWrapper>
+        </ErrorBoundary>
       </body>
     </html>
   );
