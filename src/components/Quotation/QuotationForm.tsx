@@ -142,13 +142,16 @@ const DRAFT_STORAGE_KEY = "quotation_form_draft"
 // Default terms
 const DEFAULT_TERMS = [
   "50% advance payment required to start work, 30% due at 70% project completion, and 20% within 7 days of completion.",
+  "The advance payment is non-refundable under any circumstances. If the customer cancels the work or gives it to someone else, no refund will be issued.",
+  "If our team reaches the customer’s location on the scheduled date and the customer denies the work, delays it, or changes their mind, the customer must pay for expenses already incurred, including travel fare, labour, and material costs.",
   "Quotations are valid for 30 days from issuance.",
   "Additional work requested by the customer that is not included in the original scope of work will be priced separately and agreed upon in writing before proceeding.",
-  "Painting work covers surface finishing only, issues like dampness, leakage, or plaster damage are not included.",
+  "Painting work covers surface finishing only; issues like dampness, leakage, or plaster damage are not included.",
   "The Sony Painting will be responsible for thoroughly cleaning the work area after completion, leaving no debris behind.",
   "We will provide regular updates on progress and will communicate any delays or changes to the timeline in a timely manner.",
   "Accepting the quotation and paying the deposit confirms agreement to these terms.",
 ]
+
 
 export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
   const router = useRouter()
@@ -458,17 +461,17 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
       formData.append("subtotal", data.subtotal.toString())
       formData.append("grandTotal", data.grandTotal.toString())
 
-      // Append images and their descriptions
-      ;(data.siteImages || []).forEach(
-        (img: { file?: File; url?: string; publicId?: string; description?: string }, index: number) => {
-          if (img.file) {
-            formData.append(`siteImages[${index}]`, img.file)
-            if (img.description) {
-              formData.append(`siteImages[${index}].description`, img.description)
+        // Append images and their descriptions
+        ; (data.siteImages || []).forEach(
+          (img: { file?: File; url?: string; publicId?: string; description?: string }, index: number) => {
+            if (img.file) {
+              formData.append(`siteImages[${index}]`, img.file)
+              if (img.description) {
+                formData.append(`siteImages[${index}].description`, img.description)
+              }
             }
-          }
-        },
-      )
+          },
+        )
 
       // Append existing images
       const existingImages = (data.siteImages || [])
@@ -647,7 +650,7 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                         <Controller
                           control={control}
                           name="clientAddress"
-                          rules={{ 
+                          rules={{
                             required: "Client address is required",
                             minLength: {
                               value: 10,
@@ -868,9 +871,9 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                                       failedImages.includes(index)
                                         ? "/placeholder.svg?height=200&width=300"
                                         : siteImages[index].url ||
-                                          (siteImages[index].file
-                                            ? URL.createObjectURL(siteImages[index].file)
-                                            : "/placeholder.svg?height=200&width=300")
+                                        (siteImages[index].file
+                                          ? URL.createObjectURL(siteImages[index].file)
+                                          : "/placeholder.svg?height=200&width=300")
                                     }
                                     alt="Site preview"
                                     width={200}
@@ -1151,14 +1154,13 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                                       items[index].area > 0 &&
                                       items[index].rate > 0
                                     }
-                                    className={`mt-1 ${
-                                      items[index].area != null &&
-                                      items[index].rate != null &&
-                                      items[index].area > 0 &&
-                                      items[index].rate > 0
+                                    className={`mt-1 ${items[index].area != null &&
+                                        items[index].rate != null &&
+                                        items[index].area > 0 &&
+                                        items[index].rate > 0
                                         ? "bg-gray-100"
                                         : ""
-                                    }`}
+                                      }`}
                                   />
                                   {items[index].area != null &&
                                     items[index].rate != null &&
