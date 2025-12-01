@@ -62,6 +62,7 @@ export interface Project {
   paymentHistory: {
     amount: number;
     date: string | Date;
+    method?: string;
     note?: string;
   }[];
   siteImages: { url: string; publicId: string }[];
@@ -69,7 +70,7 @@ export interface Project {
   note?: string;
   createdAt?: string | Date;
   lastUpdated?: string | Date;
-  status: "ongoing" | "completed";
+  status: "ongoing" | "completed" | "cancelled";
   updateHistory?: {
     updatedAt: string | Date;
     updatedBy: string;
@@ -103,6 +104,7 @@ export interface Invoice {
   paymentHistory: {
     amount: number;
     date: string | Date;
+    method?: string;
     note?: string;
   }[];
   amountDue: number;
@@ -187,4 +189,10 @@ export interface ApiError {
   error: string;
   details?: { message: string }[];
   code?: string;
+}
+export interface Payment {
+  amount: number;
+  date: string | Date;
+  method?: string;
+  note?: string;
 }
