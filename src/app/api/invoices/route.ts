@@ -4,6 +4,7 @@ import Invoice from "@/models/Invoice";
 import { handleError } from "@/lib/errorHandler";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+
 export async function GET(request: Request) {
   try {
     // Authentication check
@@ -22,6 +23,7 @@ export async function GET(request: Request) {
 
     // Fetch invoices with pagination
     const invoices = await Invoice.find()
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean()

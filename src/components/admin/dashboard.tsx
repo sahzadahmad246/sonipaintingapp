@@ -61,61 +61,29 @@ export default function Dashboard() {
     if (session?.user.role === "admin") {
       const fetchData = async () => {
         try {
-          const [quotationsRes, projectsRes, invoicesRes] = await Promise.all([
-            apiFetch<{ quotations: Quotation[] }>("/quotations"),
-            apiFetch<{ projects: Project[] }>("/projects"),
-            apiFetch<{ invoices: Invoice[] }>("/invoices"),
+          const [statsRes, quotationsRes, projectsRes, invoicesRes] = await Promise.all([
+            apiFetch<{
+              quotations: { total: number; pending: number; accepted: number; rejected: number };
+              projects: { total: number };
+              invoices: { total: number };
+            }>("/dashboard/stats"),
+            apiFetch<{ quotations: Quotation[] }>("/quotations?limit=3"),
+            apiFetch<{ projects: Project[] }>("/projects?limit=3"),
+            apiFetch<{ invoices: Invoice[] }>("/invoices?limit=3"),
           ]);
 
-          const quotations = quotationsRes.quotations || [];
-          const projects = projectsRes.projects || [];
-          const invoices = invoicesRes.invoices || [];
-
           setStats({
-            totalQuotations: quotations.length,
-            pendingQuotations: quotations.filter(
-              (q) => q.isAccepted === "pending"
-            ).length,
-            acceptedQuotations: quotations.filter(
-              (q) => q.isAccepted === "accepted"
-            ).length,
-            rejectedQuotations: quotations.filter(
-              (q) => q.isAccepted === "rejected"
-            ).length,
-            totalProjects: projects.length,
-            totalInvoices: invoices.length,
+            totalQuotations: statsRes.quotations.total,
+            pendingQuotations: statsRes.quotations.pending,
+            acceptedQuotations: statsRes.quotations.accepted,
+            rejectedQuotations: statsRes.quotations.rejected,
+            totalProjects: statsRes.projects.total,
+            totalInvoices: statsRes.invoices.total,
           });
 
-          // Get recent quotations, projects, and invoices
-          setRecentQuotations(
-            quotations
-              .sort(
-                (a, b) =>
-                  new Date(b.createdAt).getTime() -
-                  new Date(a.createdAt).getTime()
-              )
-              .slice(0, 3)
-          );
-
-          setRecentProjects(
-            projects
-              .sort(
-                (a, b) =>
-                  new Date(b.createdAt || 0).getTime() -
-                  new Date(a.createdAt || 0).getTime()
-              )
-              .slice(0, 3)
-          );
-
-          setRecentInvoices(
-            invoices
-              .sort(
-                (a, b) =>
-                  new Date(b.createdAt).getTime() -
-                  new Date(a.createdAt).getTime()
-              )
-              .slice(0, 3)
-          );
+          setRecentQuotations(quotationsRes.quotations || []);
+          setRecentProjects(projectsRes.projects || []);
+          setRecentInvoices(invoicesRes.invoices || []);
         } catch (error: unknown) {
           const apiError = error as ApiError;
           console.error(
@@ -348,12 +316,17 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Card className="shadow-sm">
+        <div className="flex flex-col gap-6">
+          <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-none bg-white/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="text-lg flex items-center justify-between">
-                <span>Recent Quotations</span>
-                <Button variant="ghost" size="sm" asChild className="text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <FileText className="h-5 w-5 text-primary" />
+                  </div>
+                  <span>Recent Quotations</span>
+                </div>
+                <Button variant="ghost" size="sm" asChild className="text-xs hover:bg-primary/5 text-primary">
                   <Link href="/dashboard/quotations">
                     View all <ChevronRight className="ml-1 h-4 w-4" />
                   </Link>
@@ -366,7 +339,7 @@ export default function Dashboard() {
                   {[1, 2, 3].map((i) => (
                     <div
                       key={i}
-                      className="flex items-center justify-between p-3 border rounded-lg"
+                      className="flex items-center justify-between p-3 border rounded-lg bg-gray-50/50"
                     >
                       <div className="space-y-1">
                         <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
@@ -377,17 +350,19 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : recentQuotations.length > 0 ? (
-                <div className="space-y-2">
+                <div className="flex flex-col">
                   {recentQuotations.map((quotation) => (
                     <Link
                       key={quotation.quotationNumber}
                       href={`/dashboard/quotations/${quotation.quotationNumber}`}
-                      className="block"
+                      className="block group border-b last:border-0"
                     >
-                      <div className="flex items-center justify-between p-3 border rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center justify-between py-4 px-2 hover:bg-gray-50/50 transition-colors">
                         <div>
-                          <p className="font-medium">{quotation.clientName}</p>
-                          <p className="text-sm text-gray-500">
+                          <p className="font-semibold text-gray-900 group-hover:text-primary transition-colors">
+                            {quotation.clientName}
+                          </p>
+                          <p className="text-sm text-gray-500 mt-1">
                             {new Date(quotation.date).toLocaleDateString()}
                           </p>
                         </div>
@@ -397,18 +372,23 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-6">
+                <div className="text-center py-8 bg-gray-50/50 rounded-xl border border-dashed">
                   <p className="text-gray-500">No quotations available</p>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm">
+          <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-none bg-white/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="text-lg flex items-center justify-between">
-                <span>Active Projects</span>
-                <Button variant="ghost" size="sm" asChild className="text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Briefcase className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <span>Active Projects</span>
+                </div>
+                <Button variant="ghost" size="sm" asChild className="text-xs hover:bg-blue-50 text-blue-600">
                   <Link href="/dashboard/projects">
                     View all <ChevronRight className="ml-1 h-4 w-4" />
                   </Link>
@@ -421,7 +401,7 @@ export default function Dashboard() {
                   {[1, 2, 3].map((i) => (
                     <div
                       key={i}
-                      className="flex items-center justify-between p-3 border rounded-lg"
+                      className="flex items-center justify-between p-3 border rounded-lg bg-gray-50/50"
                     >
                       <div className="space-y-1">
                         <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
@@ -432,13 +412,13 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : recentProjects.length > 0 ? (
-                <div className="space-y-2">
+                <div className="flex flex-col">
                   {recentProjects.map((project) => {
                     const totalPayments = Array.isArray(project.paymentHistory)
                       ? project.paymentHistory.reduce(
-                          (sum, payment) => sum + (Number(payment.amount) || 0),
-                          0
-                        )
+                        (sum, payment) => sum + (Number(payment.amount) || 0),
+                        0
+                      )
                       : 0;
                     const grandTotal = Number(project.grandTotal) || 0;
                     const paymentPercentage =
@@ -448,24 +428,26 @@ export default function Dashboard() {
                       <Link
                         key={project.projectId}
                         href={`/dashboard/projects/${project.projectId}`}
-                        className="block"
+                        className="block group border-b last:border-0"
                       >
-                        <div className="flex items-center justify-between p-3 border rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                        <div className="flex items-center justify-between py-4 px-2 hover:bg-gray-50/50 transition-colors">
                           <div>
-                            <p className="font-medium">{project.clientName}</p>
-                            <p className="text-sm text-gray-500">
+                            <p className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                              {project.clientName}
+                            </p>
+                            <p className="text-sm text-gray-500 mt-1">
                               {project.status?.charAt(0).toUpperCase() +
                                 project.status?.slice(1) || "In Progress"}
                             </p>
                           </div>
                           <div className="flex flex-col items-end">
-                            <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="w-16 h-2 bg-gray-100 rounded-full overflow-hidden">
                               <div
-                                className="h-full bg-primary"
+                                className="h-full bg-blue-500"
                                 style={{ width: `${paymentPercentage}%` }}
                               ></div>
                             </div>
-                            <span className="text-xs text-gray-500 mt-1">
+                            <span className="text-xs text-gray-500 mt-1 font-medium">
                               {paymentPercentage.toFixed(0)}%
                             </span>
                           </div>
@@ -475,18 +457,23 @@ export default function Dashboard() {
                   })}
                 </div>
               ) : (
-                <div className="text-center py-6">
+                <div className="text-center py-8 bg-gray-50/50 rounded-xl border border-dashed">
                   <p className="text-gray-500">No projects available</p>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm">
+          <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-none bg-white/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="text-lg flex items-center justify-between">
-                <span>Recent Invoices</span>
-                <Button variant="ghost" size="sm" asChild className="text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <DollarSign className="h-5 w-5 text-green-600" />
+                  </div>
+                  <span>Recent Invoices</span>
+                </div>
+                <Button variant="ghost" size="sm" asChild className="text-xs hover:bg-green-50 text-green-600">
                   <Link href="/dashboard/invoices">
                     View all <ChevronRight className="ml-1 h-4 w-4" />
                   </Link>
@@ -499,7 +486,7 @@ export default function Dashboard() {
                   {[1, 2, 3].map((i) => (
                     <div
                       key={i}
-                      className="flex items-center justify-between p-3 border rounded-lg"
+                      className="flex items-center justify-between p-3 border rounded-lg bg-gray-50/50"
                     >
                       <div className="space-y-1">
                         <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
@@ -510,17 +497,19 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : recentInvoices.length > 0 ? (
-                <div className="space-y-2">
+                <div className="flex flex-col">
                   {recentInvoices.map((invoice) => (
                     <Link
                       key={invoice.invoiceId}
                       href={`/invoice/${invoice.invoiceId}`}
-                      className="block"
+                      className="block group border-b last:border-0"
                     >
-                      <div className="flex items-center justify-between p-3 border rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center justify-between py-4 px-2 hover:bg-gray-50/50 transition-colors">
                         <div>
-                          <p className="font-medium">{invoice.clientName}</p>
-                          <p className="text-sm text-gray-500">
+                          <p className="font-semibold text-gray-900 group-hover:text-green-600 transition-colors">
+                            {invoice.clientName}
+                          </p>
+                          <p className="text-sm text-gray-500 mt-1">
                             {new Date(invoice.date).toLocaleDateString()}
                           </p>
                         </div>
@@ -530,7 +519,7 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-6">
+                <div className="text-center py-8 bg-gray-50/50 rounded-xl border border-dashed">
                   <p className="text-gray-500">No invoices available</p>
                 </div>
               )}

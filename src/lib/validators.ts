@@ -96,9 +96,21 @@ export const createQuotationSchema = z.object({
   subtotal: z.number().min(0).default(0),
   discount: z.number().min(0).default(0),
   grandTotal: z.number().min(0).default(0),
-  terms: z.array(z.string().max(200, "Term must be less than 200 characters")).optional(),
+  terms: z.array(z.string().max(1000, "Term must be less than 1000 characters")).optional(),
   note: z.string().max(500, "Note must be less than 500 characters").optional(),
   siteImages: z.array(siteImageSchema).optional(),
+});
+
+// Schema for the frontend form (allows files and string dates)
+export const quotationFormSchema = createQuotationSchema.extend({
+  countryCode: z.string(), // Add countryCode for form handling
+  date: z.string().or(z.date()), // Allow string input from form
+  siteImages: z.array(z.object({
+    file: z.any().optional(), // Allow File object
+    url: z.string().optional(),
+    publicId: z.string().optional(),
+    description: z.string().max(200).optional(),
+  })).optional(),
 });
 
 export const updateQuotationSchema = createQuotationSchema
@@ -142,9 +154,9 @@ export const generalInfoSchema = z.object({
   mobileNumber1: phoneNumberSchema,
   mobileNumber2: phoneNumberSchema.optional(),
   logoUrl: z.string().url("Invalid logo URL").optional(),
-  gstNumber: z.string().regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, "Invalid GST number format").optional(),
+  gstNumber: z.string().regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, "Invalid GST number format").or(z.literal("")).optional(),
   gstPercent: z.number().min(0).max(100, "GST percent must be between 0 and 100").optional(),
-  termsAndConditions: z.array(z.string().max(500, "Term must be less than 500 characters")).optional(),
+  termsAndConditions: z.array(z.string().max(1000, "Term must be less than 1000 characters")).optional(),
 });
 
 export const updateGeneralInfoSchema = generalInfoSchema.partial();

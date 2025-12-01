@@ -1,9 +1,7 @@
 "use client"
-
-import type React from "react"
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 import {
   Plus,
@@ -12,18 +10,15 @@ import {
   FileText,
   ImageIcon,
   User,
-  Phone,
-  MapPin,
   Calendar,
-  Tag,
-  DollarSign,
   Info,
   ArrowLeft,
-  Calculator,
-  X,
-  HelpCircle,
   Loader2,
   CheckCircle,
+  ChevronRight,
+  Upload,
+  FileEdit,
+  Package,
 } from "lucide-react"
 import { useForm, useFieldArray, Controller } from "react-hook-form"
 import { Button } from "@/components/ui/button"
@@ -32,14 +27,16 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
 import Image from "next/image"
-import { apiFetch } from "@/app/lib/api"
-import type { Quotation, ApiError } from "@/app/types"
+import { apiFetch, getGeneralInfo } from "@/app/lib/api"
+import type { Quotation, ApiError, GeneralInfo } from "@/app/types"
+import { quotationFormSchema } from "@/lib/validators"
+import { zodResolver } from "@hookform/resolvers/zod"
 
 // Country codes for phone numbers
 const COUNTRY_CODES = [
@@ -91,13 +88,6 @@ const COUNTRY_CODES = [
   { code: "+975", country: "Bhutan", flag: "🇧🇹" },
   { code: "+93", country: "Afghanistan", flag: "🇦🇫" },
   { code: "+998", country: "Uzbekistan", flag: "🇺🇿" },
-  { code: "+7", country: "Kazakhstan", flag: "🇰🇿" },
-  { code: "+996", country: "Kyrgyzstan", flag: "🇰🇬" },
-  { code: "+992", country: "Tajikistan", flag: "🇹🇯" },
-  { code: "+993", country: "Turkmenistan", flag: "🇹🇲" },
-  { code: "+374", country: "Armenia", flag: "🇦🇲" },
-  { code: "+995", country: "Georgia", flag: "🇬🇪" },
-  { code: "+994", country: "Azerbaijan", flag: "🇦🇿" },
   { code: "+996", country: "Kyrgyzstan", flag: "🇰🇬" },
   { code: "+992", country: "Tajikistan", flag: "🇹🇯" },
   { code: "+993", country: "Turkmenistan", flag: "🇹🇲" },
@@ -105,6 +95,9 @@ const COUNTRY_CODES = [
   { code: "+995", country: "Georgia", flag: "🇬🇪" },
   { code: "+994", country: "Azerbaijan", flag: "🇦🇿" },
 ]
+
+const numberInputClass =
+  "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
 
 interface QuotationFormProps {
   quotationNumber?: string
@@ -115,12 +108,12 @@ interface FormData {
   clientAddress: string
   clientNumber: string
   countryCode: string
-  date: string
+  date: string | Date
   items: {
     description: string
-    area?: number
+    area?: number | null
     rate: number
-    total?: number
+    total?: number | null
     note?: string
   }[]
   discount: number
@@ -139,27 +132,19 @@ interface FormData {
 // Local storage key for draft
 const DRAFT_STORAGE_KEY = "quotation_form_draft"
 
-// Default terms
+// Default terms (fallback)
 const DEFAULT_TERMS = [
   "50% advance payment required to start work, 30% due at 70% project completion, and 20% within 7 days of completion.",
-  "The advance payment is non-refundable under any circumstances. If the customer cancels the work or gives it to someone else, no refund will be issued.",
-  "If our team reaches the customer’s location on the scheduled date and the customer denies the work, delays it, or changes their mind, the customer must pay for expenses already incurred, including travel fare, labour, and material costs.",
-  "Quotations are valid for 30 days from issuance.",
-  "Additional work requested by the customer that is not included in the original scope of work will be priced separately and agreed upon in writing before proceeding.",
-  "Painting work covers surface finishing only; issues like dampness, leakage, or plaster damage are not included.",
-  "The Sony Painting will be responsible for thoroughly cleaning the work area after completion, leaving no debris behind.",
-  "We will provide regular updates on progress and will communicate any delays or changes to the timeline in a timely manner.",
-  "Accepting the quotation and paying the deposit confirms agreement to these terms.",
+  "The advance payment is non-refundable under any circumstances.",
 ]
-
 
 export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
   const router = useRouter()
   const isEditMode = !!quotationNumber
   const effectiveQuotationNumber = quotationNumber
-
   const [activeTab, setActiveTab] = useState("details")
   const [hasDraft, setHasDraft] = useState(false)
+  const [showDraftBanner, setShowDraftBanner] = useState(true)
   const [loading, setLoading] = useState(isEditMode)
   const [failedImages, setFailedImages] = useState<number[]>([])
   const [savingDraft, setSavingDraft] = useState(false)
@@ -175,6 +160,8 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
     getValues,
     trigger,
   } = useForm<FormData>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(quotationFormSchema) as any,
     defaultValues: {
       clientName: "",
       clientAddress: "",
@@ -192,7 +179,7 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
       ],
       discount: 0,
       note: "",
-      terms: DEFAULT_TERMS,
+      terms: [],
       subtotal: 0,
       grandTotal: 0,
       siteImages: [],
@@ -223,94 +210,86 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
   const discount = watch("discount")
   const siteImages = watch("siteImages")
   const formValues = watch()
-  const clientName = watch("clientName")
-  const clientAddress = watch("clientAddress")
-  const clientNumber = watch("clientNumber")
 
   // Check if required fields are filled for the current tab
-  const detailsTabValid = !!clientName && !!clientAddress && !!clientNumber
   const itemsTabValid = items.some((item) => !!item.description && item.rate > 0)
 
-
-  // Calculate totals function that can be called directly
+  // Calculate totals function
   const calculateTotals = useCallback(() => {
     const currentItems = getValues("items")
     const currentDiscount = getValues("discount") || 0
 
-    // Calculate subtotal from all items
     const subtotal = currentItems.reduce((sum, item) => {
-      if (item.total !== undefined) {
+      if (item.total != null) {
         return sum + item.total
-      } else if (item.area !== undefined && item.rate !== undefined && item.area > 0 && item.rate > 0) {
-        return sum + item.area * item.rate
+      }
+      if (item.area != null && item.rate != null) {
+        if (item.area > 0 && item.rate > 0) {
+          return sum + item.area * item.rate
+        }
       }
       return sum
     }, 0)
 
-    // Calculate grand total
     const grandTotal = Math.max(0, subtotal - currentDiscount)
 
-    // Update form values
     setValue("subtotal", subtotal, { shouldValidate: true })
     setValue("grandTotal", grandTotal, { shouldValidate: true })
 
     return { subtotal, grandTotal }
   }, [getValues, setValue])
 
-  // Update item total when area or rate changes
+  // Update item total
   const updateItemTotal = useCallback(
     (index: number) => {
       const currentItems = getValues("items")
       const item = currentItems[index]
 
-      if (item && item.area !== undefined && item.rate !== undefined && item.area > 0 && item.rate > 0) {
-        const total = item.area * item.rate
-        setValue(`items.${index}.total`, total, { shouldValidate: true })
+      // If area is NOT provided but rate is, set total = rate
+      if (item) {
+        if (item.area != null && item.area > 0 && item.rate != null && item.rate > 0) {
+          const total = item.area * item.rate
+          setValue(`items.${index}.total`, total, { shouldValidate: true })
+        } else if ((item.area == null || item.area === 0) && item.rate != null && item.rate > 0) {
+          // No area provided, set total = rate
+          setValue(`items.${index}.total`, item.rate, { shouldValidate: true })
+        }
       }
-
-      // Recalculate subtotal and grand total
       calculateTotals()
     },
     [getValues, setValue, calculateTotals],
   )
 
-  // Calculate totals whenever items or discount change
+  // Calculate totals effect
   useEffect(() => {
-    // Calculate individual item totals
     items.forEach((item, index) => {
-      if (item.area !== undefined && item.rate !== undefined && item.area > 0 && item.rate > 0) {
+      if (item.area != null && item.area > 0 && item.rate != null && item.rate > 0) {
         const total = item.area * item.rate
         setValue(`items.${index}.total`, total, { shouldValidate: true })
+      } else if ((item.area == null || item.area === 0) && item.rate != null && item.rate > 0) {
+        setValue(`items.${index}.total`, item.rate, { shouldValidate: true })
       }
     })
-
-    // Calculate totals
     calculateTotals()
   }, [items, discount, setValue, calculateTotals])
 
-  // Save form data to local storage as draft
+  // Save Draft
   const saveDraft = useCallback(() => {
-    if (isEditMode) return // Don't save drafts in edit mode
+    if (isEditMode) return
 
     try {
       setSavingDraft(true)
       const formData = getValues()
-
-      // Create a serializable version of the form data
       const draftData = {
         ...formData,
         siteImages: formData.siteImages?.map((img) => ({
           url: img.url,
           publicId: img.publicId,
           description: img.description,
-          // Omit file since it can't be stored in localStorage
         })),
       }
-
       localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftData))
       setDraftSaved(true)
-
-      // Reset the "saved" indicator after 2 seconds
       setTimeout(() => {
         setDraftSaved(false)
       }, 2000)
@@ -322,18 +301,17 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
     }
   }, [getValues, isEditMode])
 
-  // Auto-save draft when form changes
+  // Auto-save
   useEffect(() => {
     if (isDirty && !isEditMode) {
       const debounceTimer = setTimeout(() => {
         saveDraft()
       }, 2000)
-
       return () => clearTimeout(debounceTimer)
     }
   }, [formValues, isDirty, isEditMode, saveDraft])
 
-  // Load draft from local storage
+  // Load Draft
   const loadDraft = useCallback(() => {
     try {
       const draftJson = localStorage.getItem(DRAFT_STORAGE_KEY)
@@ -341,7 +319,6 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
 
       const draft = JSON.parse(draftJson) as Partial<FormData>
 
-      // Reset form with draft data
       reset({
         clientName: draft.clientName || "",
         clientAddress: draft.clientAddress || "",
@@ -357,11 +334,11 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
         siteImages: draft.siteImages || [],
       })
 
-      // Force calculation after data is loaded
       setTimeout(() => {
         calculateTotals()
       }, 0)
 
+      setShowDraftBanner(false)
       toast.success("Draft restored successfully")
       return true
     } catch (error) {
@@ -371,11 +348,12 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
     }
   }, [reset, calculateTotals])
 
-  // Clear draft from local storage
+  // Clear Draft
   const clearDraft = useCallback(() => {
     try {
       localStorage.removeItem(DRAFT_STORAGE_KEY)
       setHasDraft(false)
+      setShowDraftBanner(false)
       toast.success("Draft cleared successfully")
     } catch (error) {
       console.error("Error clearing draft:", error)
@@ -383,7 +361,7 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
     }
   }, [])
 
-  // Check for existing draft on component mount
+  // Check Draft
   useEffect(() => {
     if (!isEditMode) {
       const draftExists = !!localStorage.getItem(DRAFT_STORAGE_KEY)
@@ -391,16 +369,16 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
     }
   }, [isEditMode])
 
-  // Fetch quotation data in edit mode
+  // Fetch Data
   useEffect(() => {
-    if (isEditMode && effectiveQuotationNumber) {
-      const fetchQuotation = async () => {
-        try {
+    const initializeForm = async () => {
+      try {
+        if (isEditMode && effectiveQuotationNumber) {
           const data = await apiFetch<Quotation>(`/quotations/${effectiveQuotationNumber}`)
           reset({
             clientName: data.clientName,
             clientAddress: data.clientAddress,
-            clientNumber: data.clientNumber.replace(/^\+\d+/, '') || "",
+            clientNumber: data.clientNumber.replace(/^\+\d+/, "") || "",
             countryCode: data.clientNumber.match(/^\+\d+/)?.[0] || "+91",
             date: new Date(data.date).toISOString().split("T")[0],
             items: data.items.map((item) => ({
@@ -422,58 +400,65 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                 description: img.description ?? "",
               })) ?? [],
           })
-
-          // Force calculation after data is loaded
-          setTimeout(() => {
-            calculateTotals()
-          }, 0)
-        } catch (error: unknown) {
-          const apiError = error as ApiError
-          toast.error(apiError.error || "Failed to fetch quotation")
-        } finally {
-          setLoading(false)
+        } else {
+          const generalInfoData = await getGeneralInfo()
+          const generalInfo = generalInfoData as GeneralInfo
+          setValue(
+            "terms",
+            generalInfo.termsAndConditions && generalInfo.termsAndConditions.length > 0
+              ? generalInfo.termsAndConditions
+              : DEFAULT_TERMS,
+          )
         }
+      } catch (error: unknown) {
+        console.error("Error initializing form:", error)
+        const apiError = error as ApiError
+        toast.error(apiError.error || "Failed to load data")
+        if (!isEditMode && !hasDraft) {
+          setValue("terms", DEFAULT_TERMS)
+        }
+      } finally {
+        setLoading(false)
+        setTimeout(() => calculateTotals(), 100)
       }
-      fetchQuotation()
-    } else {
-      setLoading(false)
     }
-  }, [isEditMode, effectiveQuotationNumber, reset, calculateTotals])
+
+    initializeForm()
+  }, [isEditMode, effectiveQuotationNumber, reset, calculateTotals, setValue, hasDraft])
 
   const onSubmit = async (data: FormData) => {
     try {
-      // Recalculate totals before submission to ensure accuracy
       const { subtotal, grandTotal } = calculateTotals()
       data.subtotal = subtotal
       data.grandTotal = grandTotal
 
       const formData = new FormData()
+
       formData.append("clientName", data.clientName)
       formData.append("clientAddress", data.clientAddress)
       formData.append("clientNumber", `${data.countryCode}${data.clientNumber}`)
-      formData.append("date", data.date)
+      formData.append("date", data.date instanceof Date ? data.date.toISOString() : data.date)
       formData.append("items", JSON.stringify(data.items))
       formData.append("discount", data.discount.toString())
       formData.append("note", data.note || "")
+
       data.terms?.forEach((term, index) => {
         if (term.trim()) formData.append(`terms[${index}]`, term)
       })
+
       formData.append("subtotal", data.subtotal.toString())
       formData.append("grandTotal", data.grandTotal.toString())
-
-        // Append images and their descriptions
-        ; (data.siteImages || []).forEach(
-          (img: { file?: File; url?: string; publicId?: string; description?: string }, index: number) => {
-            if (img.file) {
-              formData.append(`siteImages[${index}]`, img.file)
-              if (img.description) {
-                formData.append(`siteImages[${index}].description`, img.description)
-              }
+      ;(data.siteImages || []).forEach(
+        (img: { file?: File; url?: string; publicId?: string; description?: string }, index: number) => {
+          if (img.file) {
+            formData.append(`siteImages[${index}]`, img.file)
+            if (img.description) {
+              formData.append(`siteImages[${index}].description`, img.description)
             }
-          },
-        )
+          }
+        },
+      )
 
-      // Append existing images
       const existingImages = (data.siteImages || [])
         .filter((img) => img.url && img.publicId)
         .map((img) => ({
@@ -481,10 +466,12 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
           publicId: img.publicId!,
           description: img.description,
         }))
+
       formData.append("existingImages", JSON.stringify(existingImages))
 
       const url = isEditMode ? `/quotations/${effectiveQuotationNumber}` : "/quotations"
       const method = isEditMode ? "PUT" : "POST"
+
       await apiFetch<Quotation>(url, {
         method,
         body: formData,
@@ -492,7 +479,6 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
 
       toast.success(isEditMode ? "Quotation updated successfully!" : "Quotation created successfully!")
 
-      // Clear draft after successful submission
       if (!isEditMode) {
         clearDraft()
       }
@@ -503,9 +489,9 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
       toast.error(apiError.error || (isEditMode ? "Failed to update quotation" : "Failed to create quotation"))
       if (apiError.details && Array.isArray(apiError.details)) {
         apiError.details.forEach((err: { message?: string } | string) => {
-          if (typeof err === 'object' && err.message) {
+          if (typeof err === "object" && err.message) {
             toast.error(err.message)
-          } else if (typeof err === 'string') {
+          } else if (typeof err === "string") {
             toast.error(err)
           }
         })
@@ -515,168 +501,183 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <div className="flex flex-col items-center">
-          <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-          <p className="text-lg text-gray-700">Loading quotation data...</p>
-        </div>
+      <div className="flex h-screen items-center justify-center bg-background">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex flex-col items-center gap-4"
+        >
+          <div className="relative">
+            <div className="h-16 w-16 rounded-full border-4 border-muted" />
+            <div className="absolute inset-0 h-16 w-16 animate-spin rounded-full border-4 border-transparent border-t-primary" />
+          </div>
+          <p className="text-sm text-muted-foreground">Loading quotation...</p>
+        </motion.div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Draft notification */}
-      {hasDraft && !isEditMode && (
-        <Alert className="bg-blue-50 border-blue-200">
-          <Info className="h-5 w-5 text-blue-500" />
-          <AlertTitle className="text-blue-700">Draft Available</AlertTitle>
-          <AlertDescription className="text-blue-600">
-            You have an unsaved quotation draft. Would you like to restore it?
-            <div className="flex gap-2 mt-2">
-              <Button size="sm" variant="outline" onClick={loadDraft}>
-                <CheckCircle className="h-3.5 w-3.5 mr-1.5" /> Restore Draft
-              </Button>
-              <Button size="sm" variant="outline" className="border-red-200 text-red-600" onClick={clearDraft}>
-                <X className="h-3.5 w-3.5 mr-1.5" /> Discard Draft
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <Card className="w-full shadow-md border-gray-200">
-        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <CardTitle className="flex items-center text-gray-800">
-                <FileText className="mr-2 h-6 w-6 text-primary" />
-                {isEditMode ? `Edit Quotation #${effectiveQuotationNumber}` : "Create New Quotation"}
-              </CardTitle>
-              <CardDescription>
-                {isEditMode ? "Update the quotation details." : "Fill in the details to create a new quotation."}
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2 self-start sm:self-auto">
-              <Button variant="outline" size="sm" asChild>
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
+        {/* Header */}
+        <motion.header initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                asChild
+                className="h-10 w-10 shrink-0 rounded-xl border border-border bg-card shadow-sm transition-all hover:scale-105 hover:shadow-md"
+              >
                 <Link href={isEditMode ? `/dashboard/quotations/${effectiveQuotationNumber}` : "/dashboard/quotations"}>
-                  <ArrowLeft className="h-4 w-4 mr-1.5" /> {isEditMode ? "Cancel" : "Back"}
+                  <ArrowLeft className="h-4 w-4" />
                 </Link>
               </Button>
-              {!isEditMode && (
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                    {isEditMode ? "Edit Quotation" : "New Quotation"}
+                  </h1>
+                  {isEditMode && (
+                    <Badge variant="secondary" className="font-mono text-xs">
+                      #{effectiveQuotationNumber}
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {isEditMode ? "Update the quotation details below" : "Create a professional estimate for your client"}
+                </p>
+              </div>
+            </div>
+
+            {!isEditMode && (
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={saveDraft}
                   disabled={savingDraft || draftSaved}
-                  className={draftSaved ? "bg-green-50 text-green-600 border-green-200" : ""}
+                  className="gap-2 rounded-full px-4 bg-transparent"
                 >
                   {savingDraft ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Saving...
-                    </>
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : draftSaved ? (
-                    <>
-                      <CheckCircle className="h-3.5 w-3.5 mr-1.5" /> Saved
-                    </>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
                   ) : (
-                    <>
-                      <Save className="h-3.5 w-3.5 mr-1.5" /> Save Draft
-                    </>
+                    <Save className="h-4 w-4" />
                   )}
+                  {savingDraft ? "Saving..." : draftSaved ? "Saved!" : "Save Draft"}
                 </Button>
-              )}
-            </div>
+              </motion.div>
+            )}
           </div>
-        </CardHeader>
+        </motion.header>
 
-        <Tabs defaultValue="details" value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="px-6 pt-6">
-            <TabsList className="grid grid-cols-2 mb-6">
-              <TabsTrigger
-                value="details"
-                className="flex items-center gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
-              >
-                <User className="h-4 w-4" /> Details
-              </TabsTrigger>
-              <TabsTrigger
-                value="items"
-                className="flex items-center gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
-              >
-                <FileText className="h-4 w-4" /> Items
-                <Badge variant="outline" className="ml-1 h-5 px-1.5">
-                  {itemFields.length}
-                </Badge>
-              </TabsTrigger>
-            </TabsList>
-          </div>
+        {/* Draft Notification */}
+        <AnimatePresence>
+          {hasDraft && !isEditMode && showDraftBanner && (
+            <motion.div
+              initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+              animate={{ opacity: 1, height: "auto", marginBottom: 24 }}
+              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+              className="overflow-hidden"
+            >
+              <Alert className="border-amber-200/50 bg-amber-50/50 dark:border-amber-900/50 dark:bg-amber-950/20">
+                <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <AlertTitle className="text-amber-800 dark:text-amber-200">Unsaved draft found</AlertTitle>
+                <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-amber-700 dark:text-amber-300">
+                    Would you like to continue where you left off?
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={clearDraft}
+                      className="text-amber-700 hover:bg-amber-100 hover:text-amber-900 dark:text-amber-300 dark:hover:bg-amber-900/30"
+                    >
+                      Discard
+                    </Button>
+                    <Button size="sm" onClick={loadDraft} className="bg-amber-600 text-white hover:bg-amber-700">
+                      Resume Draft
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          <form onSubmit={handleSubmit(onSubmit)}>
-            <CardContent className="p-6">
-              <TabsContent value="details" className="mt-0 space-y-6">
-                {/* Client Information */}
-                <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                  <h3 className="text-lg font-medium text-gray-800 flex items-center mb-4">
-                    <User className="h-5 w-5 mr-2 text-primary" /> Client Information
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="clientName" className="text-base flex items-center">
-                          Client Name <span className="text-red-500 ml-1">*</span>
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <Tabs defaultValue="details" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            {/* Tabs Navigation */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              <TabsList className="inline-flex h-12 w-full gap-1 rounded-2xl bg-muted/50 p-1.5 sm:w-auto">
+                <TabsTrigger
+                  value="details"
+                  className="flex-1 gap-2 rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm sm:flex-initial"
+                >
+                  <FileEdit className="h-4 w-4" />
+                  <span>Details</span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="items"
+                  className="flex-1 gap-2 rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm sm:flex-initial"
+                >
+                  <Package className="h-4 w-4" />
+                  <span>Items</span>
+                  <Badge variant="secondary" className="ml-1 h-5 min-w-5 rounded-full px-1.5 text-xs">
+                    {itemFields.length}
+                  </Badge>
+                </TabsTrigger>
+              </TabsList>
+            </motion.div>
+
+            {/* Details Tab */}
+            <TabsContent value="details" className="mt-0 space-y-6">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="space-y-6"
+              >
+                <Card className="overflow-hidden border-0 bg-card shadow-sm">
+                  <div className="border-b bg-muted/30 px-4 py-3 sm:px-6 sm:py-4">
+                    <h3 className="flex items-center gap-2 font-semibold">
+                      <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-primary/10">
+                        <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                      </div>
+                      Client Information
+                    </h3>
+                  </div>
+                  <CardContent className="space-y-4 p-4 sm:space-y-5 sm:p-6">
+                    <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
+                      {/* Client Name */}
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          Client Name *
                         </Label>
                         <Controller
                           control={control}
                           name="clientName"
-                          rules={{ required: "Client name is required" }}
                           render={({ field }) => (
-                            <div className="relative">
-                              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                              <Input
-                                {...field}
-                                id="clientName"
-                                placeholder="Enter client name"
-                                className="h-10 pl-10"
-                              />
-                            </div>
+                            <Input
+                              {...field}
+                              placeholder="Enter client name"
+                              className={`h-10 sm:h-11 rounded-xl bg-muted/30 transition-all focus:bg-background ${
+                                errors.clientName ? "border-destructive focus-visible:ring-destructive" : ""
+                              }`}
+                            />
                           )}
                         />
-                        {errors.clientName && <p className="text-red-500 text-sm">{errors.clientName.message}</p>}
+                        {errors.clientName && <p className="text-xs text-destructive">{errors.clientName.message}</p>}
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="clientAddress" className="text-base flex items-center">
-                          Client Address <span className="text-red-500 ml-1">*</span>
-                        </Label>
-                        <Controller
-                          control={control}
-                          name="clientAddress"
-                          rules={{
-                            required: "Client address is required",
-                            minLength: {
-                              value: 10,
-                              message: "Address must be at least 10 characters long"
-                            }
-                          }}
-                          render={({ field }) => (
-                            <div className="relative">
-                              <MapPin className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                              <Textarea
-                                {...field}
-                                id="clientAddress"
-                                placeholder="Enter client address"
-                                rows={3}
-                                className="resize-none pl-10"
-                              />
-                            </div>
-                          )}
-                        />
-                        {errors.clientAddress && <p className="text-red-500 text-sm">{errors.clientAddress.message}</p>}
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="clientNumber" className="text-base flex items-center">
-                          Client Number <span className="text-red-500 ml-1">*</span>
+
+                      {/* Phone Number */}
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          Phone Number *
                         </Label>
                         <div className="flex gap-2">
                           <Controller
@@ -684,15 +685,15 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                             name="countryCode"
                             render={({ field }) => (
                               <Select value={field.value} onValueChange={field.onChange}>
-                                <SelectTrigger className="w-32">
-                                  <SelectValue placeholder="Code" />
+                                <SelectTrigger className="h-10 sm:h-11 w-[90px] sm:w-[100px] shrink-0 rounded-xl bg-muted/30">
+                                  <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
-                                  {COUNTRY_CODES.map((country) => (
-                                    <SelectItem key={country.code} value={country.code}>
+                                <SelectContent className="max-h-[300px]">
+                                  {COUNTRY_CODES.map((c) => (
+                                    <SelectItem key={`${c.code}-${c.country}`} value={c.code}>
                                       <span className="flex items-center gap-2">
-                                        <span>{country.flag}</span>
-                                        <span>{country.code}</span>
+                                        <span>{c.flag}</span>
+                                        <span>{c.code}</span>
                                       </span>
                                     </SelectItem>
                                   ))}
@@ -703,623 +704,646 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                           <Controller
                             control={control}
                             name="clientNumber"
-                            rules={{ required: "Client number is required" }}
                             render={({ field }) => (
-                              <div className="relative flex-1">
-                                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                <Input
-                                  {...field}
-                                  id="clientNumber"
-                                  placeholder="Enter phone number"
-                                  className="h-10 pl-10"
-                                />
-                              </div>
+                              <Input
+                                {...field}
+                                placeholder="Phone number"
+                                className={`h-10 sm:h-11 flex-1 rounded-xl bg-muted/30 transition-all focus:bg-background ${
+                                  errors.clientNumber ? "border-destructive focus-visible:ring-destructive" : ""
+                                }`}
+                              />
                             )}
                           />
                         </div>
-                        {errors.clientNumber && <p className="text-red-500 text-sm">{errors.clientNumber.message}</p>}
+                        {errors.clientNumber && (
+                          <p className="text-xs text-destructive">{errors.clientNumber.message}</p>
+                        )}
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="date" className="text-base flex items-center">
-                          Date <span className="text-red-500 ml-1">*</span>
+                    </div>
+
+                    {/* Address */}
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        Billing Address *
+                      </Label>
+                      <Controller
+                        control={control}
+                        name="clientAddress"
+                        render={({ field }) => (
+                          <Textarea
+                            {...field}
+                            placeholder="Enter complete billing address"
+                            className={`min-h-[80px] sm:min-h-[100px] resize-none rounded-xl bg-muted/30 transition-all focus:bg-background ${
+                              errors.clientAddress ? "border-destructive focus-visible:ring-destructive" : ""
+                            }`}
+                          />
+                        )}
+                      />
+                      {errors.clientAddress && (
+                        <p className="text-xs text-destructive">{errors.clientAddress.message}</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="overflow-hidden border-0 bg-card shadow-sm">
+                  <div className="border-b bg-muted/30 px-4 py-3 sm:px-6 sm:py-4">
+                    <h3 className="flex items-center gap-2 font-semibold">
+                      <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-primary/10">
+                        <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                      </div>
+                      Quotation Details
+                    </h3>
+                  </div>
+                  <CardContent className="space-y-4 p-4 sm:p-6">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          Date
                         </Label>
                         <Controller
                           control={control}
                           name="date"
-                          rules={{
-                            required: "Date is required",
-                            pattern: {
-                              value: /^\d{4}-\d{2}-\d{2}$/,
-                              message: "Date must be in YYYY-MM-DD format",
-                            },
-                          }}
                           render={({ field }) => (
-                            <div className="relative">
-                              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                              <Input {...field} id="date" type="date" placeholder="YYYY-MM-DD" className="h-10 pl-10" />
-                            </div>
+                            <Input
+                              type="date"
+                              {...field}
+                              value={
+                                field.value instanceof Date ? field.value.toISOString().split("T")[0] : field.value
+                              }
+                              className="h-10 sm:h-11 rounded-xl bg-muted/30"
+                            />
                           )}
                         />
-                        {errors.date && <p className="text-red-500 text-sm">{errors.date.message}</p>}
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="note" className="text-base">
-                          Additional Notes
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          Private Notes
                         </Label>
                         <Controller
                           control={control}
                           name="note"
                           render={({ field }) => (
-                            <div className="relative">
-                              <Info className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                              <Textarea
-                                {...field}
-                                id="note"
-                                placeholder="Any additional notes about this quotation"
-                                rows={3}
+                            <Textarea
+                              {...field}
+                              className="min-h-[80px] resize-none rounded-xl bg-muted/30"
+                              placeholder="Internal notes (not visible to client)"
+                            />
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Site Images Card */}
+                <Card className="overflow-hidden border-0 bg-card shadow-sm">
+                  <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-3 sm:px-6 sm:py-4">
+                    <h3 className="flex items-center gap-2 font-semibold">
+                      <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-primary/10">
+                        <ImageIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                      </div>
+                      Site Images
+                    </h3>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => appendImage({ description: "" })}
+                      className="gap-1.5 rounded-full h-8 px-3 text-xs"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Add
+                    </Button>
+                  </div>
+                  <CardContent className="p-4 sm:p-6">
+                    {imageFields.length === 0 ? (
+                      <div
+                        onClick={() => appendImage({ description: "" })}
+                        className="cursor-pointer rounded-xl border-2 border-dashed border-muted-foreground/20 bg-muted/20 p-8 sm:p-12 text-center transition-colors hover:border-primary/40 hover:bg-muted/40"
+                      >
+                        <div className="mx-auto mb-3 flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-full bg-muted">
+                          <Upload className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground" />
+                        </div>
+                        <p className="font-medium text-sm sm:text-base">Upload Site Photos</p>
+                        <p className="mt-1 text-xs sm:text-sm text-muted-foreground">Tap to add images</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+                        {imageFields.map((field, index) => {
+                          const image = siteImages?.[index]
+                          const imageUrl = image?.url
+                          const imageFile = image?.file
+
+                          return (
+                            <motion.div
+                              key={field.id}
+                              initial={{ opacity: 0, scale: 0.9 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.9 }}
+                              className="group relative aspect-square overflow-hidden rounded-xl border bg-muted/30"
+                            >
+                              <Controller
+                                control={control}
+                                name={`siteImages.${index}.file`}
+                                render={({ field: { onChange, ref, ...fieldProps } }) => (
+                                  <div className="absolute inset-0 z-10">
+                                    <Input
+                                      type="file"
+                                      accept="image/*"
+                                      className="h-full w-full cursor-pointer opacity-0"
+                                      onChange={(e) => onChange(e.target.files?.[0])}
+                                      ref={ref}
+                                      {...fieldProps}
+                                      value={undefined}
+                                    />
+                                  </div>
+                                )}
+                              />
+
+                              {imageUrl || imageFile ? (
+                                <Image
+                                  src={
+                                    failedImages.includes(index)
+                                      ? "/placeholder.svg?height=200&width=200"
+                                      : imageUrl || (imageFile ? URL.createObjectURL(imageFile) : "")
+                                  }
+                                  alt="Preview"
+                                  fill
+                                  className="object-cover transition-transform group-hover:scale-105"
+                                  onError={() => setFailedImages((prev) => [...prev, index])}
+                                  unoptimized
+                                />
+                              ) : (
+                                <div className="flex h-full items-center justify-center">
+                                  <ImageIcon className="h-8 w-8 sm:h-10 sm:w-10 text-muted-foreground/30" />
+                                </div>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  removeImage(index)
+                                }}
+                                className="absolute right-1.5 top-1.5 sm:right-2 sm:top-2 z-20 rounded-full bg-background/90 p-1 sm:p-1.5 shadow-sm backdrop-blur-sm transition-all hover:bg-destructive hover:text-destructive-foreground"
+                              >
+                                <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                              </button>
+
+                              <div className="absolute inset-x-0 bottom-0 z-20 translate-y-full bg-background/95 p-1.5 sm:p-2 backdrop-blur-sm transition-transform group-hover:translate-y-0">
+                                <Controller
+                                  control={control}
+                                  name={`siteImages.${index}.description`}
+                                  render={({ field }) => (
+                                    <Input
+                                      {...field}
+                                      placeholder="Add caption..."
+                                      className="h-6 sm:h-7 border-0 bg-transparent p-0 text-xs focus-visible:ring-0"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  )}
+                                />
+                              </div>
+                            </motion.div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Terms Card */}
+                <Card className="overflow-hidden border-0 bg-card shadow-sm">
+                  <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-3 sm:px-6 sm:py-4">
+                    <h3 className="flex items-center gap-2 font-semibold">
+                      <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-primary/10">
+                        <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                      </div>
+                      Terms & Conditions
+                    </h3>
+                    <Link href="/terms" className="text-xs font-medium text-primary hover:underline">
+                      Manage
+                    </Link>
+                  </div>
+                  <CardContent className="p-4 sm:p-6">
+                    <Controller
+                      control={control}
+                      name="terms"
+                      render={({ field }) => (
+                        <Textarea
+                          value={field.value?.join("\n") ?? ""}
+                          onChange={(e) => field.onChange(e.target.value.split("\n"))}
+                          className="min-h-[120px] sm:min-h-[150px] resize-none rounded-xl border-0 bg-muted/30 p-3 sm:p-4 text-sm leading-relaxed"
+                          placeholder="Enter terms and conditions..."
+                        />
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+
+                <div className="flex items-center justify-between pt-4">
+                  <Button type="button" variant="ghost" onClick={() => router.back()} className="gap-2">
+                    <ArrowLeft className="h-4 w-4" />
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      const valid = await trigger(["clientName", "clientNumber", "clientAddress"])
+                      if (valid) setActiveTab("items")
+                      else toast.error("Please fill in all required client details")
+                    }}
+                    className="gap-2 rounded-full px-6"
+                  >
+                    Continue to Items
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </motion.div>
+            </TabsContent>
+
+            {/* Items Tab */}
+            <TabsContent value="items" className="mt-0">
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                <Card className="overflow-hidden border-0 bg-card shadow-sm">
+                  <div className="border-b bg-muted/30 px-4 py-3 sm:px-6 sm:py-4">
+                    <h3 className="flex items-center gap-2 font-semibold">
+                      <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-primary/10">
+                        <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                      </div>
+                      Line Items
+                    </h3>
+                  </div>
+
+                  {/* Desktop Header */}
+                  <div className="hidden border-b bg-muted/20 px-6 py-3 md:grid md:grid-cols-12 md:gap-4">
+                    <div className="col-span-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      #
+                    </div>
+                    <div className="col-span-5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Description
+                    </div>
+                    <div className="col-span-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Area (sq ft)
+                    </div>
+                    <div className="col-span-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Rate
+                    </div>
+                    <div className="col-span-2 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Total
+                    </div>
+                  </div>
+
+                  {/* Items List */}
+                  <div className="divide-y">
+                    <AnimatePresence mode="popLayout">
+                      {itemFields.map((field, index) => (
+                        <motion.div
+                          key={field.id}
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="group"
+                        >
+                          {/* Desktop View */}
+                          <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 items-start">
+                            <div className="col-span-1 flex items-center justify-center pt-2.5">
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-destructive/70 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive"
+                                onClick={() => {
+                                  removeItem(index)
+                                  setTimeout(() => calculateTotals(), 0)
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+
+                            <div className="col-span-5 space-y-2">
+                              <Controller
+                                control={control}
+                                name={`items.${index}.description`}
+                                render={({ field }) => (
+                                  <Input
+                                    {...field}
+                                    placeholder="Item description"
+                                    className={`h-10 rounded-lg border-transparent bg-transparent font-medium transition-all hover:border-input hover:bg-muted/30 focus:border-input focus:bg-background ${
+                                      errors.items?.[index]?.description ? "border-destructive" : ""
+                                    }`}
+                                  />
+                                )}
+                              />
+                              <Controller
+                                control={control}
+                                name={`items.${index}.note`}
+                                render={({ field }) => (
+                                  <Input
+                                    {...field}
+                                    placeholder="Additional notes (optional)"
+                                    className="h-8 rounded-lg border-transparent bg-transparent text-xs text-muted-foreground transition-all hover:border-input hover:bg-muted/30 focus:border-input focus:bg-background"
+                                  />
+                                )}
+                              />
+                              {errors.items?.[index]?.description && (
+                                <p className="text-xs text-destructive">{errors.items[index]?.description?.message}</p>
+                              )}
+                            </div>
+
+                            <div className="col-span-2">
+                              <Controller
+                                control={control}
+                                name={`items.${index}.area`}
+                                render={({ field }) => (
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    placeholder="—"
+                                    value={field.value ?? ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value ? Math.max(0, Number(e.target.value)) : undefined
+                                      field.onChange(val)
+                                      setTimeout(() => updateItemTotal(index), 0)
+                                    }}
+                                    className={`h-10 rounded-lg border-transparent bg-transparent text-right font-mono transition-all hover:border-input hover:bg-muted/30 focus:border-input focus:bg-background ${numberInputClass}`}
+                                  />
+                                )}
+                              />
+                            </div>
+
+                            <div className="col-span-2">
+                              <Controller
+                                control={control}
+                                name={`items.${index}.rate`}
+                                render={({ field }) => (
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    placeholder="0"
+                                    value={field.value ?? ""}
+                                    onChange={(e) => {
+                                      const val = Math.max(0, Number(e.target.value))
+                                      field.onChange(val)
+                                      setTimeout(() => updateItemTotal(index), 0)
+                                    }}
+                                    className={`h-10 rounded-lg border-transparent bg-transparent text-right font-mono transition-all hover:border-input hover:bg-muted/30 focus:border-input focus:bg-background ${numberInputClass}`}
+                                  />
+                                )}
+                              />
+                            </div>
+
+                            <div className="col-span-2">
+                              <Controller
+                                control={control}
+                                name={`items.${index}.total`}
+                                render={({ field }) => {
+                                  const areaValue = items[index]?.area
+                                  const hasArea = areaValue != null && areaValue > 0
+
+                                  if (hasArea) {
+                                    // Display-only when area is provided (auto-calculated)
+                                    return (
+                                      <div className="flex h-10 items-center justify-end rounded-lg bg-muted/30 px-3 font-mono font-semibold">
+                                        {(field.value ?? 0).toLocaleString("en-IN")}
+                                      </div>
+                                    )
+                                  }
+
+                                  // Editable when no area
+                                  return (
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      placeholder="0"
+                                      value={field.value ?? ""}
+                                      onChange={(e) => {
+                                        const val = Math.max(0, Number(e.target.value))
+                                        field.onChange(val)
+                                        setTimeout(() => calculateTotals(), 0)
+                                      }}
+                                      className={`h-10 rounded-lg border-transparent bg-transparent text-right font-mono font-semibold transition-all hover:border-input hover:bg-muted/30 focus:border-input focus:bg-background ${numberInputClass}`}
+                                    />
+                                  )
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Mobile View - Simplified, flatter structure */}
+                          <div className="p-4 md:hidden">
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="text-sm font-medium text-muted-foreground">Item {index + 1}</span>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                onClick={() => {
+                                  removeItem(index)
+                                  setTimeout(() => calculateTotals(), 0)
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+
+                            <Controller
+                              control={control}
+                              name={`items.${index}.description`}
+                              render={({ field }) => (
+                                <Input
+                                  {...field}
+                                  placeholder="Item description"
+                                  className={`h-10 rounded-xl bg-muted/30 mb-2 ${
+                                    errors.items?.[index]?.description ? "border-destructive" : ""
+                                  }`}
+                                />
+                              )}
+                            />
+                            <Controller
+                              control={control}
+                              name={`items.${index}.note`}
+                              render={({ field }) => (
+                                <Input
+                                  {...field}
+                                  placeholder="Notes (optional)"
+                                  className="h-9 rounded-xl bg-muted/30 text-sm mb-3"
+                                />
+                              )}
+                            />
+
+                            <div className="grid grid-cols-3 gap-2">
+                              <div>
+                                <Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Area</Label>
+                                <Controller
+                                  control={control}
+                                  name={`items.${index}.area`}
+                                  render={({ field }) => (
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      placeholder="—"
+                                      value={field.value ?? ""}
+                                      onChange={(e) => {
+                                        const val = e.target.value ? Math.max(0, Number(e.target.value)) : undefined
+                                        field.onChange(val)
+                                        setTimeout(() => updateItemTotal(index), 0)
+                                      }}
+                                      className={`h-9 rounded-lg bg-muted/30 text-center font-mono text-sm ${numberInputClass}`}
+                                    />
+                                  )}
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Rate</Label>
+                                <Controller
+                                  control={control}
+                                  name={`items.${index}.rate`}
+                                  render={({ field }) => (
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      placeholder="0"
+                                      value={field.value ?? ""}
+                                      onChange={(e) => {
+                                        const val = Math.max(0, Number(e.target.value))
+                                        field.onChange(val)
+                                        setTimeout(() => updateItemTotal(index), 0)
+                                      }}
+                                      className={`h-9 rounded-lg bg-muted/30 text-center font-mono text-sm ${numberInputClass}`}
+                                    />
+                                  )}
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Total</Label>
+                                <Controller
+                                  control={control}
+                                  name={`items.${index}.total`}
+                                  render={({ field }) => {
+                                    const areaValue = items[index]?.area
+                                    const hasArea = areaValue != null && areaValue > 0
+
+                                    if (hasArea) {
+                                      return (
+                                        <div className="flex h-9 items-center justify-center rounded-lg bg-primary/10 font-mono font-semibold text-sm text-primary">
+                                          {(field.value ?? 0).toLocaleString("en-IN")}
+                                        </div>
+                                      )
+                                    }
+
+                                    return (
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        placeholder="0"
+                                        value={field.value ?? ""}
+                                        onChange={(e) => {
+                                          const val = Math.max(0, Number(e.target.value))
+                                          field.onChange(val)
+                                          setTimeout(() => calculateTotals(), 0)
+                                        }}
+                                        className={`h-9 rounded-lg bg-muted/30 text-center font-mono font-semibold text-sm ${numberInputClass}`}
+                                      />
+                                    )
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+
+                    {itemFields.length === 0 && (
+                      <div className="flex flex-col items-center justify-center py-12 sm:py-16 text-center">
+                        <div className="mb-3 sm:mb-4 flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-full bg-muted">
+                          <Package className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground" />
+                        </div>
+                        <p className="font-medium text-sm sm:text-base">No items added yet</p>
+                        <p className="mt-1 text-xs sm:text-sm text-muted-foreground">Add your first item below</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-dashed px-4 py-4 sm:px-6">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        appendItem({ description: "", rate: 0, note: "" })
+                        setTimeout(() => calculateTotals(), 0)
+                      }}
+                      className="w-full gap-2 rounded-xl border-dashed h-11"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Item
+                    </Button>
+                  </div>
+
+                  {/* Totals Section */}
+                  <div className="border-t bg-muted/20 p-4 sm:p-6">
+                    <div className="mx-auto max-w-sm space-y-3 sm:space-y-4">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Subtotal</span>
+                        <span className="font-mono font-medium">
+                          {(watch("subtotal") ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-4 text-sm">
+                        <span className="text-muted-foreground">Discount</span>
+                        <Controller
+                          control={control}
+                          name="discount"
+                          render={({ field }) => (
+                            <div className="relative w-24 sm:w-28">
+                              <Input
+                                type="number"
+                                min="0"
                                 value={field.value ?? ""}
-                                className="resize-none pl-10"
+                                onChange={(e) => {
+                                  const val = Math.max(0, Number(e.target.value))
+                                  field.onChange(val)
+                                  setTimeout(() => calculateTotals(), 0)
+                                }}
+                                className={`${numberInputClass} h-8 sm:h-9 rounded-lg text-right font-mono pr-2`}
                               />
                             </div>
                           )}
                         />
                       </div>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Site Images */}
-                <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-medium text-gray-800 flex items-center">
-                      <ImageIcon className="h-5 w-5 mr-2 text-primary" /> Site Images
-                    </h3>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            onClick={() => appendImage({ description: "" })}
-                            className="bg-primary hover:bg-primary/90"
-                          >
-                            <ImageIcon className="h-4 w-4 mr-2" /> Add Image
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Add a new site image</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
+                      <Separator />
 
-                  {imageFields.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                      <div className="bg-gray-100 p-6 rounded-full mb-4">
-                        <ImageIcon className="h-12 w-12 text-gray-400" />
-                      </div>
-                      <p className="text-gray-500 mb-4">No site images added yet</p>
-                      <Button
-                        type="button"
-                        onClick={() => appendImage({ description: "" })}
-                        variant="outline"
-                        className="gap-2"
-                      >
-                        <Plus className="h-4 w-4" /> Add First Image
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {imageFields.map((field, index) => (
-                        <motion.div
-                          key={field.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          transition={{ duration: 0.3 }}
-                          className="p-4 border rounded-lg bg-gray-50 shadow-sm"
-                        >
-                          <div className="flex justify-between items-center mb-3">
-                            <h4 className="font-medium text-gray-800 flex items-center">
-                              <span className="bg-primary text-white rounded-full h-6 w-6 flex items-center justify-center text-sm mr-2">
-                                {index + 1}
-                              </span>
-                              Image {index + 1}
-                            </h4>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={() => removeImage(index)}
-                                    className="h-8 w-8 p-0"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Remove this image</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-
-                          <div className="space-y-3">
-                            <div>
-                              <Label htmlFor={`siteImages.${index}.file`} className="text-sm font-medium">
-                                Upload Image
-                              </Label>
-                              <Controller
-                                control={control}
-                                name={`siteImages.${index}.file`}
-                                render={({ field: { onChange, ref, ...field } }) => (
-                                  <Input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                      const file = e.target.files?.[0]
-                                      onChange(file)
-                                    }}
-                                    ref={ref}
-                                    {...field}
-                                    value={undefined}
-                                    className="mt-1"
-                                  />
-                                )}
-                              />
-                              {siteImages && siteImages[index] && (siteImages[index].url || siteImages[index].file) && (
-                                <div className="mt-3 relative">
-                                  <Image
-                                    src={
-                                      failedImages.includes(index)
-                                        ? "/placeholder.svg?height=200&width=300"
-                                        : siteImages[index].url ||
-                                        (siteImages[index].file
-                                          ? URL.createObjectURL(siteImages[index].file)
-                                          : "/placeholder.svg?height=200&width=300")
-                                    }
-                                    alt="Site preview"
-                                    width={200}
-                                    height={128}
-                                    className="h-32 w-auto object-cover rounded-md border shadow-sm"
-                                    onError={() => {
-                                      setFailedImages((prev) => [...prev, index])
-                                      toast.error(`Failed to load image ${index + 1}`)
-                                    }}
-                                    unoptimized={true}
-                                  />
-                                  {(siteImages[index].url || siteImages[index].file) && (
-                                    <Button
-                                      type="button"
-                                      variant="destructive"
-                                      size="icon"
-                                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
-                                      onClick={() => {
-                                        const updatedImages = [...siteImages]
-                                        if (updatedImages[index].url) {
-                                          updatedImages[index] = {
-                                            ...updatedImages[index],
-                                            url: undefined,
-                                            publicId: undefined,
-                                          }
-                                        } else {
-                                          updatedImages[index] = {
-                                            ...updatedImages[index],
-                                            file: undefined,
-                                          }
-                                        }
-                                        setValue("siteImages", updatedImages)
-                                      }}
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </Button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            <div>
-                              <Label htmlFor={`siteImages.${index}.description`} className="text-sm font-medium">
-                                Description (Optional)
-                              </Label>
-                              <Controller
-                                control={control}
-                                name={`siteImages.${index}.description`}
-                                render={({ field }) => (
-                                  <Textarea
-                                    {...field}
-                                    id={`siteImages.${index}.description`}
-                                    placeholder="Enter image description"
-                                    rows={3}
-                                    value={field.value ?? ""}
-                                    className="mt-1 resize-none"
-                                  />
-                                )}
-                              />
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Terms & Conditions */}
-                <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                  <h3 className="text-lg font-medium text-gray-800 flex items-center mb-4">
-                    <Tag className="h-5 w-5 mr-2 text-primary" /> Terms & Conditions
-                  </h3>
-                  <Controller
-                    control={control}
-                    name="terms"
-                    render={({ field }) => (
-                      <Textarea
-                        id="terms"
-                        placeholder="Enter terms, one per line"
-                        rows={8}
-                        value={field.value?.join("\n") ?? ""}
-                        onChange={(e) => field.onChange(e.target.value.split("\n"))}
-                        className="resize-none"
-                      />
-                    )}
-                  />
-                  <p className="text-sm text-gray-500 mt-2 flex items-center">
-                    <HelpCircle className="h-3.5 w-3.5 mr-1.5 text-gray-400" />
-                    Enter each term on a new line.{" "}
-                    <Link href="/terms" className="text-primary hover:underline ml-1">
-                      View full terms and conditions
-                    </Link>
-                  </p>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="items" className="mt-0">
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-medium text-gray-800 flex items-center">
-                      <FileText className="h-5 w-5 mr-2 text-primary" /> Quotation Items
-                    </h3>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            onClick={() => {
-                              appendItem({
-                                description: "",
-                                area: undefined,
-                                rate: 0,
-                                total: undefined,
-                                note: "",
-                              })
-                              // Force recalculation after adding item
-                              setTimeout(() => calculateTotals(), 0)
-                            }}
-                            className="bg-primary hover:bg-primary/90"
-                          >
-                            <Plus className="h-4 w-4 mr-2" /> Add Item
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Add a new item</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-
-                  <div className="space-y-6">
-                    {itemFields.map((field, index) => (
-                      <motion.div
-                        key={field.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.3 }}
-                        className="p-5 border rounded-lg bg-gray-50 shadow-sm"
-                      >
-                        <div className="flex justify-between items-center mb-4">
-                          <h4 className="font-medium text-gray-800 flex items-center">
-                            <span className="bg-primary text-white rounded-full h-6 w-6 flex items-center justify-center text-sm mr-2">
-                              {index + 1}
-                            </span>
-                            Item {index + 1}
-                          </h4>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => {
-                                    removeItem(index)
-                                    // Force recalculation after removing item
-                                    setTimeout(() => calculateTotals(), 0)
-                                  }}
-                                  disabled={itemFields.length === 1}
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Remove this item</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                          <div className="lg:col-span-2">
-                            <Label
-                              htmlFor={`items.${index}.description`}
-                              className="text-sm font-medium flex items-center"
-                            >
-                              Description <span className="text-red-500 ml-1">*</span>
-                            </Label>
-                            <Controller
-                              control={control}
-                              name={`items.${index}.description`}
-                              rules={{ required: "Description is required" }}
-                              render={({ field }) => (
-                                <Input {...field} placeholder="Item description" className="mt-1" />
-                              )}
-                            />
-                            {errors.items?.[index]?.description && (
-                              <p className="text-red-500 text-sm mt-1">{errors.items[index]?.description?.message}</p>
-                            )}
-                          </div>
-                          <div>
-                            <Label htmlFor={`items.${index}.area`} className="text-sm font-medium">
-                              Area (sq.ft)
-                            </Label>
-                            <Controller
-                              control={control}
-                              name={`items.${index}.area`}
-                              render={({ field }) => (
-                                <Input
-                                  type="number"
-                                  placeholder="Area"
-                                  value={field.value ?? ""}
-                                  onChange={(e) => {
-                                    const value = e.target.value ? Number(e.target.value) : undefined
-                                    field.onChange(value)
-                                    // Update item total and recalculate totals
-                                    setTimeout(() => updateItemTotal(index), 0)
-                                  }}
-                                  className="mt-1"
-                                />
-                              )}
-                            />
-                            {errors.items?.[index]?.area && (
-                              <p className="text-red-500 text-sm mt-1">{errors.items[index]?.area?.message}</p>
-                            )}
-                          </div>
-                          <div>
-                            <Label htmlFor={`items.${index}.rate`} className="text-sm font-medium flex items-center">
-                              Rate (₹) <span className="text-red-500 ml-1">*</span>
-                            </Label>
-                            <Controller
-                              control={control}
-                              name={`items.${index}.rate`}
-                              rules={{
-                                required: "Rate is required",
-                                min: {
-                                  value: 0,
-                                  message: "Rate must be non-negative",
-                                },
-                              }}
-                              render={({ field }) => (
-                                <Input
-                                  type="number"
-                                  placeholder="Rate"
-                                  value={field.value ?? ""}
-                                  onChange={(e) => {
-                                    const value = Number(e.target.value)
-                                    field.onChange(value)
-                                    // Update item total and recalculate totals
-                                    setTimeout(() => updateItemTotal(index), 0)
-                                  }}
-                                  className="mt-1"
-                                />
-                              )}
-                            />
-                            {errors.items?.[index]?.rate && (
-                              <p className="text-red-500 text-sm mt-1">{errors.items[index]?.rate?.message}</p>
-                            )}
-                          </div>
-                          <div>
-                            <Label htmlFor={`items.${index}.total`} className="text-sm font-medium">
-                              Total (₹)
-                            </Label>
-                            <Controller
-                              control={control}
-                              name={`items.${index}.total`}
-                              rules={{
-                                validate: (value) =>
-                                  items[index].area == null ||
-                                  items[index].rate == null ||
-                                  items[index].area === 0 ||
-                                  items[index].rate === 0 ||
-                                  value != null ||
-                                  "Total is required if area or rate is missing or zero",
-                              }}
-                              render={({ field }) => (
-                                <div className="relative">
-                                  <Input
-                                    type="number"
-                                    placeholder="Auto-calculated or enter total"
-                                    value={field.value ?? ""}
-                                    onChange={(e) => {
-                                      const value = e.target.value ? Number(e.target.value) : undefined
-                                      field.onChange(value)
-                                      // Recalculate totals when manually entering total
-                                      setTimeout(() => calculateTotals(), 0)
-                                    }}
-                                    disabled={
-                                      items[index].area != null &&
-                                      items[index].rate != null &&
-                                      items[index].area > 0 &&
-                                      items[index].rate > 0
-                                    }
-                                    className={`mt-1 ${items[index].area != null &&
-                                        items[index].rate != null &&
-                                        items[index].area > 0 &&
-                                        items[index].rate > 0
-                                        ? "bg-gray-100"
-                                        : ""
-                                      }`}
-                                  />
-                                  {items[index].area != null &&
-                                    items[index].rate != null &&
-                                    items[index].area > 0 &&
-                                    items[index].rate > 0 && (
-                                      <Calculator className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                    )}
-                                </div>
-                              )}
-                            />
-                            {errors.items?.[index]?.total && (
-                              <p className="text-red-500 text-sm mt-1">{errors.items[index]?.total?.message}</p>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="mt-4">
-                          <Label htmlFor={`items.${index}.note`} className="text-sm font-medium">
-                            Note (Optional)
-                          </Label>
-                          <Controller
-                            control={control}
-                            name={`items.${index}.note`}
-                            render={({ field }) => (
-                              <Input
-                                {...field}
-                                placeholder="Additional notes"
-                                value={field.value ?? ""}
-                                className="mt-1"
-                              />
-                            )}
-                          />
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                  {errors.items && <p className="text-red-500 text-sm">{errors.items.message}</p>}
-                </div>
-
-                <Card className="bg-gray-50 border shadow-sm mt-6">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-primary flex items-center">
-                      <DollarSign className="h-5 w-5 mr-2" /> Quotation Summary
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600 font-medium">Subtotal:</span>
-                      <Controller
-                        control={control}
-                        name="subtotal"
-                        render={({ field }) => (
-                          <span className="font-medium text-lg">₹{(field.value ?? 0).toFixed(2)}</span>
-                        )}
-                      />
-                    </div>
-                    <div>
-                      <div className="flex justify-between items-center">
-                        <Label htmlFor="discount" className="text-gray-600 font-medium">
-                          Discount:
-                        </Label>
-                        <div className="w-1/3">
-                          <Controller
-                            control={control}
-                            name="discount"
-                            rules={{
-                              min: {
-                                value: 0,
-                                message: "Discount cannot be negative",
-                              },
-                            }}
-                            render={({ field }) => (
-                              <Input
-                                id="discount"
-                                type="number"
-                                value={field.value ?? ""}
-                                onChange={(e) => {
-                                  const value = Number(e.target.value)
-                                  field.onChange(value)
-                                  // Recalculate totals when discount changes
-                                  setTimeout(() => calculateTotals(), 0)
-                                }}
-                                className="text-right h-9"
-                              />
-                            )}
-                          />
-                          {errors.discount && <p className="text-red-500 text-sm mt-1">{errors.discount.message}</p>}
-                        </div>
+                      <div className="flex items-center justify-between pt-2">
+                        <span className="text-base sm:text-lg font-semibold">Grand Total</span>
+                        <span className="text-xl sm:text-2xl font-bold tracking-tight">
+                          {(watch("grandTotal") ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </span>
                       </div>
                     </div>
-                    <div className="flex justify-between items-center pt-4 border-t">
-                      <span className="text-lg font-semibold">Grand Total:</span>
-                      <Controller
-                        control={control}
-                        name="grandTotal"
-                        render={({ field }) => (
-                          <span className="text-xl font-bold text-primary">₹{(field.value ?? 0).toFixed(2)}</span>
-                        )}
-                      />
-                    </div>
-                  </CardContent>
+                  </div>
                 </Card>
-              </TabsContent>
-            </CardContent>
 
-            <CardFooter className="flex justify-between bg-gray-50 border-t p-6">
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => {
-                  if (activeTab === "details") {
-                    router.push(
-                      isEditMode ? `/dashboard/quotations/${effectiveQuotationNumber}` : "/dashboard/quotations",
-                    )
-                  } else if (activeTab === "items") {
-                    setActiveTab("details")
-                  }
-                }}
-              >
-                {activeTab === "details" ? "Cancel" : "Previous"}
-              </Button>
-              <div className="flex gap-2">
-                {activeTab === "details" ? (
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      if (detailsTabValid) {
-                        setActiveTab("items")
-                      } else {
-                        toast.error("Please fill in all required client information fields")
-                        trigger(["clientName", "clientAddress", "clientNumber"])
-                      }
-                    }}
-                    className="bg-primary/90 hover:bg-primary"
-                  >
-                    Next
+                <div className="flex items-center justify-between pt-6">
+                  <Button type="button" variant="ghost" onClick={() => setActiveTab("details")} className="gap-2">
+                    <ArrowLeft className="h-4 w-4" />
+                    Back
                   </Button>
-                ) : (
-                  <Button
-                    type="submit"
-                    disabled={isSubmitting || !itemsTabValid}
-                    className="bg-primary/90 hover:bg-primary"
-                    size="lg"
-                  >
-                    <Save className="mr-2 h-5 w-5" />
-                    {isSubmitting
-                      ? isEditMode
-                        ? "Updating..."
-                        : "Creating..."
-                      : isEditMode
-                        ? "Update Quotation"
-                        : "Create Quotation"}
+                  <Button type="submit" disabled={isSubmitting || !itemsTabValid} className="gap-2 rounded-full px-6">
+                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {isEditMode ? "Update Quotation" : "Create Quotation"}
                   </Button>
-                )}
-              </div>
-            </CardFooter>
-          </form>
-        </Tabs>
-      </Card>
+                </div>
+              </motion.div>
+            </TabsContent>
+          </Tabs>
+        </form>
+      </div>
     </div>
   )
 }
