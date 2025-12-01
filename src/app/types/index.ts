@@ -65,7 +65,7 @@ export interface Project {
     method?: string;
     note?: string;
   }[];
-  siteImages: { url: string; publicId: string }[];
+  siteImages: { url: string; publicId: string; description?: string }[];
   terms: string[];
   note?: string;
   createdAt?: string | Date;
