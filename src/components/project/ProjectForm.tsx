@@ -39,6 +39,8 @@ import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
 import { apiFetch } from "@/app/lib/api";
 import type { Project, Quotation } from "@/app/types";
+import { projectFormSchema } from "@/lib/validators";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 interface ProjectFormProps {
   projectId?: string;
@@ -100,6 +102,8 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
     watch,
     getValues,
   } = useForm<FormData>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(projectFormSchema) as any,
     defaultValues: {
       quotationNumber: "",
       clientName: "",
@@ -429,32 +433,51 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
         </motion.header>
 
         <Tabs defaultValue="details" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+
+
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-            <TabsList className="inline-flex h-12 w-full gap-1 rounded-2xl bg-muted/50 p-1.5 sm:w-auto">
-              <TabsTrigger value="details" className="flex-1 gap-2 rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm sm:flex-initial">
+            <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-2xl bg-muted/50 p-1.5 sm:inline-flex sm:h-12 sm:w-auto">
+
+              <TabsTrigger
+                value="details"
+                className="gap-2 rounded-xl px-2 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm sm:px-6"
+              >
                 <FileEdit className="h-4 w-4" /> <span>Details</span>
               </TabsTrigger>
-              <TabsTrigger value="items" className="flex-1 gap-2 rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm sm:flex-initial">
+
+              <TabsTrigger
+                value="items"
+                className="gap-2 rounded-xl px-2 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm sm:px-6"
+              >
                 <Package className="h-4 w-4" />
                 <span>Items</span>
                 <Badge variant="secondary" className="ml-1 h-5 min-w-5 rounded-full px-1.5 text-xs text-primary bg-primary/10">
                   {itemFields.length}
                 </Badge>
               </TabsTrigger>
-              <TabsTrigger value="extraWork" className="flex-1 gap-2 rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm sm:flex-initial">
+
+              <TabsTrigger
+                value="extraWork"
+                className="gap-2 rounded-xl px-2 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm sm:px-6"
+              >
                 <Briefcase className="h-4 w-4" />
                 <span>Extra Work</span>
                 <Badge variant="secondary" className="ml-1 h-5 min-w-5 rounded-full px-1.5 text-xs text-primary bg-primary/10">
                   {extraWorkFields.length}
                 </Badge>
               </TabsTrigger>
-              <TabsTrigger value="images" className="flex-1 gap-2 rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm sm:flex-initial">
+
+              <TabsTrigger
+                value="images"
+                className="gap-2 rounded-xl px-2 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm sm:px-6"
+              >
                 <ImageIcon className="h-4 w-4" />
                 <span>Images</span>
                 <Badge variant="secondary" className="ml-1 h-5 min-w-5 rounded-full px-1.5 text-xs text-primary bg-primary/10">
                   {imageFields.length}
                 </Badge>
               </TabsTrigger>
+
             </TabsList>
           </motion.div>
 
@@ -614,6 +637,9 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                                 <Input {...field} placeholder="Description" className="h-10 rounded-xl bg-muted/30" />
                               )}
                             />
+                            {errors.items?.[index]?.description && (
+                              <p className="text-xs text-destructive">{errors.items[index]?.description?.message}</p>
+                            )}
                           </div>
                           <div className="sm:col-span-4 lg:col-span-2 space-y-2">
                             <Label className="text-xs font-medium">Area (sq.ft)</Label>
@@ -634,6 +660,9 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                                 />
                               )}
                             />
+                            {errors.items?.[index]?.area && (
+                              <p className="text-xs text-destructive">{errors.items[index]?.area?.message}</p>
+                            )}
                           </div>
                           <div className="sm:col-span-4 lg:col-span-2 space-y-2">
                             <Label className="text-xs font-medium">Rate (₹)</Label>
@@ -653,6 +682,9 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                                 />
                               )}
                             />
+                            {errors.items?.[index]?.rate && (
+                              <p className="text-xs text-destructive">{errors.items[index]?.rate?.message}</p>
+                            )}
                           </div>
                           <div className="sm:col-span-4 lg:col-span-3 space-y-2">
                             <Label className="text-xs font-medium">Total (₹)</Label>
@@ -681,6 +713,9 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                                 </div>
                               )}
                             />
+                            {errors.items?.[index]?.total && (
+                              <p className="text-xs text-destructive">{errors.items[index]?.total?.message}</p>
+                            )}
                           </div>
                           <div className="sm:col-span-12 space-y-2">
                             <Label className="text-xs font-medium">Item Note</Label>
@@ -769,6 +804,9 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                                 <Input {...field} placeholder="Description of extra work" className="h-10 rounded-xl bg-muted/30" />
                               )}
                             />
+                            {errors.extraWork?.[index]?.description && (
+                              <p className="text-xs text-destructive">{errors.extraWork[index]?.description?.message}</p>
+                            )}
                           </div>
                           <div className="sm:col-span-4 space-y-2">
                             <Label className="text-xs font-medium">Amount (₹)</Label>
@@ -791,6 +829,9 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                                 </div>
                               )}
                             />
+                            {errors.extraWork?.[index]?.total && (
+                              <p className="text-xs text-destructive">{errors.extraWork[index]?.total?.message}</p>
+                            )}
                           </div>
                           <div className="sm:col-span-12 space-y-2">
                             <Label className="text-xs font-medium">Note</Label>
@@ -919,6 +960,7 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
                         />
                       )}
                     />
+                    {errors.discount && <p className="text-xs text-destructive mt-1">{errors.discount.message}</p>}
                   </div>
                 </div>
               </div>

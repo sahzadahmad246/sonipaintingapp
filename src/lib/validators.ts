@@ -139,6 +139,20 @@ export const createInvoiceSchema = createProjectSchema.extend({
   accessToken: z.string().min(1, "Access token is required"),
 });
 
+// Schema for the frontend project form
+export const projectFormSchema = createProjectSchema.extend({
+  date: z.string().or(z.date()), // Allow string input from form
+  siteImages: z.array(z.object({
+    file: z.any().optional(), // Allow File object
+    url: z.string().optional(),
+    publicId: z.string().optional(),
+    description: z.string().max(200).optional(),
+  })).default([]),
+  items: z.array(itemSchema).min(1, "At least one item is required"),
+  extraWork: z.array(extraWorkSchema).default([]),
+  existingImages: z.array(siteImageSchema).default([]),
+});
+
 export const updateInvoiceSchema = createInvoiceSchema.partial();
 
 // Portfolio schema
