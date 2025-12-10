@@ -1,32 +1,42 @@
 "use client";
 
-import type React from "react";
-
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
-import Image from "next/image";
 import { motion } from "framer-motion";
-import { Plus, Trash2, FileText, Save } from "lucide-react";
+import Link from "next/link";
+import {
+  Plus,
+  Trash2,
+  Save,
+  FileText,
+  ImageIcon,
+  User,
+  ArrowLeft,
+  Loader2,
+  Upload,
+  FileEdit,
+  Package,
+  Briefcase,
+  DollarSign,
+} from "lucide-react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from "@/components/ui/card";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import Image from "next/image";
 import { apiFetch } from "@/app/lib/api";
 import type { Project, Quotation } from "@/app/types";
 
@@ -52,7 +62,11 @@ interface FormData {
     total: number;
     note?: string;
   }[];
-  siteImages: File[];
+  siteImages: {
+    file?: File;
+    url?: string;
+    publicId?: string;
+  }[];
   existingImages: { url: string; publicId: string }[];
   terms: string[];
   discount: number;
@@ -72,10 +86,15 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
   const effectiveProjectId =
     projectId || (typeof params.projectId === "string" ? params.projectId : "");
 
+  const [activeTab, setActiveTab] = useState("details");
+  const [loading, setLoading] = useState(true);
+  const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
+
   const {
     control,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
     setValue,
     reset,
     watch,
@@ -117,29 +136,32 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
     name: "extraWork",
   });
 
-  const [loading, setLoading] = useState(true);
-  const [quotations, setQuotations] = useState<Quotation[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const {
+    fields: imageFields,
+    append: appendImage,
+    remove: removeImage,
+  } = useFieldArray({
+    control,
+    name: "siteImages",
+  });
 
-  // Watch form fields for real-time updates
+  // Watch form fields
   const items = watch("items");
   const extraWork = watch("extraWork");
   const discount = watch("discount");
+  const watchedImages = watch("siteImages");
 
-  // Calculate totals function that can be called directly
+  // Calculate totals
   const calculateTotals = useCallback(() => {
     const currentItems = getValues("items");
     const currentExtraWork = getValues("extraWork");
     const currentDiscount = getValues("discount") || 0;
 
-    // Calculate subtotal from items
     const itemSubtotal = currentItems.reduce((sum, item) => {
-      if (item.total !== null && item.total !== undefined) {
+      if (item.total != null) {
         return sum + item.total;
       } else if (
-        item.area !== null &&
-        item.area !== undefined &&
-        item.rate &&
+        item.area != null &&
         item.area > 0 &&
         item.rate > 0
       ) {
@@ -148,24 +170,21 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
       return sum;
     }, 0);
 
-    // Calculate subtotal from extra work
     const extraWorkSubtotal = currentExtraWork.reduce(
       (sum, ew) => sum + (ew.total || 0),
       0
     );
 
-    // Calculate total subtotal and grand total
     const subtotal = itemSubtotal + extraWorkSubtotal;
     const grandTotal = Math.max(0, subtotal - currentDiscount);
 
-    // Update form values
     setValue("subtotal", subtotal, { shouldValidate: true });
     setValue("grandTotal", grandTotal, { shouldValidate: true });
 
     return { subtotal, grandTotal };
   }, [getValues, setValue]);
 
-  // Update item total when area or rate changes
+  // Update item total
   const updateItemTotal = useCallback(
     (index: number) => {
       const currentItems = getValues("items");
@@ -173,43 +192,43 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
 
       if (
         item &&
-        item.area !== null &&
-        item.area !== undefined &&
-        item.rate &&
+        item.area != null &&
         item.area > 0 &&
         item.rate > 0
       ) {
         const total = item.area * item.rate;
         setValue(`items.${index}.total`, total, { shouldValidate: true });
+      } else if ((item.area == null || item.area === 0) && item.rate > 0) {
+        setValue(`items.${index}.total`, item.rate, { shouldValidate: true });
       }
 
-      // Recalculate subtotal and grand total
       calculateTotals();
     },
     [getValues, setValue, calculateTotals]
   );
 
-  // Auto-calculate totals whenever items, extraWork, or discount change
+  // Auto-calculate totals
   useEffect(() => {
-    // Calculate individual item totals
+    // We don't blindly recalculate item totals here to avoid overwriting manual edits if logic is complex,
+    // but consistent with QuotationForm logic:
     items.forEach((item, index) => {
-      if (
-        item.area !== null &&
-        item.area !== undefined &&
-        item.rate &&
-        item.area > 0 &&
-        item.rate > 0
-      ) {
+      if (item.area != null && item.area > 0 && item.rate > 0) {
         const total = item.area * item.rate;
-        setValue(`items.${index}.total`, total, { shouldValidate: true });
+        // Only update if different to avoid loops? react-hook-form handles value checks usually.
+        if (item.total !== total) {
+          setValue(`items.${index}.total`, total, { shouldValidate: true });
+        }
+      } else if ((item.area == null || item.area === 0) && item.rate > 0) {
+        if (item.total !== item.rate) {
+          setValue(`items.${index}.total`, item.rate, { shouldValidate: true });
+        }
       }
     });
 
-    // Calculate totals
     calculateTotals();
   }, [items, extraWork, discount, setValue, calculateTotals]);
 
-  // Fetch quotations and project data
+  // Fetch Data
   useEffect(() => {
     const fetchQuotations = async () => {
       try {
@@ -217,9 +236,8 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
           "/quotations"
         );
         setQuotations(quotations);
-      } catch (error: unknown) {
-        const apiError = error as ApiError;
-        toast.error(apiError.error || "Failed to fetch quotations");
+      } catch {
+        toast.error("Failed to fetch quotations");
       }
     };
 
@@ -240,7 +258,7 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
             note: item.note ?? "",
           })),
           extraWork: data.extraWork || [],
-          siteImages: [],
+          siteImages: data.siteImages?.map(img => ({ url: img.url, publicId: img.publicId })) || [],
           existingImages: data.siteImages || [],
           terms: data.terms || [],
           discount: data.discount,
@@ -248,13 +266,10 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
           subtotal: data.subtotal ?? 0,
           grandTotal: data.grandTotal ?? 0,
         });
-        setImagePreviews(data.siteImages?.map((img) => img.url) || []);
 
-        // Force calculation after data is loaded
-        setTimeout(() => {
-          calculateTotals();
-        }, 0);
-      } catch (error: unknown) {
+        // Force calculation
+        setTimeout(() => calculateTotals(), 100);
+      } catch (error) {
         const apiError = error as ApiError;
         toast.error(apiError.error || "Failed to fetch project");
       } finally {
@@ -270,19 +285,18 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
     }
   }, [effectiveProjectId, reset, calculateTotals]);
 
-  const handleImageChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    onChange: (value: File[] | null) => void
-  ) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    onChange(files);
-    const previews = files.map((file) => URL.createObjectURL(file));
-    setImagePreviews((prev) => [...prev, ...previews]);
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files);
+      newFiles.forEach(file => {
+        appendImage({ file, url: URL.createObjectURL(file) });
+      });
+    }
   };
 
   const onSubmit = async (data: FormData) => {
     try {
-      // Recalculate totals before submission to ensure accuracy
+      setIsSubmittingForm(true);
       const { subtotal, grandTotal } = calculateTotals();
       data.subtotal = subtotal;
       data.grandTotal = grandTotal;
@@ -300,25 +314,35 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
       formData.append("note", data.note || "");
       formData.append("subtotal", String(data.subtotal));
       formData.append("grandTotal", String(data.grandTotal));
-      formData.append("existingImages", JSON.stringify(data.existingImages));
+
+      const existingImages = data.siteImages
+        .filter(img => img.url && img.publicId)
+        .map(img => ({ url: img.url, publicId: img.publicId }));
+
+      formData.append("existingImages", JSON.stringify(existingImages));
+
       data.terms.forEach((term, index) => {
         formData.append(`terms[${index}]`, term);
       });
 
-      if (data.siteImages?.length) {
-        data.siteImages.forEach((file, index) => {
-          formData.append(`siteImages[${index}]`, file);
-        });
-      }
+      // Handle new image uploads
+      data.siteImages.forEach((img, index) => {
+        if (img.file) {
+          // We can't easily map arrays of files with inconsistent indices in FormData if we mix existing and new
+          // But the backend loop handles `siteImages[` prefix.
+          // Let's just append all new files.
+          formData.append(`siteImages[${index}]`, img.file);
+        }
+      });
 
       await apiFetch<Project>(`/projects/${effectiveProjectId}`, {
         method: "PUT",
         body: formData,
-        headers: {}, // Remove Content-Type
       });
+
       toast.success("Project updated successfully!");
       router.push(`/dashboard/projects/${effectiveProjectId}`);
-    } catch (error: unknown) {
+    } catch (error) {
       console.error("Update project error:", error);
       const apiError = error as ApiError;
       toast.error(apiError.error || "Failed to update project");
@@ -327,6 +351,8 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
           toast.error(`Validation error: ${err.message}`)
         );
       }
+    } finally {
+      setIsSubmittingForm(false);
     }
   };
 
@@ -336,760 +362,587 @@ export default function ProjectForm({ projectId }: ProjectFormProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-        <span className="ml-3 text-lg">Loading project data...</span>
+      <div className="flex h-screen items-center justify-center bg-background">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex flex-col items-center gap-4"
+        >
+          <div className="relative">
+            <div className="h-16 w-16 rounded-full border-4 border-muted" />
+            <div className="absolute inset-0 h-16 w-16 animate-spin rounded-full border-4 border-transparent border-t-primary" />
+          </div>
+          <p className="text-sm text-muted-foreground">Loading project data...</p>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <Card className="w-full shadow-md">
-      <CardHeader className="bg-gray-50 border-b">
-        <CardTitle className="flex items-center text-primary">
-          <FileText className="mr-2 h-6 w-6" />
-          Edit Project #{effectiveProjectId}
-        </CardTitle>
-        <CardDescription>Update the project details.</CardDescription>
-      </CardHeader>
-      <CardContent className="p-6">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="quotationNumber" className="text-base">
-                  Quotation Number
-                </Label>
-                <Controller
-                  control={control}
-                  name="quotationNumber"
-                  rules={{ required: "Quotation number is required" }}
-                  render={({ field }) => (
-                    <select
-                      {...field}
-                      id="quotationNumber"
-                      className="w-full border rounded-md p-2 h-10"
-                      value={field.value}
-                      onChange={(e) => field.onChange(e.target.value)}
-                    >
-                      <option value="">Select Quotation</option>
-                      {quotations.map((q) => (
-                        <option
-                          key={q.quotationNumber}
-                          value={q.quotationNumber}
-                        >
-                          {q.quotationNumber} - {q.clientName}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                />
-                {errors.quotationNumber && (
-                  <p className="text-red-500 text-sm">
-                    {errors.quotationNumber.message}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="clientName" className="text-base">
-                  Client Name
-                </Label>
-                <Controller
-                  control={control}
-                  name="clientName"
-                  rules={{ required: "Client name is required" }}
-                  render={({ field }) => (
-                    <Input
-                      {...field}
-                      id="clientName"
-                      placeholder="Enter client name"
-                      className="h-10"
-                    />
-                  )}
-                />
-                {errors.clientName && (
-                  <p className="text-red-500 text-sm">
-                    {errors.clientName.message}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="clientAddress" className="text-base">
-                  Client Address
-                </Label>
-                <Controller
-                  control={control}
-                  name="clientAddress"
-                  rules={{ required: "Client address is required" }}
-                  render={({ field }) => (
-                    <Textarea
-                      {...field}
-                      id="clientAddress"
-                      placeholder="Enter client address"
-                      rows={3}
-                      className="resize-none"
-                    />
-                  )}
-                />
-                {errors.clientAddress && (
-                  <p className="text-red-500 text-sm">
-                    {errors.clientAddress.message}
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="clientNumber" className="text-base">
-                  Client Number
-                </Label>
-                <Controller
-                  control={control}
-                  name="clientNumber"
-                  rules={{ required: "Client number is required" }}
-                  render={({ field }) => (
-                    <Input
-                      {...field}
-                      id="clientNumber"
-                      placeholder="Enter client phone number"
-                      className="h-10"
-                    />
-                  )}
-                />
-                {errors.clientNumber && (
-                  <p className="text-red-500 text-sm">
-                    {errors.clientNumber.message}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="date" className="text-base">
-                  Date
-                </Label>
-                <Controller
-                  control={control}
-                  name="date"
-                  rules={{
-                    required: "Date is required",
-                    validate: (value) =>
-                      !isNaN(Date.parse(value)) || "Invalid date format",
-                  }}
-                  render={({ field }) => (
-                    <Input {...field} id="date" type="date" className="h-10" />
-                  )}
-                />
-                {errors.date && (
-                  <p className="text-red-500 text-sm">{errors.date.message}</p>
-                )}
-              </div>
-            </div>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
 
-          <div className="mt-10">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-medium text-gray-800">Items</h3>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        appendItem({
-                          description: "",
-                          area: null,
-                          rate: 0,
-                          total: null,
-                          note: "",
-                        });
-                        // Force recalculation after adding item
-                        setTimeout(() => calculateTotals(), 0);
-                      }}
-                      className="bg-primary/90 hover:bg-primary"
-                    >
-                      <Plus className="h-4 w-4 mr-2" /> Add Item
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Add a new item</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <div className="space-y-6">
-              {itemFields.map((field, index) => (
-                <motion.div
-                  key={field.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.3 }}
-                  className="p-5 border rounded-lg bg-gray-50 shadow-sm"
-                >
-                  <div className="flex justify-between items-center mb-4">
-                    <h4 className="font-medium text-gray-800">
-                      Item {index + 1}
-                    </h4>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => {
-                              removeItem(index);
-                              // Force recalculation after removing item
-                              setTimeout(() => calculateTotals(), 0);
-                            }}
-                            disabled={itemFields.length === 1}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Remove this item</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    <div className="lg:col-span-2">
-                      <Label
-                        htmlFor={`items.${index}.description`}
-                        className="text-sm font-medium"
-                      >
-                        Description
-                      </Label>
-                      <Controller
-                        control={control}
-                        name={`items.${index}.description`}
-                        rules={{ required: "Description is required" }}
-                        render={({ field }) => (
-                          <Input
-                            {...field}
-                            placeholder="Item description"
-                            className="mt-1"
-                          />
-                        )}
-                      />
-                      {errors.items?.[index]?.description && (
-                        <p className="text-red-500 text-sm mt-1">
-                          {errors.items[index]?.description?.message}
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <Label
-                        htmlFor={`items.${index}.area`}
-                        className="text-sm font-medium"
-                      >
-                        Area (sq.ft)
-                      </Label>
-                      <Controller
-                        control={control}
-                        name={`items.${index}.area`}
-                        render={({ field }) => (
-                          <Input
-                            type="number"
-                            placeholder="Area"
-                            value={field.value ?? ""}
-                            onChange={(e) => {
-                              const value = e.target.value
-                                ? Number(e.target.value)
-                                : null;
-                              field.onChange(value);
-
-                              // Update item total and recalculate totals
-                              setTimeout(() => updateItemTotal(index), 0);
-                            }}
-                            className="mt-1"
-                          />
-                        )}
-                      />
-                      {errors.items?.[index]?.area && (
-                        <p className="text-red-500 text-sm mt-1">
-                          {errors.items[index]?.area?.message}
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <Label
-                        htmlFor={`items.${index}.rate`}
-                        className="text-sm font-medium"
-                      >
-                        Rate (₹)
-                      </Label>
-                      <Controller
-                        control={control}
-                        name={`items.${index}.rate`}
-                        rules={{
-                          required: "Rate is required",
-                          min: {
-                            value: 0,
-                            message: "Rate must be non-negative",
-                          },
-                        }}
-                        render={({ field }) => (
-                          <Input
-                            type="number"
-                            placeholder="Rate"
-                            value={field.value ?? ""}
-                            onChange={(e) => {
-                              const value = Number(e.target.value) || 0;
-                              field.onChange(value);
-
-                              // Update item total and recalculate totals
-                              setTimeout(() => updateItemTotal(index), 0);
-                            }}
-                            className="mt-1"
-                          />
-                        )}
-                      />
-                      {errors.items?.[index]?.rate && (
-                        <p className="text-red-500 text-sm mt-1">
-                          {errors.items[index]?.rate?.message}
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <Label
-                        htmlFor={`items.${index}.total`}
-                        className="text-sm font-medium"
-                      >
-                        Total (₹)
-                      </Label>
-                      <Controller
-                        control={control}
-                        name={`items.${index}.total`}
-                        rules={{
-                          validate: (value) =>
-                            items[index].area == null ||
-                            items[index].rate == null ||
-                            items[index].area === 0 ||
-                            items[index].rate === 0 ||
-                            value != null ||
-                            "Total is required if area or rate is missing or zero",
-                        }}
-                        render={({ field }) => (
-                          <Input
-                            type="number"
-                            placeholder="Auto-calculated or enter total"
-                            value={field.value ?? ""}
-                            onChange={(e) => {
-                              const value = e.target.value
-                                ? Number(e.target.value)
-                                : null;
-                              field.onChange(value);
-
-                              // Recalculate totals when manually entering total
-                              setTimeout(() => calculateTotals(), 0);
-                            }}
-                            disabled={
-                              items[index].area != null &&
-                              items[index].rate != null &&
-                              items[index].area > 0 &&
-                              items[index].rate > 0
-                            }
-                            className={`mt-1 ${
-                              items[index].area != null &&
-                              items[index].rate != null &&
-                              items[index].area > 0 &&
-                              items[index].rate > 0
-                                ? "bg-gray-100"
-                                : ""
-                            }`}
-                          />
-                        )}
-                      />
-                      {errors.items?.[index]?.total && (
-                        <p className="text-red-500 text-sm mt-1">
-                          {errors.items[index]?.total?.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <Label
-                      htmlFor={`items.${index}.note`}
-                      className="text-sm font-medium"
-                    >
-                      Note (Optional)
-                    </Label>
-                    <Controller
-                      control={control}
-                      name={`items.${index}.note`}
-                      render={({ field }) => (
-                        <Input
-                          {...field}
-                          placeholder="Additional notes"
-                          value={field.value ?? ""}
-                          className="mt-1"
-                        />
-                      )}
-                    />
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-            {errors.items && (
-              <p className="text-red-500 text-sm">{errors.items.message}</p>
-            )}
-          </div>
-
-          <div className="mt-10">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-medium text-gray-800">Extra Work</h3>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        appendExtraWork({
-                          description: "",
-                          total: 0,
-                          note: "",
-                        });
-                        // Force recalculation after adding extra work
-                        setTimeout(() => calculateTotals(), 0);
-                      }}
-                      className="bg-primary/90 hover:bg-primary"
-                    >
-                      <Plus className="h-4 w-4 mr-2" /> Add Extra Work
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Add extra work</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <div className="space-y-6">
-              {extraWorkFields.map((field, index) => (
-                <motion.div
-                  key={field.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.3 }}
-                  className="p-5 border rounded-lg bg-gray-50 shadow-sm"
-                >
-                  <div className="flex justify-between items-center mb-4">
-                    <h4 className="font-medium text-gray-800">
-                      Extra Work {index + 1}
-                    </h4>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => {
-                              removeExtraWork(index);
-                              // Force recalculation after removing extra work
-                              setTimeout(() => calculateTotals(), 0);
-                            }}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Remove this extra work</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label
-                        htmlFor={`extraWork.${index}.description`}
-                        className="text-sm font-medium"
-                      >
-                        Description
-                      </Label>
-                      <Controller
-                        control={control}
-                        name={`extraWork.${index}.description`}
-                        rules={{ required: "Description is required" }}
-                        render={({ field }) => (
-                          <Input
-                            {...field}
-                            placeholder="Extra work description"
-                            className="mt-1"
-                          />
-                        )}
-                      />
-                      {errors.extraWork?.[index]?.description && (
-                        <p className="text-red-500 text-sm mt-1">
-                          {errors.extraWork[index]?.description?.message}
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <Label
-                        htmlFor={`extraWork.${index}.total`}
-                        className="text-sm font-medium"
-                      >
-                        Total (₹)
-                      </Label>
-                      <Controller
-                        control={control}
-                        name={`extraWork.${index}.total`}
-                        rules={{
-                          required: "Total is required",
-                          min: {
-                            value: 0,
-                            message: "Total must be non-negative",
-                          },
-                        }}
-                        render={({ field }) => (
-                          <Input
-                            type="number"
-                            placeholder="Total"
-                            value={field.value ?? ""}
-                            onChange={(e) => {
-                              const value = Number(e.target.value) || 0;
-                              field.onChange(value);
-
-                              // Recalculate totals when extra work total changes
-                              setTimeout(() => calculateTotals(), 0);
-                            }}
-                            className="mt-1"
-                          />
-                        )}
-                      />
-                      {errors.extraWork?.[index]?.total && (
-                        <p className="text-red-500 text-sm mt-1">
-                          {errors.extraWork[index]?.total?.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <Label
-                      htmlFor={`extraWork.${index}.note`}
-                      className="text-sm font-medium"
-                    >
-                      Note (Optional)
-                    </Label>
-                    <Controller
-                      control={control}
-                      name={`extraWork.${index}.note`}
-                      render={({ field }) => (
-                        <Input
-                          {...field}
-                          placeholder="Additional notes"
-                          value={field.value ?? ""}
-                          className="mt-1"
-                        />
-                      )}
-                    />
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-10">
-            <div className="space-y-2">
-              <Label htmlFor="siteImages" className="text-base">
-                Site Images
-              </Label>
-              <Controller
-                control={control}
-                name="siteImages"
-                render={({ field: { onChange } }) => (
-                  <Input
-                    type="file"
-                    id="siteImages"
-                    multiple
-                    accept="image/*"
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      handleImageChange(e, onChange)
-                    }
-                    className="mt-1"
-                  />
-                )}
-              />
-              {errors.siteImages && (
-                <p className="text-red-500 text-sm">
-                  {errors.siteImages.message}
-                </p>
-              )}
-              {imagePreviews.length > 0 && (
-                <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {imagePreviews.map((preview, index) => (
-                    <Image
-                      key={index}
-                      src={preview || "/placeholder.svg"}
-                      alt={`Site image preview ${index + 1}`}
-                      width={128}
-                      height={128}
-                      className="w-full h-32 object-cover rounded-md border shadow-sm"
-                      unoptimized={true}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
-            <div>
-              <div className="mb-6">
-                <Label htmlFor="note" className="text-base">
-                  Additional Notes
-                </Label>
-                <Controller
-                  control={control}
-                  name="note"
-                  render={({ field }) => (
-                    <Textarea
-                      {...field}
-                      id="note"
-                      placeholder="Any additional notes"
-                      rows={4}
-                      value={field.value ?? ""}
-                      className="mt-1 resize-none"
-                    />
-                  )}
-                />
-              </div>
+        {/* Header */}
+        <motion.header initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                asChild
+                className="h-10 w-10 shrink-0 rounded-xl border border-border bg-card shadow-sm transition-all hover:scale-105 hover:shadow-md"
+              >
+                <Link href={`/dashboard/projects/${effectiveProjectId}`}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </Button>
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label htmlFor="terms" className="text-base">
-                    Terms & Conditions
-                  </Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const defaultTerms = [
-                        "50% advance payment required to start work, 30% due at 70% project completion, and 20% within 7 days of completion.",
-                        "Quotations are valid for 30 days from issuance.",
-                        "Additional work requested by the customer that is not included in the original scope of work will be priced separately and agreed upon in writing before proceeding.",
-                        "Painting work covers surface finishing only, issues like dampness, leakage, or plaster damage are not included.",
-                        "The Sony Painting will be responsible for thoroughly cleaning the work area after completion, leaving no debris behind.",
-                        "We will provide regular updates on progress and will communicate any delays or changes to the timeline in a timely manner.",
-                        "Accepting the quotation and paying the deposit confirms agreement to these terms.",
-                      ];
-                      setValue("terms", defaultTerms);
-                    }}
-                  >
-                    Load Default Terms
-                  </Button>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                    Edit Project
+                  </h1>
+                  <Badge variant="secondary" className="font-mono text-xs">
+                    #{effectiveProjectId}
+                  </Badge>
                 </div>
-                <Controller
-                  control={control}
-                  name="terms"
-                  render={({ field }) => (
-                    <Textarea
-                      id="terms"
-                      placeholder="Enter terms, one per line"
-                      rows={6}
-                      value={field.value?.join("\n") ?? ""}
-                      onChange={(e) =>
-                        field.onChange(
-                          e.target.value
-                            .split("\n")
-                            .filter((term) => term.trim())
-                        )
-                      }
-                      className="mt-1 resize-none"
-                    />
-                  )}
-                />
-                <p className="text-sm text-gray-500 mt-1">
-                  Enter each term on a new line
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Update project details and manage work status
                 </p>
               </div>
             </div>
 
-            <div>
-              <Card className="bg-gray-50 border shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg text-primary">
-                    Project Summary
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 font-medium">Subtotal:</span>
-                    <Controller
-                      control={control}
-                      name="subtotal"
-                      render={({ field }) => (
-                        <span className="font-medium text-lg">
-                          ₹{(field.value ?? 0).toFixed(2)}
-                        </span>
-                      )}
-                    />
-                  </div>
-                  <div>
-                    <div className="flex justify-between items-center">
-                      <Label
-                        htmlFor="discount"
-                        className="text-gray-600 font-medium"
-                      >
-                        Discount:
-                      </Label>
-                      <div className="w-1/3">
-                        <Controller
-                          control={control}
-                          name="discount"
-                          rules={{
-                            min: {
-                              value: 0,
-                              message: "Discount cannot be negative",
-                            },
-                          }}
-                          render={({ field }) => (
-                            <Input
-                              id="discount"
-                              type="number"
-                              value={field.value ?? ""}
-                              onChange={(e) => {
-                                const value = Number(e.target.value) || 0;
-                                field.onChange(value);
-                              }}
-                              className="text-right h-9"
-                            />
-                          )}
-                        />
-                        {errors.discount && (
-                          <p className="text-red-500 text-sm mt-1">
-                            {errors.discount.message}
-                          </p>
-                        )}
-                      </div>
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <Button
+                onClick={handleSubmit(onSubmit)}
+                disabled={isSubmittingForm}
+                className="gap-2 rounded-full px-6 shadow-md hover:shadow-lg transition-all"
+              >
+                {isSubmittingForm ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {isSubmittingForm ? "Saving..." : "Save Project"}
+              </Button>
+            </motion.div>
+          </div>
+        </motion.header>
+
+        <Tabs defaultValue="details" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <TabsList className="inline-flex h-12 w-full gap-1 rounded-2xl bg-muted/50 p-1.5 sm:w-auto">
+              <TabsTrigger value="details" className="flex-1 gap-2 rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm sm:flex-initial">
+                <FileEdit className="h-4 w-4" /> <span>Details</span>
+              </TabsTrigger>
+              <TabsTrigger value="items" className="flex-1 gap-2 rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm sm:flex-initial">
+                <Package className="h-4 w-4" />
+                <span>Items</span>
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 rounded-full px-1.5 text-xs text-primary bg-primary/10">
+                  {itemFields.length}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="extraWork" className="flex-1 gap-2 rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm sm:flex-initial">
+                <Briefcase className="h-4 w-4" />
+                <span>Extra Work</span>
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 rounded-full px-1.5 text-xs text-primary bg-primary/10">
+                  {extraWorkFields.length}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="images" className="flex-1 gap-2 rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm sm:flex-initial">
+                <ImageIcon className="h-4 w-4" />
+                <span>Images</span>
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 rounded-full px-1.5 text-xs text-primary bg-primary/10">
+                  {imageFields.length}
+                </Badge>
+              </TabsTrigger>
+            </TabsList>
+          </motion.div>
+
+          {/* Details Tab */}
+          <TabsContent value="details" className="mt-0 space-y-6">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-6">
+              <Card className="overflow-hidden border-0 bg-card shadow-sm">
+                <div className="border-b bg-muted/30 px-4 py-3 sm:px-6 sm:py-4">
+                  <h3 className="flex items-center gap-2 font-semibold">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+                      <User className="h-3.5 w-3.5 text-primary" />
                     </div>
-                  </div>
-                  <div className="flex justify-between items-center pt-4 border-t">
-                    <span className="text-lg font-semibold">Grand Total:</span>
-                    <Controller
-                      control={control}
-                      name="grandTotal"
-                      render={({ field }) => (
-                        <span className="text-xl font-bold text-primary">
-                          ₹{(field.value ?? 0).toFixed(2)}
-                        </span>
-                      )}
-                    />
+                    Client Information
+                  </h3>
+                </div>
+                <CardContent className="space-y-4 p-4 sm:p-6">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Client Name</Label>
+                      <Controller
+                        control={control}
+                        name="clientName"
+                        rules={{ required: "Client name is required" }}
+                        render={({ field }) => (
+                          <Input {...field} placeholder="Client name" className="h-10 rounded-xl bg-muted/30" />
+                        )}
+                      />
+                      {errors.clientName && <p className="text-xs text-destructive">{errors.clientName.message}</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Client Number</Label>
+                      <Controller
+                        control={control}
+                        name="clientNumber"
+                        rules={{ required: "Client number is required" }}
+                        render={({ field }) => (
+                          <Input {...field} placeholder="Client number" className="h-10 rounded-xl bg-muted/30" />
+                        )}
+                      />
+                      {errors.clientNumber && <p className="text-xs text-destructive">{errors.clientNumber.message}</p>}
+                    </div>
+                    <div className="sm:col-span-2 space-y-2">
+                      <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Address</Label>
+                      <Controller
+                        control={control}
+                        name="clientAddress"
+                        rules={{ required: "Client address is required" }}
+                        render={({ field }) => (
+                          <Textarea {...field} placeholder="Client address" className="min-h-[80px] rounded-xl bg-muted/30 resize-none" />
+                        )}
+                      />
+                      {errors.clientAddress && <p className="text-xs text-destructive">{errors.clientAddress.message}</p>}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-            </div>
-          </div>
-        </form>
-        <CardFooter className="flex justify-end bg-gray-50 border-t p-6">
-          <Button
-            type="submit"
-            onClick={handleSubmit(onSubmit)}
-            disabled={isSubmitting}
-            className="bg-primary/90 hover:bg-primary"
-            size="lg"
-          >
-            <Save className="mr-2 h-5 w-5" />
-            {isSubmitting ? "Updating..." : "Update Project"}
-          </Button>
-        </CardFooter>
-      </CardContent>
-    </Card>
+
+              <Card className="overflow-hidden border-0 bg-card shadow-sm">
+                <div className="border-b bg-muted/30 px-4 py-3 sm:px-6 sm:py-4">
+                  <h3 className="flex items-center gap-2 font-semibold">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+                      <FileText className="h-3.5 w-3.5 text-primary" />
+                    </div>
+                    Project Details
+                  </h3>
+                </div>
+                <CardContent className="space-y-4 p-4 sm:p-6">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Quotation Reference</Label>
+                      <Controller
+                        control={control}
+                        name="quotationNumber"
+                        rules={{ required: "Quotation number is required" }}
+                        render={({ field }) => (
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <SelectTrigger className="h-10 rounded-xl bg-muted/30">
+                              <SelectValue placeholder="Select Quotation" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {quotations.map(q => (
+                                <SelectItem key={q.quotationNumber} value={q.quotationNumber}>
+                                  {q.quotationNumber} - {q.clientName}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                      {errors.quotationNumber && <p className="text-xs text-destructive">{errors.quotationNumber.message}</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Date</Label>
+                      <Controller
+                        control={control}
+                        name="date"
+                        rules={{ required: "Date is required" }}
+                        render={({ field }) => (
+                          <Input type="date" {...field} className="h-10 rounded-xl bg-muted/30" />
+                        )}
+                      />
+                      {errors.date && <p className="text-xs text-destructive">{errors.date.message}</p>}
+                    </div>
+                    <div className="sm:col-span-2 space-y-2">
+                      <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Private Note</Label>
+                      <Controller
+                        control={control}
+                        name="note"
+                        render={({ field }) => (
+                          <Textarea {...field} placeholder="Internal notes" className="min-h-[80px] rounded-xl bg-muted/30 resize-none" />
+                        )}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </TabsContent>
+
+          {/* Items Tab */}
+          <TabsContent value="items" className="mt-0 space-y-6">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              <Card className="overflow-hidden border-0 bg-card shadow-sm">
+                <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-3 sm:px-6 sm:py-4">
+                  <h3 className="flex items-center gap-2 font-semibold">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+                      <Package className="h-3.5 w-3.5 text-primary" />
+                    </div>
+                    Work Items
+                  </h3>
+                </div>
+                <CardContent className="p-0">
+                  <div className="space-y-0 divide-y">
+                    {itemFields.map((field, index) => (
+                      <div key={field.id} className="p-4 sm:p-6 transition-colors hover:bg-muted/5">
+                        <div className="flex items-start justify-between mb-4">
+                          <Badge variant="outline" className="rounded-md bg-background font-mono text-xs">
+                            Item {index + 1}
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeItem(index)}
+                            className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-12">
+                          <div className="sm:col-span-12 lg:col-span-5 space-y-2">
+                            <Label className="text-xs font-medium">Description</Label>
+                            <Controller
+                              control={control}
+                              name={`items.${index}.description`}
+                              rules={{ required: "Required" }}
+                              render={({ field }) => (
+                                <Input {...field} placeholder="Description" className="h-10 rounded-xl bg-muted/30" />
+                              )}
+                            />
+                          </div>
+                          <div className="sm:col-span-4 lg:col-span-2 space-y-2">
+                            <Label className="text-xs font-medium">Area (sq.ft)</Label>
+                            <Controller
+                              control={control}
+                              name={`items.${index}.area`}
+                              render={({ field }) => (
+                                <Input
+                                  type="number"
+                                  {...field}
+                                  value={field.value ?? ""}
+                                  onChange={e => {
+                                    field.onChange(e.target.value ? Number(e.target.value) : null);
+                                    setTimeout(() => updateItemTotal(index), 0);
+                                  }}
+                                  placeholder="0"
+                                  className="h-10 rounded-xl bg-muted/30"
+                                />
+                              )}
+                            />
+                          </div>
+                          <div className="sm:col-span-4 lg:col-span-2 space-y-2">
+                            <Label className="text-xs font-medium">Rate (₹)</Label>
+                            <Controller
+                              control={control}
+                              name={`items.${index}.rate`}
+                              render={({ field }) => (
+                                <Input
+                                  type="number"
+                                  {...field}
+                                  onChange={e => {
+                                    field.onChange(Number(e.target.value));
+                                    setTimeout(() => updateItemTotal(index), 0);
+                                  }}
+                                  placeholder="0"
+                                  className="h-10 rounded-xl bg-muted/30"
+                                />
+                              )}
+                            />
+                          </div>
+                          <div className="sm:col-span-4 lg:col-span-3 space-y-2">
+                            <Label className="text-xs font-medium">Total (₹)</Label>
+                            <Controller
+                              control={control}
+                              name={`items.${index}.total`}
+                              render={({ field }) => (
+                                <div className="relative">
+                                  <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                  <Input
+                                    type="number"
+                                    {...field}
+                                    value={field.value ?? ""}
+                                    readOnly={
+                                      (items[index].area || 0) > 0 && (items[index].rate || 0) > 0
+                                    }
+                                    onChange={e => {
+                                      field.onChange(e.target.value ? Number(e.target.value) : null);
+                                      setTimeout(() => calculateTotals(), 0);
+                                    }}
+                                    className={`h-10 rounded-xl pl-9 ${(items[index].area || 0) > 0 && (items[index].rate || 0) > 0
+                                      ? "bg-muted text-muted-foreground cursor-not-allowed"
+                                      : "bg-muted/30"
+                                      }`}
+                                  />
+                                </div>
+                              )}
+                            />
+                          </div>
+                          <div className="sm:col-span-12 space-y-2">
+                            <Label className="text-xs font-medium">Item Note</Label>
+                            <Controller
+                              control={control}
+                              name={`items.${index}.note`}
+                              render={({ field }) => (
+                                <Input {...field} placeholder="Additional details..." className="h-10 rounded-xl bg-muted/30" />
+                              )}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {itemFields.length === 0 && (
+                      <div className="flex flex-col items-center justify-center py-12 text-center">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                          <Package className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                        <h3 className="mt-4 text-lg font-semibold">No items added</h3>
+                        <p className="mb-4 text-sm text-muted-foreground max-w-sm">
+                          Start extending the scope of this project by adding work items.
+                        </p>
+                        <Button onClick={() => appendItem({ description: "", area: null, rate: 0, total: null, note: "" })} variant="outline">
+                          Add First Item
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+              <div className="mt-6">
+                <Card className="overflow-hidden border-0 bg-card shadow-sm">
+                  <CardContent className="p-6">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-muted-foreground">Items Subtotal</p>
+                        <div className="text-2xl font-bold tracking-tight">
+                          ₹{items.reduce((acc, item) => acc + (item.total || 0), 0).toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </motion.div>
+          </TabsContent>
+
+          {/* Extra Work Tab */}
+          <TabsContent value="extraWork" className="mt-0 space-y-6">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              <Card className="overflow-hidden border-0 bg-card shadow-sm">
+                <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-3 sm:px-6 sm:py-4">
+                  <h3 className="flex items-center gap-2 font-semibold">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+                      <Briefcase className="h-3.5 w-3.5 text-primary" />
+                    </div>
+                    Extra Work
+                  </h3>
+                </div>
+                <CardContent className="p-0">
+                  <div className="space-y-0 divide-y">
+                    {extraWorkFields.map((field, index) => (
+                      <div key={field.id} className="p-4 sm:p-6 transition-colors hover:bg-muted/5">
+                        <div className="flex items-start justify-between mb-4">
+                          <Badge variant="outline" className="rounded-md bg-background font-mono text-xs">
+                            Extra {index + 1}
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeExtraWork(index)}
+                            className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-12">
+                          <div className="sm:col-span-8 space-y-2">
+                            <Label className="text-xs font-medium">Description</Label>
+                            <Controller
+                              control={control}
+                              name={`extraWork.${index}.description`}
+                              rules={{ required: "Required" }}
+                              render={({ field }) => (
+                                <Input {...field} placeholder="Description of extra work" className="h-10 rounded-xl bg-muted/30" />
+                              )}
+                            />
+                          </div>
+                          <div className="sm:col-span-4 space-y-2">
+                            <Label className="text-xs font-medium">Amount (₹)</Label>
+                            <Controller
+                              control={control}
+                              name={`extraWork.${index}.total`}
+                              rules={{ required: "Required" }}
+                              render={({ field }) => (
+                                <div className="relative">
+                                  <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                  <Input
+                                    type="number"
+                                    {...field}
+                                    onChange={e => {
+                                      field.onChange(Number(e.target.value));
+                                      setTimeout(() => calculateTotals(), 0);
+                                    }}
+                                    className="h-10 rounded-xl pl-9 bg-muted/30"
+                                  />
+                                </div>
+                              )}
+                            />
+                          </div>
+                          <div className="sm:col-span-12 space-y-2">
+                            <Label className="text-xs font-medium">Note</Label>
+                            <Controller
+                              control={control}
+                              name={`extraWork.${index}.note`}
+                              render={({ field }) => (
+                                <Input {...field} placeholder="Additional notes" className="h-10 rounded-xl bg-muted/30" />
+                              )}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {extraWorkFields.length === 0 && (
+                      <div className="flex flex-col items-center justify-center py-12 text-center">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                          <Briefcase className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                        <h3 className="mt-4 text-lg font-semibold">No extra work</h3>
+                        <p className="mb-4 text-sm text-muted-foreground max-w-sm">
+                          If any out-of-scope work needs to be tracked, add it here.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="border-t bg-muted/30 p-4 sm:p-6 flex justify-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => appendExtraWork({ description: "", total: 0, note: "" })}
+                      className="w-full sm:w-auto gap-2 border-dashed"
+                    >
+                      <Plus className="h-4 w-4" /> Add Extra Work
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </TabsContent>
+
+          {/* Images Tab */}
+          <TabsContent value="images" className="mt-0 space-y-6">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              <Card className="overflow-hidden border-0 bg-card shadow-sm">
+                <div className="border-b bg-muted/30 px-4 py-3 sm:px-6 sm:py-4">
+                  <h3 className="flex items-center gap-2 font-semibold">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+                      <ImageIcon className="h-3.5 w-3.5 text-primary" />
+                    </div>
+                    Site Images
+                  </h3>
+                </div>
+                <CardContent className="p-6">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {/* Upload Button */}
+                    <div className="relative aspect-video cursor-pointer overflow-hidden rounded-xl border-2 border-dashed border-muted-foreground/25 bg-muted/10 hover:bg-muted/20 transition-colors">
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        className="absolute inset-0 cursor-pointer opacity-0"
+                      />
+                      <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-background shadow-sm">
+                          <Upload className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                        <p className="text-xs font-medium text-muted-foreground">Click to upload</p>
+                      </div>
+                    </div>
+
+                    {/* Images List */}
+                    {watchedImages.map((img, index) => (
+                      <div key={index} className="group relative aspect-video overflow-hidden rounded-xl bg-muted">
+                        <Image
+                          src={img.url || "/placeholder.svg"}
+                          alt={`Project Image ${index + 1}`}
+                          fill
+                          className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100" />
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="absolute right-2 top-2 h-8 w-8 translate-y-2 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100"
+                          onClick={() => removeImage(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </TabsContent>
+        </Tabs>
+
+        {/* Footer Summary */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="mt-8"
+        >
+          <Card className="overflow-hidden border-0 bg-card shadow-lg ring-1 ring-border/50">
+            <CardContent className="flex flex-col gap-6 p-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-4 lg:w-1/2">
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Discount</Label>
+                  <div className="relative max-w-[200px]">
+                    <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Controller
+                      control={control}
+                      name="discount"
+                      render={({ field }) => (
+                        <Input
+                          type="number"
+                          {...field}
+                          onChange={e => {
+                            field.onChange(Number(e.target.value));
+                            setTimeout(() => calculateTotals(), 0);
+                          }}
+                          className="h-10 rounded-xl pl-9 bg-muted/30"
+                        />
+                      )}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2 rounded-2xl bg-muted/30 p-4 lg:w-1/3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-medium">₹{getValues("subtotal").toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Discount</span>
+                  <span className="text-destructive">-₹{getValues("discount").toFixed(2)}</span>
+                </div>
+                <Separator className="my-2" />
+                <div className="flex justify-between text-lg font-bold text-primary">
+                  <span>Grand Total</span>
+                  <span>₹{getValues("grandTotal").toFixed(2)}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+      </div>
+    </div>
   );
 }

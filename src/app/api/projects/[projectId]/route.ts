@@ -69,6 +69,7 @@ export async function PUT(
   context: { params: Promise<{ projectId: string }> }
 ) {
   console.log("PUT /api/projects/[projectId] called:", request.url);
+  await dbConnect();
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
@@ -181,7 +182,7 @@ export async function PUT(
       return NextResponse.json({ error: parsed.error.errors }, { status: 400 });
     }
 
-    await dbConnect();
+
 
     const existingProject = await Project.findOne({ projectId }).session(session);
     if (!existingProject) {

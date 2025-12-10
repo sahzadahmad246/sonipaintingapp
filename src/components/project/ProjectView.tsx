@@ -283,7 +283,7 @@ export default function ProjectView({ projectId }: ProjectViewProps) {
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
                     <h3 className="font-medium text-foreground">Payment Progress</h3>
-                    <span className="text-sm text-muted-foreground">{progressPercentage.toFixed(0)}%</span>
+                    <span className="text-sm text-muted-foreground pl-2">{progressPercentage.toFixed(0)}%</span>
                   </div>
                   <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
                     <div
