@@ -1,17 +1,14 @@
 import { z } from "zod";
 
 // Common validation schemas
+// Common validation schemas
 const phoneNumberSchema = z
   .string()
-  .regex(/^(\+\d{1,4})?[6-9]\d{9}$/, "Phone number must be a valid mobile number")
+  // Relaxed regex to allow international numbers (7 to 15 digits)
+  .regex(/^\+?\d{7,15}$/, "Phone number must be between 7 and 15 digits")
   .transform((val) => {
-    // Remove all non-digits and ensure we have a valid number
-    const digits = val.replace(/\D/g, "");
-    // If it starts with country code, remove it to get the 10-digit number
-    if (digits.length > 10) {
-      return digits.slice(-10); // Take last 10 digits
-    }
-    return digits;
+    // Remove all non-digits
+    return val.replace(/\D/g, "");
   });
 
 const emailSchema = z
@@ -111,6 +108,30 @@ export const quotationFormSchema = createQuotationSchema.extend({
     publicId: z.string().optional(),
     description: z.string().max(200).optional(),
   })).optional(),
+}).superRefine((data, ctx) => {
+  const { countryCode, clientNumber } = data;
+  
+// ...
+  // Dynamic validation based on country code
+  if (countryCode === "+91") {
+    // India: 10 digits
+    if (clientNumber.length !== 10) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Indian mobile number must be exactly 10 digits",
+        path: ["clientNumber"],
+      });
+    }
+  } else {
+    // Other countries: 7-15 digits
+     if (clientNumber.length < 7 || clientNumber.length > 15) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Phone number must be between 7 and 15 digits",
+        path: ["clientNumber"],
+      });
+    }
+  }
 });
 
 export const updateQuotationSchema = createQuotationSchema
