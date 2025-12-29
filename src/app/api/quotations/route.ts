@@ -48,6 +48,10 @@ export async function POST(request: NextRequest) {
       clientName: sanitizeToString(formData.get("clientName")),
       clientAddress: sanitizeToString(formData.get("clientAddress")),
       clientNumber: sanitizeToString(formData.get("clientNumber")),
+      clientMobile: {
+        countryCode: sanitizeToString(formData.get("clientMobile[countryCode]")) || "+91",
+        number: sanitizeToString(formData.get("clientMobile[number]")) || "",
+      },
       date: sanitizeToString(formData.get("date")) ? new Date(sanitizeToString(formData.get("date"))!) : undefined,
       discount: formData.get("discount") ? Number(formData.get("discount")) || 0 : undefined,
       note: sanitizeToString(formData.get("note")),
@@ -155,7 +159,8 @@ export async function POST(request: NextRequest) {
       quotationNumber,
       clientName: parsed.data.clientName,
       clientAddress: parsed.data.clientAddress,
-      clientNumber: parsed.data.clientNumber,
+      clientNumber: parsed.data.clientNumber!, // Ensured by validation or manual construct if needed, but schema makes it optional? No, previous step made it optional. But we populate it in FormData.
+      clientMobile: parsed.data.clientMobile,
       date: parsed.data.date,
       items: parsed.data.items,
       subtotal: parsed.data.subtotal,

@@ -79,6 +79,10 @@ export async function PUT(
       clientName: sanitizeToString(formData.get("clientName")),
       clientAddress: sanitizeToString(formData.get("clientAddress")),
       clientNumber: sanitizeToString(formData.get("clientNumber")),
+      clientMobile: {
+        countryCode: sanitizeToString(formData.get("clientMobile[countryCode]")) || "+91",
+        number: sanitizeToString(formData.get("clientMobile[number]")) || "",
+      },
       date: sanitizeToString(formData.get("date"))
         ? new Date(sanitizeToString(formData.get("date"))!)
         : undefined,
@@ -225,9 +229,14 @@ export async function PUT(
           updateData.clientNumber = parsed.data.clientNumber;
         }
         if (
+          parsed.data.clientMobile !== undefined
+        ) {
+          updateData.clientMobile = parsed.data.clientMobile;
+        }
+        if (
           parsed.data.date !== undefined &&
           new Date(parsed.data.date).toISOString() !==
-            new Date(existingQuotation.date).toISOString()
+          new Date(existingQuotation.date).toISOString()
         ) {
           updateData.date = new Date(parsed.data.date);
         }
@@ -500,7 +509,7 @@ export async function PUT(
         {
           action:
             parsed.data.isAccepted !== undefined &&
-            parsed.data.isAccepted !== existingQuotation.isAccepted
+              parsed.data.isAccepted !== existingQuotation.isAccepted
               ? "update_quotation_status"
               : "update_quotation",
           userId: userId,
@@ -531,9 +540,8 @@ export async function PUT(
         "2": quotationNumber, // Quotation #{{2}}
         "3": quotationUrl, // View details: {{3}}
       };
-      whatsappMessage = `Dear ${updatedQuotation.clientName}, you have ${
-        updatedQuotation.isAccepted === "accepted" ? "accepted" : "rejected"
-      } Quotation #${quotationNumber}. Thank you! View details: ${quotationUrl}`;
+      whatsappMessage = `Dear ${updatedQuotation.clientName}, you have ${updatedQuotation.isAccepted === "accepted" ? "accepted" : "rejected"
+        } Quotation #${quotationNumber}. Thank you! View details: ${quotationUrl}`;
     } else {
       action = "quotation_updated";
       templateVariables = {
@@ -542,11 +550,9 @@ export async function PUT(
         "3": updatedQuotation.grandTotal?.toFixed(2) || "0.00", // Grand Total: ₹{{3}}
         "4": quotationUrl, // View details: {{4}}
       };
-      whatsappMessage = `Dear ${
-        updatedQuotation.clientName
-      }, your Quotation #${quotationNumber} has been updated. Grand Total: ₹${
-        updatedQuotation.grandTotal?.toFixed(2) || "0.00"
-      }. You can now accept or reject it. View details: ${quotationUrl}`;
+      whatsappMessage = `Dear ${updatedQuotation.clientName
+        }, your Quotation #${quotationNumber} has been updated. Grand Total: ₹${updatedQuotation.grandTotal?.toFixed(2) || "0.00"
+        }. You can now accept or reject it. View details: ${quotationUrl}`;
     }
 
     try {

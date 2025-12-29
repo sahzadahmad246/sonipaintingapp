@@ -11,6 +11,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Soni Painting- Interior Contractor",
   description: "Interior painting, POP, carpentry, and tiling services",
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({

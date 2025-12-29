@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { motion } from "framer-motion"
-import { Home, Brush, ImageIcon, Phone, User, Menu } from "lucide-react"
+import { Home, Brush, ImageIcon, Phone, User, Menu, BookOpen } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { cn } from "@/lib/utils"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -37,6 +37,7 @@ export default function MobileNav() {
     { href: "/", label: "Home", icon: <Home className="h-5 w-5" /> },
     { href: "/services", label: "Services", icon: <Brush className="h-5 w-5" /> },
     { href: "/portfolio", label: "Portfolio", icon: <ImageIcon className="h-5 w-5" /> },
+    { href: "/blog", label: "Blog", icon: <BookOpen className="h-5 w-5" /> },
     { href: "/contact", label: "Contact", icon: <Phone className="h-5 w-5" /> },
     ...(session ? [{ href: "/profile", label: "Profile", icon: <User className="h-5 w-5" /> }] : []),
   ]

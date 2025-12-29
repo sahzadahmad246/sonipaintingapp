@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useSession } from "next-auth/react"
 import { signOut } from "next-auth/react"
-import { LayoutDashboard, FileText, Briefcase, Camera, Shield, Settings, DollarSign, LogOut, Mail, Star } from "lucide-react"
+import { LayoutDashboard, FileText, Briefcase, Camera, Shield, Settings, DollarSign, LogOut, Mail, Star, BookOpen } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -59,6 +59,13 @@ export default function DashboardSidebar({ pendingQuotations = 0 }: DashboardSid
             >
               <Briefcase className="h-5 w-5 mr-3 text-gray-500 group-hover:text-gray-700" />
               Projects
+            </Link>
+            <Link
+              href="/dashboard/blog"
+              className="flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900 group transition-colors"
+            >
+              <BookOpen className="h-5 w-5 mr-3 text-gray-500 group-hover:text-gray-700" />
+              Blog
             </Link>
             <Link
               href="/dashboard/invoices"

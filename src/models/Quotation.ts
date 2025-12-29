@@ -5,6 +5,10 @@ export interface IQuotation extends Document {
   clientName: string;
   clientAddress: string;
   clientNumber: string;
+  clientMobile?: {
+    countryCode: string;
+    number: string;
+  };
   date: Date;
   items: {
     description: string;
@@ -34,6 +38,10 @@ const QuotationSchema: Schema = new Schema({
   clientName: { type: String, required: true },
   clientAddress: { type: String, required: true },
   clientNumber: { type: String, required: true },
+  clientMobile: {
+    countryCode: { type: String, default: "+91" },
+    number: { type: String },
+  },
   date: { type: Date, required: true },
   items: [
     {

@@ -16,7 +16,8 @@ import {
   Plus,
   DollarSign,
   MessageSquare,
-  Star
+  Star,
+  BookOpen
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -145,6 +146,13 @@ export default function DashboardMobileNav({
               >
                 <Star className="h-5 w-5 mr-3" />
                 <span className="text-base font-medium">Reviews</span>
+              </Link>
+              <Link
+                href="/dashboard/blog"
+                className="flex items-center p-3 rounded-md hover:bg-gray-100"
+              >
+                <BookOpen className="h-5 w-5 mr-3" />
+                <span className="text-base font-medium">Blog</span>
               </Link>
               <Link
                 href="/dashboard/audit-logs"

@@ -375,11 +375,49 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
       try {
         if (isEditMode && effectiveQuotationNumber) {
           const data = await apiFetch<Quotation>(`/quotations/${effectiveQuotationNumber}`)
+
+          let countryCode = "+91";
+          let number = "";
+
+          if (data.clientMobile && data.clientMobile.countryCode && data.clientMobile.number) {
+            countryCode = data.clientMobile.countryCode;
+            number = data.clientMobile.number;
+          } else if (data.clientNumber) {
+            // Legacy fallback if clientMobile is not set
+            const matchedCode = COUNTRY_CODES.find(c => data.clientNumber.startsWith(c.code));
+            if (matchedCode) {
+              countryCode = matchedCode.code;
+              number = data.clientNumber.slice(matchedCode.code.length);
+            } else {
+              // Best guess or just put everything in number?
+              // The user said "auto prefilled key country code and number gets filled in the number filed".
+              // This implies the previous logic wasn't splitting correctly.
+              // Let's rely on string matching.
+              const match = data.clientNumber.match(/^(\+\d+)(\d+)$/);
+              if (match) {
+                // Try to match against known codes
+                const potentialCode = match[1];
+                const known = COUNTRY_CODES.find(c => c.code === potentialCode);
+                if (known) {
+                  countryCode = known.code;
+                  number = data.clientNumber.replace(known.code, "");
+                } else {
+                  // Fallback: If starts with +, assume it tries to be a code
+                  countryCode = "+91";
+                  number = data.clientNumber.replace(/^\+91/, "");
+                }
+              } else {
+                // No plus?
+                number = data.clientNumber;
+              }
+            }
+          }
+
           reset({
             clientName: data.clientName,
             clientAddress: data.clientAddress,
-            clientNumber: data.clientNumber.replace(/^\+\d+/, "") || "",
-            countryCode: data.clientNumber.match(/^\+\d+/)?.[0] || "+91",
+            clientNumber: number,
+            countryCode: countryCode,
             date: new Date(data.date).toISOString().split("T")[0],
             items: data.items.map((item) => ({
               description: item.description,
@@ -436,7 +474,11 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
 
       formData.append("clientName", data.clientName)
       formData.append("clientAddress", data.clientAddress)
-      formData.append("clientNumber", `${data.countryCode}${data.clientNumber}`)
+      // Send both legacy string and new object structure
+      const fullNumber = `${data.countryCode}${data.clientNumber}`;
+      formData.append("clientNumber", fullNumber)
+      formData.append("clientMobile[countryCode]", data.countryCode)
+      formData.append("clientMobile[number]", data.clientNumber)
       formData.append("date", data.date instanceof Date ? data.date.toISOString() : data.date)
       formData.append("items", JSON.stringify(data.items))
       formData.append("discount", data.discount.toString())
@@ -448,16 +490,16 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
 
       formData.append("subtotal", data.subtotal.toString())
       formData.append("grandTotal", data.grandTotal.toString())
-      ;(data.siteImages || []).forEach(
-        (img: { file?: File; url?: string; publicId?: string; description?: string }, index: number) => {
-          if (img.file) {
-            formData.append(`siteImages[${index}]`, img.file)
-            if (img.description) {
-              formData.append(`siteImages[${index}].description`, img.description)
+        ; (data.siteImages || []).forEach(
+          (img: { file?: File; url?: string; publicId?: string; description?: string }, index: number) => {
+            if (img.file) {
+              formData.append(`siteImages[${index}]`, img.file)
+              if (img.description) {
+                formData.append(`siteImages[${index}].description`, img.description)
+              }
             }
-          }
-        },
-      )
+          },
+        )
 
       const existingImages = (data.siteImages || [])
         .filter((img) => img.url && img.publicId)
@@ -665,9 +707,8 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                             <Input
                               {...field}
                               placeholder="Enter client name"
-                              className={`h-10 sm:h-11 rounded-xl bg-muted/30 transition-all focus:bg-background ${
-                                errors.clientName ? "border-destructive focus-visible:ring-destructive" : ""
-                              }`}
+                              className={`h-10 sm:h-11 rounded-xl bg-muted/30 transition-all focus:bg-background ${errors.clientName ? "border-destructive focus-visible:ring-destructive" : ""
+                                }`}
                             />
                           )}
                         />
@@ -708,9 +749,8 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                               <Input
                                 {...field}
                                 placeholder="Phone number"
-                                className={`h-10 sm:h-11 flex-1 rounded-xl bg-muted/30 transition-all focus:bg-background ${
-                                  errors.clientNumber ? "border-destructive focus-visible:ring-destructive" : ""
-                                }`}
+                                className={`h-10 sm:h-11 flex-1 rounded-xl bg-muted/30 transition-all focus:bg-background ${errors.clientNumber ? "border-destructive focus-visible:ring-destructive" : ""
+                                  }`}
                               />
                             )}
                           />
@@ -733,9 +773,8 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                           <Textarea
                             {...field}
                             placeholder="Enter complete billing address"
-                            className={`min-h-[80px] sm:min-h-[100px] resize-none rounded-xl bg-muted/30 transition-all focus:bg-background ${
-                              errors.clientAddress ? "border-destructive focus-visible:ring-destructive" : ""
-                            }`}
+                            className={`min-h-[80px] sm:min-h-[100px] resize-none rounded-xl bg-muted/30 transition-all focus:bg-background ${errors.clientAddress ? "border-destructive focus-visible:ring-destructive" : ""
+                              }`}
                           />
                         )}
                       />
@@ -1031,9 +1070,8 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                                   <Input
                                     {...field}
                                     placeholder="Item description"
-                                    className={`h-10 rounded-lg border-transparent bg-transparent font-medium transition-all hover:border-input hover:bg-muted/30 focus:border-input focus:bg-background ${
-                                      errors.items?.[index]?.description ? "border-destructive" : ""
-                                    }`}
+                                    className={`h-10 rounded-lg border-transparent bg-transparent font-medium transition-all hover:border-input hover:bg-muted/30 focus:border-input focus:bg-background ${errors.items?.[index]?.description ? "border-destructive" : ""
+                                      }`}
                                   />
                                 )}
                               />
@@ -1157,9 +1195,8 @@ export default function QuotationForm({ quotationNumber }: QuotationFormProps) {
                                 <Input
                                   {...field}
                                   placeholder="Item description"
-                                  className={`h-10 rounded-xl bg-muted/30 mb-2 ${
-                                    errors.items?.[index]?.description ? "border-destructive" : ""
-                                  }`}
+                                  className={`h-10 rounded-xl bg-muted/30 mb-2 ${errors.items?.[index]?.description ? "border-destructive" : ""
+                                    }`}
                                 />
                               )}
                             />

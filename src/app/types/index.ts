@@ -5,6 +5,10 @@ export interface Quotation {
   clientName: string;
   clientAddress: string;
   clientNumber: string;
+  clientMobile?: {
+    countryCode: string;
+    number: string;
+  };
   date: string | Date;
   items: {
     description: string;
@@ -137,8 +141,8 @@ export interface GeneralInfo {
   publicId?: string;
   siteName: string;
   gstNumber?: string;
-  gstPercent?: number; 
-  termsAndConditions?: string[]; 
+  gstPercent?: number;
+  termsAndConditions?: string[];
   mobileNumber1: string;
   mobileNumber2?: string;
   address: string;
