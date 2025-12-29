@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import ServicesDisplay from "@/components/services/ServicesDisplay";
 import { Metadata } from "next";
 import { services } from "../lib/servicesData";
 
 // Define metadata for SEO
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Soni Painting Services - Interior Contracting in Mumbai & Thane",
   description:
@@ -144,7 +146,9 @@ export default function ServicesPage() {
           tailored for homes and offices in Mumbai and Thane. From painting to
           false ceilings, we deliver quality and excellence.
         </p>
-        <ServicesDisplay />
+        <Suspense fallback={<div>Loading services...</div>}>
+          <ServicesDisplay />
+        </Suspense>
       </div>
     </section>
   );

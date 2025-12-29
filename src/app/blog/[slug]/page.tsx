@@ -24,7 +24,11 @@ async function getPost(slug: string): Promise<IPost | null> {
     await dbConnect();
 
     // Need to verify User model is registered for populate
-    const post = await Post.findOne({ slug, isPublished: true }).populate("author", "name image");
+    const post = await Post.findOneAndUpdate(
+        { slug, isPublished: true },
+        { $inc: { views: 1 } },
+        { new: true }
+    ).populate("author", "name image");
 
     if (!post) return null;
     return JSON.parse(JSON.stringify(post)); // Serialize for client

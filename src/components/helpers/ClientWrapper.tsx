@@ -1,8 +1,9 @@
 "use client";
 
 import type React from "react";
-import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useEffect, Suspense } from "react"; // Added Suspense
+import { toast } from "sonner";
 import { ThemeProvider } from "@/components/helpers/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import SessionWrapper from "@/components/helpers/SessionWrapper";
@@ -12,11 +13,32 @@ import DashboardSidebar from "../admin/dashboard-sidebar";
 import DashboardMobileNav from "../admin/dashboard-mobile-nav";
 import { initializeAccessibility } from "@/lib/accessibility";
 
+function SearchParamHandler() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    const error = searchParams?.get("error");
+    if (error === "unauthorized_admin") {
+      toast.error("Access Denied", {
+        description: "You do not have permission to access that page.",
+        duration: 5000,
+      });
+
+      const newParams = new URLSearchParams(searchParams.toString());
+      newParams.delete("error");
+      router.replace(pathname + (newParams.toString() ? `?${newParams.toString()}` : ""));
+    }
+  }, [searchParams, pathname, router]);
+
+  return null;
+}
+
 export default function ClientWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isDashboardRoute = pathname?.startsWith("/dashboard");
 
-  // Initialize accessibility features
   useEffect(() => {
     initializeAccessibility({
       skipToContent: true,
@@ -29,10 +51,12 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
   return (
     <SessionWrapper>
       <ThemeProvider>
-        {/* Show Navbar on non-dashboard routes */}
+        <Suspense fallback={null}>
+          <SearchParamHandler />
+        </Suspense>
+
         {!isDashboardRoute && <Navbar />}
 
-        {/* Show Dashboard Sidebar on dashboard routes (desktop only) */}
         {isDashboardRoute && <DashboardSidebar />}
 
         <main
@@ -41,7 +65,6 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
           {children}
         </main>
 
-        {/* Show appropriate mobile navigation based on route */}
         {isDashboardRoute ? <DashboardMobileNav /> : <MobileNav />}
 
         <Toaster position="top-right" richColors />

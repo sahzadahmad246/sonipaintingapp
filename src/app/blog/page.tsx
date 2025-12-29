@@ -111,7 +111,7 @@ export default async function BlogPage({
                         {/* Featured Post (Hero) */}
                         {featuredPost && (
                             <div className="mb-16">
-                                <Link href={`/blog/${featuredPost.slug}`} className="group relative block rounded-3xl overflow-hidden shadow-xl aspect-[21/9] min-h-[400px]">
+                                <Link href={`/blog/${featuredPost.slug}`} className="group relative block rounded-3xl overflow-hidden shadow-xl aspect-[16/9] md:aspect-[21/9] min-h-[250px] md:min-h-[400px] w-full max-w-full">
                                     <Image
                                         src={featuredPost.coverImage}
                                         alt={featuredPost.title}

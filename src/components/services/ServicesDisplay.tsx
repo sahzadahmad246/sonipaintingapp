@@ -22,10 +22,10 @@ export default function ServicesDisplay() {
   };
 
   return (
-    <section className="py-16 bg-background">
-      <div className="container mx-auto px-4">
+    <section className="py-8 sm:py-16 bg-background">
+      <div className="container mx-auto px-2 sm:px-4">
         <motion.h2
-          className="text-3xl md:text-4xl font-bold text-center mb-8"
+          className="text-2xl md:text-4xl font-bold text-center mb-6 sm:mb-8"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
@@ -33,7 +33,7 @@ export default function ServicesDisplay() {
           Our Services
         </motion.h2>
         <ServiceSearch onSearch={handleSearch} />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mt-6 sm:mt-8">
           {filteredServices.length > 0 ? (
             filteredServices.map((service) => (
               <motion.div

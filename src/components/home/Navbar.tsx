@@ -7,7 +7,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { useSession, signIn, signOut } from "next-auth/react"
-import { User, LogOut, LogIn, LayoutDashboard, Menu } from "lucide-react"
+import { User, LogOut, LogIn, LayoutDashboard } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   NavigationMenu,
@@ -24,7 +24,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 
 interface CustomNavLinkProps {
   href: string
@@ -55,8 +54,7 @@ const CustomNavLink = ({ href, children, className, ...props }: CustomNavLinkPro
 export default function Navbar() {
   const { data: session } = useSession()
   const [isScrolled, setIsScrolled] = useState(false)
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const pathname = usePathname()
+  
 
   useEffect(() => {
     const handleScroll = () => {
@@ -112,41 +110,7 @@ export default function Navbar() {
             </NavigationMenuList>
           </NavigationMenu>
 
-          <div className="md:hidden">
-            <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden">
-                  <Menu className="h-5 w-5" />
-                  <span className="sr-only">Toggle menu</span>
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-[250px] sm:w-[300px]">
-                <div className="flex flex-col gap-6 py-6">
-                  <div className="flex items-center">
-                    <Image src="/logo.png" alt="PaintPro Logo" width={40} height={30} className="w-[40px] h-auto" />
-                    <span className="ml-2 font-bold text-lg text-primary">SoniPainting</span>
-                  </div>
-                  <nav className="flex flex-col gap-4">
-                    {navItems.map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className={cn(
-                          "px-2 py-2 text-base rounded-md transition-colors",
-                          pathname === item.href
-                            ? "bg-primary/10 text-primary font-medium"
-                            : "text-gray-600 hover:text-primary hover:bg-primary/5",
-                        )}
-                        onClick={() => setIsMobileMenuOpen(false)}
-                      >
-                        {item.label}
-                      </Link>
-                    ))}
-                  </nav>
-                </div>
-              </SheetContent>
-            </Sheet>
-          </div>
+
 
           {session ? (
             <DropdownMenu>

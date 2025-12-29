@@ -84,7 +84,7 @@ export const services: Service[] = [
     id: "false-ceiling",
     title: "False Ceiling",
     description: "Modern false ceiling designs for aesthetics and functionality.",
-    icon: "CeilingLight",
+    icon: "LampCeiling",
     image: "/images/false-ceiling.jpg",
     slug: "false-ceiling",
     details: {
