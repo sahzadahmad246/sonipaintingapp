@@ -62,7 +62,7 @@ export default async function BlogPage({
             <div className="bg-gray-50 border-b border-gray-100">
                 <div className="max-w-7xl mx-auto px-4 py-16 sm:px-6 lg:px-8 text-center">
                     <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl sm:tracking-tight lg:text-6xl">
-                        Our Blog
+                        Blog List
                     </h1>
                     <p className="mt-5 max-w-xl mx-auto text-xl text-gray-500">
                         Insights, tips, and updates from the Soni Painting team.
@@ -252,7 +252,7 @@ function SectionHeader({ title, href }: { title: string, href?: string }) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function BlogCard({ post }: { post: any }) {
     return (
-        <Link href={`/blog/${post.slug}`} className="group bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 ring-1 ring-gray-200 overflow-hidden flex flex-col h-full">
+        <Link href={`/blog/${post.slug}`} className="group bg-white md:rounded-xl shadow-none md:shadow-sm hover:shadow-md transition-all duration-300 border-b md:border md:ring-1 md:ring-gray-200 overflow-hidden flex flex-col h-full">
             <div className="relative h-48 w-full overflow-hidden">
                 <Image
                     src={post.coverImage}
@@ -284,7 +284,7 @@ function BlogCard({ post }: { post: any }) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function BlogCardHorizontal({ post }: { post: any }) {
     return (
-        <Link href={`/blog/${post.slug}`} className="group flex flex-col sm:flex-row bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 ring-1 ring-gray-200 overflow-hidden h-full sm:h-44">
+        <Link href={`/blog/${post.slug}`} className="group flex flex-col sm:flex-row bg-white md:rounded-xl shadow-none border-b md:border md:shadow-sm hover:shadow-md transition-all duration-300 md:ring-1 md:ring-gray-200 overflow-hidden h-full sm:h-44">
             <div className="relative h-44 w-full sm:w-64 max-w-full overflow-hidden shrink-0">
                 <Image
                     src={post.coverImage}

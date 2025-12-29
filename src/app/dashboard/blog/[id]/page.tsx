@@ -85,7 +85,6 @@ export default function EditBlogPost({ params }: { params: Promise<{ id: string 
             }
         };
         if (id) fetchPost();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id, reset, router]);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

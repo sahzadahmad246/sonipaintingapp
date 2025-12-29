@@ -17,7 +17,8 @@ import {
   DollarSign,
   MessageSquare,
   Star,
-  BookOpen
+  BookOpen,
+  User as UserIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -112,6 +113,15 @@ export default function DashboardMobileNav({
           </SheetTrigger>
           <SheetContent side="bottom" className="h-[50vh]">
             <div className="grid grid-cols-1 gap-4 pt-6">
+              <Link
+                href="/profile"
+                className="flex items-center p-3 rounded-md hover:bg-gray-100"
+              >
+                <div className="bg-primary/10 p-1 rounded-full mr-3">
+                  <UserIcon className="h-4 w-4 text-primary" />
+                </div>
+                <span className="text-base font-medium">Profile</span>
+              </Link>
               <Link
                 href="/dashboard/invoices"
                 className="flex items-center p-3 rounded-md hover:bg-gray-100"

@@ -12,6 +12,11 @@ export const metadata: Metadata = {
   title: "Soni Painting- Interior Contractor",
   description: "Interior painting, POP, carpentry, and tiling services",
   manifest: "/manifest.json",
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+    shortcut: '/logo.png',
+  },
 };
 
 export default function RootLayout({

@@ -30,16 +30,8 @@ import {
 } from "@/components/ui/card";
 import { apiFetch } from "@/app/lib/api";
 import type { Quotation, Project, Invoice, ApiError } from "@/app/types";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
@@ -175,46 +167,6 @@ export default function Dashboard() {
             <Button variant="outline" size="icon" className="rounded-full">
               <Bell className="h-4 w-4" />
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-full md:hidden"
-                >
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={session.user.image || ""} />
-                    <AvatarFallback>
-                      {session.user.name?.charAt(0) || "A"}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/profile" className="flex items-center">
-                    <Avatar className="h-4 w-4 mr-2">
-                      <AvatarImage src={session.user.image || ""} />
-                      <AvatarFallback>
-                        {session.user.name?.charAt(0) || "A"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span>Profile</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link
-                    href="/dashboard/settings"
-                    className="flex items-center"
-                  >
-                    <DollarSign className="mr-2 h-4 w-4" />
-                    <span>Settings</span>
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </div>
       </header>
@@ -260,7 +212,7 @@ export default function Dashboard() {
               transition={{ duration: 0.5 }}
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
             >
-              <Card className="shadow-sm border-l-4 border-l-primary">
+              <Card className="shadow-none border-b rounded-none sm:shadow-sm sm:border sm:border-l-4 sm:rounded-xl sm:border-l-primary mb-4 sm:mb-0">
                 <CardHeader className="pb-2">
                   <CardDescription>Total Quotations</CardDescription>
                 </CardHeader>
@@ -273,7 +225,7 @@ export default function Dashboard() {
                   </div>
                 </CardContent>
               </Card>
-              <Card className="shadow-sm border-l-4 border-l-yellow-500">
+              <Card className="shadow-none border-b rounded-none sm:shadow-sm sm:border sm:border-l-4 sm:rounded-xl sm:border-l-yellow-500 mb-4 sm:mb-0">
                 <CardHeader className="pb-2">
                   <CardDescription>Pending Quotations</CardDescription>
                 </CardHeader>
@@ -286,7 +238,7 @@ export default function Dashboard() {
                   </div>
                 </CardContent>
               </Card>
-              <Card className="shadow-sm border-l-4 border-l-green-500">
+              <Card className="shadow-none border-b rounded-none sm:shadow-sm sm:border sm:border-l-4 sm:rounded-xl sm:border-l-green-500 mb-4 sm:mb-0">
                 <CardHeader className="pb-2">
                   <CardDescription>Accepted Quotations</CardDescription>
                 </CardHeader>
@@ -299,7 +251,7 @@ export default function Dashboard() {
                   </div>
                 </CardContent>
               </Card>
-              <Card className="shadow-sm border-l-4 border-l-blue-500">
+              <Card className="shadow-none border-b rounded-none sm:shadow-sm sm:border sm:border-l-4 sm:rounded-xl sm:border-l-blue-500 mb-4 sm:mb-0">
                 <CardHeader className="pb-2">
                   <CardDescription>Total Projects</CardDescription>
                 </CardHeader>
@@ -317,7 +269,7 @@ export default function Dashboard() {
         </div>
 
         <div className="flex flex-col gap-6">
-          <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-none bg-white/50 backdrop-blur-sm">
+          <Card className="shadow-none border-t border-b sm:border sm:shadow-sm sm:rounded-xl hover:shadow-md transition-all duration-200 bg-white/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="text-lg flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -379,7 +331,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-none bg-white/50 backdrop-blur-sm">
+          <Card className="shadow-none border-t border-b sm:border sm:shadow-sm sm:rounded-xl hover:shadow-md transition-all duration-200 bg-white/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="text-lg flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -464,7 +416,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-none bg-white/50 backdrop-blur-sm">
+          <Card className="shadow-none border-t border-b sm:border sm:shadow-sm sm:rounded-xl hover:shadow-md transition-all duration-200 bg-white/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="text-lg flex items-center justify-between">
                 <div className="flex items-center gap-2">

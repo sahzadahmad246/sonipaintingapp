@@ -110,9 +110,9 @@ export default async function BlogPostPage({ params }: Props) {
                 />
             </div>
 
-            <main className="max-w-4xl mx-auto px-6 relative z-10 -mt-20 md:-mt-24 pointer-events-none">
-                {/* Content Wrapper - Overlapping the image slightly for modern look */}
-                <div className="bg-white rounded-t-3xl p-6 md:p-12 shadow-xl min-h-[200px] pointer-events-auto">
+            <main className="w-full md:max-w-4xl md:mx-auto relative z-10 md:-mt-24 pointer-events-none md:px-6">
+                {/* Content Wrapper - Full width on mobile, boxed on desktop */}
+                <div className="bg-white md:rounded-t-3xl p-6 md:p-12 md:shadow-xl min-h-[200px] pointer-events-auto border-t md:border-t-0">
 
                     <div className="mb-8">
                         <Link href="/blog" className="inline-flex items-center text-sm font-medium text-primary hover:text-primary/80 mb-6 transition-colors group">
