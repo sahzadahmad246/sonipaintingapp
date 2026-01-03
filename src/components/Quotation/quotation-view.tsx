@@ -21,6 +21,7 @@ import {
   AlertCircle,
   ExternalLink,
   Building,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
@@ -91,6 +92,25 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
     Promise.all([fetchQuotation(), fetchGeneralInfo()]).finally(() => setLoading(false))
   }, [quotationNumber, fetchQuotation, fetchGeneralInfo, status])
 
+  const getErrorMessage = (error: unknown): string => {
+    if (!error) return "An unexpected error occurred"
+    const errorObj = error as { error?: unknown; message?: string }
+    const errorValue = errorObj.error
+    if (typeof errorValue === "string") {
+      return errorValue
+    }
+    if (Array.isArray(errorValue)) {
+      return errorValue.map((e: { message?: string }) => e.message || String(e)).join(", ")
+    }
+    if (typeof errorValue === "object" && errorValue !== null) {
+      return (errorValue as { message?: string }).message || JSON.stringify(errorValue)
+    }
+    if (errorObj.message) {
+      return errorObj.message
+    }
+    return "An unexpected error occurred"
+  }
+
   const handleAccept = async () => {
     if (!quotation) return
     setIsUpdating(true)
@@ -104,8 +124,7 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
       setQuotation((prev) => (prev ? { ...prev, ...data } : data))
       toast.success("Quotation accepted!")
     } catch (error: unknown) {
-      const apiError = error as ApiError
-      toast.error(apiError.error || "Failed to accept quotation")
+      toast.error(getErrorMessage(error))
     } finally {
       setIsUpdating(false)
     }
@@ -124,8 +143,7 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
       setQuotation((prev) => (prev ? { ...prev, ...data } : data))
       toast.success("Quotation rejected!")
     } catch (error: unknown) {
-      const apiError = error as ApiError
-      toast.error(apiError.error || "Failed to reject quotation")
+      toast.error(getErrorMessage(error))
     } finally {
       setIsUpdating(false)
     }
@@ -319,7 +337,12 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
                     size="sm"
                     className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
                   >
-                    <CheckCheck className="mr-1.5 h-4 w-4" /> Accept
+                    {isUpdating ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCheck className="mr-1.5 h-4 w-4" />
+                    )}
+                    Accept
                   </Button>
                   <Button
                     onClick={handleReject}
@@ -328,7 +351,12 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
                     size="sm"
                     className="rounded-lg"
                   >
-                    <XCircle className="mr-1.5 h-4 w-4" /> Reject
+                    {isUpdating ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <XCircle className="mr-1.5 h-4 w-4" />
+                    )}
+                    Reject
                   </Button>
                 </div>
               </div>

@@ -75,14 +75,21 @@ export async function PUT(
       userId = "temporary-placeholder"; // Will be replaced with actual creator ID
     }
 
+    // Only build clientMobile object if data is actually provided
+    const mobileNumber = sanitizeToString(formData.get("clientMobile[number]"));
+    const mobileCountryCode = sanitizeToString(formData.get("clientMobile[countryCode]"));
+    const clientMobileData = mobileNumber
+      ? {
+        countryCode: mobileCountryCode || "+91",
+        number: mobileNumber,
+      }
+      : undefined;
+
     const data: UpdateQuotationData = {
       clientName: sanitizeToString(formData.get("clientName")),
       clientAddress: sanitizeToString(formData.get("clientAddress")),
       clientNumber: sanitizeToString(formData.get("clientNumber")),
-      clientMobile: {
-        countryCode: sanitizeToString(formData.get("clientMobile[countryCode]")) || "+91",
-        number: sanitizeToString(formData.get("clientMobile[number]")) || "",
-      },
+      clientMobile: clientMobileData,
       date: sanitizeToString(formData.get("date"))
         ? new Date(sanitizeToString(formData.get("date"))!)
         : undefined,
@@ -178,7 +185,8 @@ export async function PUT(
 
     const parsed = updateQuotationSchema.safeParse(data);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.errors }, { status: 400 });
+      const errorMessages = parsed.error.errors.map((e) => e.message).join(", ");
+      return NextResponse.json({ error: errorMessages }, { status: 400 });
     }
 
     await dbConnect();
