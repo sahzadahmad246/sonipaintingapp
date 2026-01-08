@@ -1,3 +1,4 @@
+//src/app/dashboard/quotations/[quotationNumber]/page.tsx
 import QuotationView from "@/components/Quotation/quotation-view";
 
 interface EditQuotationPageProps {

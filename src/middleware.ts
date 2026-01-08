@@ -11,7 +11,7 @@ export default withAuth(
 
     // Check for admin role on dashboard routes
     // (Double check path because matcher catches them, but safe to check)
-    if (path.startsWith("/dashboard") || path.startsWith("/quotations") || path.startsWith("/projects") || path.startsWith("/settings")) {
+    if (path.startsWith("/dashboard") || path.startsWith("/projects") || path.startsWith("/settings")) {
       if (token?.role !== "admin") {
         const url = req.nextUrl.clone();
         url.pathname = "/";
@@ -39,5 +39,5 @@ export default withAuth(
 )
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/quotations/:path*", "/projects/:path*", "/invoices/:path*", "/portfolio/:path*", "/settings", "/audit-logs"],
+  matcher: ["/dashboard/:path*", "/projects/:path*", "/invoices/:path*", "/portfolio/:path*", "/settings", "/audit-logs"],
 };
