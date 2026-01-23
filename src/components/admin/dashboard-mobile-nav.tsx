@@ -18,10 +18,14 @@ import {
   MessageSquare,
   Star,
   BookOpen,
-  User as UserIcon
+  User as UserIcon,
+  Users,
+  Calendar,
+  Wallet,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 
 interface DashboardMobileNavProps {
@@ -77,6 +81,20 @@ export default function DashboardMobileNav({
     },
   ];
 
+  const moreItems = [
+    { href: "/profile", label: "Profile", icon: <UserIcon className="h-5 w-5" /> },
+    { href: "/dashboard/invoices", label: "Invoices", icon: <DollarSign className="h-5 w-5" /> },
+    { href: "/dashboard/expenses", label: "Expenses", icon: <Wallet className="h-5 w-5" /> },
+    { href: "/dashboard/staff", label: "Staff", icon: <Users className="h-5 w-5" /> },
+    { href: "/dashboard/attendance", label: "Attendance", icon: <Calendar className="h-5 w-5" /> },
+    { href: "/dashboard/portfolio", label: "Portfolio", icon: <Camera className="h-5 w-5" /> },
+    { href: "/dashboard/settings", label: "Settings", icon: <Settings className="h-5 w-5" /> },
+    { href: "/dashboard/contact", label: "Contact Messages", icon: <MessageSquare className="h-5 w-5" /> },
+    { href: "/dashboard/reviews", label: "Reviews", icon: <Star className="h-5 w-5" /> },
+    { href: "/dashboard/blog", label: "Blog", icon: <BookOpen className="h-5 w-5" /> },
+    { href: "/dashboard/audit-logs", label: "Audit Logs", icon: <Badge className="h-5 w-5" /> },
+  ];
+
   return (
     <motion.div
       className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 px-2 py-2"
@@ -111,74 +129,37 @@ export default function DashboardMobileNav({
             <MoreHorizontal className="h-5 w-5" />
             <span className="text-xs mt-1">More</span>
           </SheetTrigger>
-          <SheetContent side="bottom" className="h-[50vh]">
-            <div className="grid grid-cols-1 gap-4 pt-6">
-              <Link
-                href="/profile"
-                className="flex items-center p-3 rounded-md hover:bg-gray-100"
-              >
-                <div className="bg-primary/10 p-1 rounded-full mr-3">
-                  <UserIcon className="h-4 w-4 text-primary" />
-                </div>
-                <span className="text-base font-medium">Profile</span>
-              </Link>
-              <Link
-                href="/dashboard/invoices"
-                className="flex items-center p-3 rounded-md hover:bg-gray-100"
-              >
-                <DollarSign className="h-5 w-5 mr-3" />
-                <span className="text-base font-medium">Invoices</span>
-              </Link>
-              <Link
-                href="/dashboard/portfolio"
-                className="flex items-center p-3 rounded-md hover:bg-gray-100"
-              >
-                <Camera className="h-5 w-5 mr-3" />
-                <span className="text-base font-medium">Portfolio</span>
-              </Link>
-              <Link
-                href="/dashboard/settings"
-                className="flex items-center p-3 rounded-md hover:bg-gray-100"
-              >
-                <Settings className="h-5 w-5 mr-3" />
-                <span className="text-base font-medium">Settings</span>
-              </Link>
-              <Link
-                href="/dashboard/contact"
-                className="flex items-center p-3 rounded-md hover:bg-gray-100"
-              >
-                <MessageSquare className="h-5 w-5 mr-3" />
-                <span className="text-base font-medium">Contact Messages</span>
-              </Link>
-              <Link
-                href="/dashboard/reviews"
-                className="flex items-center p-3 rounded-md hover:bg-gray-100"
-              >
-                <Star className="h-5 w-5 mr-3" />
-                <span className="text-base font-medium">Reviews</span>
-              </Link>
-              <Link
-                href="/dashboard/blog"
-                className="flex items-center p-3 rounded-md hover:bg-gray-100"
-              >
-                <BookOpen className="h-5 w-5 mr-3" />
-                <span className="text-base font-medium">Blog</span>
-              </Link>
-              <Link
-                href="/dashboard/audit-logs"
-                className="flex items-center p-3 rounded-md hover:bg-gray-100"
-              >
-                <Badge className="h-5 w-5 mr-3" />
-                <span className="text-base font-medium">Audit Logs</span>
-              </Link>
-              <div className="border-t border-gray-200 my-2"></div>
-              <button
-                onClick={() => signOut({ callbackUrl: "/" })}
-                className="flex items-center p-3 rounded-md hover:bg-gray-100 text-red-500 w-full text-left"
-              >
-                <LogOut className="h-5 w-5 mr-3" />
-                <span className="text-base font-medium">Sign Out</span>
-              </button>
+          <SheetContent side="bottom" className="h-[95vh] sm:h-full p-0">
+            <div className="flex items-center justify-between p-4 border-b">
+              <span className="font-semibold text-lg">Menu</span>
+              <SheetClose>
+                <X className="h-6 w-6 text-gray-500" />
+              </SheetClose>
+            </div>
+            <div className="overflow-y-auto max-h-[calc(95vh-60px)] p-4">
+              <div className="grid grid-cols-1 gap-2">
+                {moreItems.map((item) => (
+                  <SheetClose key={item.href} asChild>
+                    <Link
+                      href={item.href}
+                      className="flex items-center p-3 rounded-md hover:bg-gray-100"
+                    >
+                      <div className="text-gray-500 mr-3">{item.icon}</div>
+                      <span className="text-base font-medium">{item.label}</span>
+                    </Link>
+                  </SheetClose>
+                ))}
+                <div className="border-t border-gray-200 my-2"></div>
+                <SheetClose asChild>
+                  <button
+                    onClick={() => signOut({ callbackUrl: "/" })}
+                    className="flex items-center p-3 rounded-md hover:bg-gray-100 text-red-500 w-full text-left"
+                  >
+                    <LogOut className="h-5 w-5 mr-3" />
+                    <span className="text-base font-medium">Sign Out</span>
+                  </button>
+                </SheetClose>
+              </div>
             </div>
           </SheetContent>
         </Sheet>

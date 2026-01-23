@@ -98,7 +98,7 @@ export default function AddStaffDialog({
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <UserPlus className="w-5 h-5 text-orange-500" />
+                        <UserPlus className="w-5 h-5 text-black" />
                         Add New Staff
                     </DialogTitle>
                 </DialogHeader>
@@ -200,7 +200,7 @@ export default function AddStaffDialog({
                         <Button
                             type="submit"
                             disabled={loading}
-                            className="bg-orange-500 hover:bg-orange-600"
+                            className="bg-black hover:bg-black/90 text-white"
                         >
                             {loading ? (
                                 <>

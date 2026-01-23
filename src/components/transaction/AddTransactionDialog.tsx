@@ -124,8 +124,8 @@ export default function AddTransactionDialog({
                             variant={type === "credit" ? "default" : "outline"}
                             className={
                                 type === "credit"
-                                    ? "bg-green-500 hover:bg-green-600"
-                                    : "hover:bg-green-50 hover:text-green-600 hover:border-green-300"
+                                    ? "bg-black text-white hover:bg-black/90"
+                                    : "hover:bg-gray-100 hover:text-black hover:border-black"
                             }
                             onClick={() => setType("credit")}
                         >
@@ -137,8 +137,8 @@ export default function AddTransactionDialog({
                             variant={type === "debit" ? "default" : "outline"}
                             className={
                                 type === "debit"
-                                    ? "bg-red-500 hover:bg-red-600"
-                                    : "hover:bg-red-50 hover:text-red-600 hover:border-red-300"
+                                    ? "bg-black text-white hover:bg-black/90"
+                                    : "hover:bg-gray-100 hover:text-black hover:border-black"
                             }
                             onClick={() => setType("debit")}
                         >
@@ -221,11 +221,7 @@ export default function AddTransactionDialog({
                         <Button
                             type="submit"
                             disabled={loading}
-                            className={
-                                type === "credit"
-                                    ? "bg-green-500 hover:bg-green-600"
-                                    : "bg-red-500 hover:bg-red-600"
-                            }
+                            className="bg-black hover:bg-black/90 text-white"
                         >
                             {loading ? (
                                 <>

@@ -9,14 +9,14 @@ import {
     MapPin,
     Trash2,
     Clock,
-    User,
     Building2,
     ChevronLeft,
     ChevronRight,
+    Users,
+    MoreVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
     Select,
     SelectContent,
@@ -29,9 +29,16 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -42,7 +49,6 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import StaffHistoryDialog from "./StaffHistoryDialog";
 
@@ -77,10 +83,10 @@ interface AttendanceRecord {
 }
 
 const HAJIRI_OPTIONS = [
-    { value: "0.5", label: "0.5 (Half Day)" },
-    { value: "1", label: "1 (Full Day)" },
-    { value: "1.5", label: "1.5 (Overtime)" },
-    { value: "2", label: "2 (Double Shift)" },
+    { value: "0.5", label: "0.5" },
+    { value: "1", label: "1" },
+    { value: "1.5", label: "1.5" },
+    { value: "2", label: "2" },
 ];
 
 export default function AttendanceSheet() {
@@ -93,9 +99,11 @@ export default function AttendanceSheet() {
     const [deleting, setDeleting] = useState(false);
     const [saving, setSaving] = useState(false);
     const [historyStaff, setHistoryStaff] = useState<Staff | null>(null);
+    const [isDateDialogOpen, setIsDateDialogOpen] = useState(false);
 
     // Date selection
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
+    const [tempDate, setTempDate] = useState("");
 
     // Add form state
     const [selectedStaffId, setSelectedStaffId] = useState("");
@@ -228,6 +236,18 @@ export default function AttendanceSheet() {
         setSelectedDate(date.toISOString().split("T")[0]);
     };
 
+    const openDateDialog = () => {
+        setTempDate(selectedDate);
+        setIsDateDialogOpen(true);
+    };
+
+    const applyDateFilter = () => {
+        if (tempDate) {
+            setSelectedDate(tempDate);
+        }
+        setIsDateDialogOpen(false);
+    };
+
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat("en-IN", {
             style: "currency",
@@ -236,13 +256,20 @@ export default function AttendanceSheet() {
         }).format(amount);
     };
 
+    const formatCurrencyShort = (amount: number) => {
+        if (amount >= 100000) {
+            return `₹${(amount / 100000).toFixed(1)}L`;
+        } else if (amount >= 1000) {
+            return `₹${(amount / 1000).toFixed(1)}K`;
+        }
+        return `₹${amount}`;
+    };
+
     const formatDisplayDate = (dateStr: string) => {
         const date = new Date(dateStr);
         return date.toLocaleDateString("en-IN", {
-            weekday: "long",
             day: "2-digit",
-            month: "long",
-            year: "numeric",
+            month: "short",
         });
     };
 
@@ -257,222 +284,212 @@ export default function AttendanceSheet() {
     );
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-4 md:p-6">
-            <div className="max-w-5xl mx-auto space-y-6">
-                {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                        <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                            Attendance Sheet
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pb-20">
+            <div className="max-w-5xl mx-auto">
+                {/* Header - Compact */}
+                <div className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900 px-4 pt-4 pb-2">
+                    <div className="flex items-center justify-between">
+                        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">
+                            Attendance
                         </h1>
-                        <p className="text-slate-600 dark:text-slate-400 mt-1">
-                            Mark daily hajiri for your workers
-                        </p>
+                        <Button
+                            onClick={() => setIsAddDialogOpen(true)}
+                            size="icon"
+                            className="bg-black hover:bg-black/90 text-white h-9 w-9"
+                        >
+                            <Plus className="w-5 h-5" />
+                        </Button>
                     </div>
-                    <Button
-                        onClick={() => setIsAddDialogOpen(true)}
-                        className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-                    >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Mark Attendance
-                    </Button>
+
+                    {/* Date Navigation */}
+                    <div className="flex items-center justify-between mt-3 bg-white dark:bg-slate-800 rounded-lg p-2 border border-slate-200 dark:border-slate-700">
+                        <Button variant="ghost" size="icon" onClick={() => changeDate(-1)} className="h-8 w-8">
+                            <ChevronLeft className="w-4 h-4" />
+                        </Button>
+                        <button
+                            onClick={openDateDialog}
+                            className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300"
+                        >
+                            <Calendar className="w-4 h-4" />
+                            {formatDisplayDate(selectedDate)}
+                        </button>
+                        <Button variant="ghost" size="icon" onClick={() => changeDate(1)} className="h-8 w-8">
+                            <ChevronRight className="w-4 h-4" />
+                        </Button>
+                    </div>
                 </div>
 
-                {/* Date Selector */}
-                <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-slate-200 dark:border-slate-700">
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                            <Button variant="outline" size="icon" onClick={() => changeDate(-1)}>
-                                <ChevronLeft className="w-4 h-4" />
-                            </Button>
-                            <div className="flex items-center gap-4">
-                                <Calendar className="w-5 h-5 text-purple-500" />
-                                <div className="text-center">
-                                    <Input
-                                        type="date"
-                                        value={selectedDate}
-                                        onChange={(e) => setSelectedDate(e.target.value)}
-                                        className="w-auto text-center font-medium"
-                                    />
-                                    <p className="text-sm text-slate-500 mt-1">
-                                        {formatDisplayDate(selectedDate)}
-                                    </p>
-                                </div>
+                {/* Stats - Compact Row */}
+                <div className="px-4 py-3">
+                    <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-2.5 border border-slate-200 dark:border-slate-700">
+                            <div className="flex items-center gap-1 mb-1">
+                                <Clock className="w-3 h-3 text-purple-600" />
+                                <span className="text-[10px] text-slate-500 uppercase">Hajiri</span>
                             </div>
-                            <Button variant="outline" size="icon" onClick={() => changeDate(1)}>
-                                <ChevronRight className="w-4 h-4" />
-                            </Button>
+                            <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                                {dayTotals.hajiri}
+                            </p>
                         </div>
-                    </CardContent>
-                </Card>
-
-                {/* Day Summary */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                        <Card className="bg-gradient-to-br from-purple-500 to-pink-600 text-white border-0 shadow-lg">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                    <Clock className="w-4 h-4" />
-                                    Total Hajiri
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-3xl font-bold">{dayTotals.hajiri}</p>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                        <Card className="bg-gradient-to-br from-green-500 to-emerald-600 text-white border-0 shadow-lg">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                    <IndianRupee className="w-4 h-4" />
-                                    Day Earnings
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-3xl font-bold">{formatCurrency(dayTotals.earnings)}</p>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                        <Card className="bg-gradient-to-br from-orange-500 to-amber-600 text-white border-0 shadow-lg">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                    <IndianRupee className="w-4 h-4" />
-                                    Advance Given
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-3xl font-bold">{formatCurrency(dayTotals.advance)}</p>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-2.5 border border-slate-200 dark:border-slate-700">
+                            <div className="flex items-center gap-1 mb-1">
+                                <IndianRupee className="w-3 h-3 text-green-600" />
+                                <span className="text-[10px] text-slate-500 uppercase">Earnings</span>
+                            </div>
+                            <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                                {formatCurrencyShort(dayTotals.earnings)}
+                            </p>
+                        </div>
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-2.5 border border-slate-200 dark:border-slate-700">
+                            <div className="flex items-center gap-1 mb-1">
+                                <IndianRupee className="w-3 h-3 text-orange-600" />
+                                <span className="text-[10px] text-slate-500 uppercase">Advance</span>
+                            </div>
+                            <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                                {formatCurrencyShort(dayTotals.advance)}
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Attendance List */}
-                <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-slate-200 dark:border-slate-700">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <User className="w-5 h-5" />
-                            Attendance Records
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {loading ? (
-                            <div className="flex justify-center py-12">
-                                <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-                            </div>
-                        ) : attendance.length === 0 ? (
-                            <div className="text-center py-12 text-slate-500">
-                                <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                                <p>No attendance recorded for this day</p>
-                                <Button
-                                    onClick={() => setIsAddDialogOpen(true)}
-                                    variant="link"
-                                    className="text-purple-600 mt-2"
-                                >
-                                    Mark attendance now
-                                </Button>
-                            </div>
-                        ) : (
-                            <AnimatePresence mode="popLayout">
-                                <div className="space-y-3">
-                                    {attendance.map((record, index) => (
-                                        <motion.div
-                                            key={record._id}
-                                            initial={{ opacity: 0, x: -20 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            exit={{ opacity: 0, x: 20 }}
-                                            transition={{ delay: index * 0.05 }}
-                                            className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                {/* Attendance Section */}
+                <div className="px-4">
+                    <h2 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3">
+                        Records ({attendance.length})
+                    </h2>
+
+                    {loading ? (
+                        <div className="flex justify-center py-12">
+                            <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+                        </div>
+                    ) : attendance.length === 0 ? (
+                        <div className="text-center py-12 text-slate-500">
+                            <Users className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                            <p className="text-sm">No attendance for this day</p>
+                            <button
+                                onClick={() => setIsAddDialogOpen(true)}
+                                className="text-sm text-black dark:text-white underline mt-2"
+                            >
+                                Mark attendance
+                            </button>
+                        </div>
+                    ) : (
+                        <AnimatePresence mode="popLayout">
+                            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                                {attendance.map((record, index) => (
+                                    <motion.div
+                                        key={record._id}
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={{ delay: index * 0.02 }}
+                                        className="flex items-center justify-between py-3"
+                                    >
+                                        <div
+                                            className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+                                            onClick={() => setHistoryStaff(record.staffId)}
                                         >
-                                            <div className="flex items-center gap-4">
-                                                <div
-                                                    className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold cursor-pointer hover:ring-2 hover:ring-purple-400 transition-all"
-                                                    onClick={() => setHistoryStaff(record.staffId)}
-                                                >
-                                                    {record.staffId.name.charAt(0).toUpperCase()}
+                                            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                                                {record.staffId.name.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                                                    {record.staffId.name}
+                                                </p>
+                                                <div className="flex items-center gap-1 text-xs text-slate-500">
+                                                    <span>{record.hajiriCount} hajiri</span>
+                                                    {record.projectInfo && (
+                                                        <>
+                                                            <span>•</span>
+                                                            <span className="flex items-center gap-0.5">
+                                                                <Building2 className="w-3 h-3" />
+                                                                {record.projectInfo.clientName}
+                                                            </span>
+                                                        </>
+                                                    )}
                                                 </div>
-                                                <div>
-                                                    <p
-                                                        className="font-medium text-slate-800 dark:text-slate-200 cursor-pointer hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-                                                        onClick={() => setHistoryStaff(record.staffId)}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                            <div className="text-right">
+                                                <p className="text-sm font-semibold text-green-600">
+                                                    {formatCurrency(record.hajiriCount * record.staffId.dailyRate)}
+                                                </p>
+                                                {record.advancePayment > 0 && (
+                                                    <p className="text-[10px] text-orange-500">
+                                                        -{formatCurrency(record.advancePayment)}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <button className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded">
+                                                        <MoreVertical className="w-4 h-4 text-slate-500" />
+                                                    </button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem
+                                                        onClick={() => setDeleteId(record._id)}
+                                                        className="text-red-600"
                                                     >
-                                                        {record.staffId.name}
-                                                    </p>
-                                                    <div className="flex items-center gap-2 text-sm text-slate-500">
-                                                        <span>{record.staffId.staffId}</span>
-                                                        {record.projectInfo && (
-                                                            <>
-                                                                <span>•</span>
-                                                                <div className="flex items-center gap-1">
-                                                                    <Building2 className="w-3 h-3" />
-                                                                    <span>{record.projectInfo.clientName}</span>
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                    {record.notes && (
-                                                        <p className="text-xs text-slate-400 mt-1">{record.notes}</p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-4">
-                                                <div className="text-right">
-                                                    <Badge variant="secondary" className="bg-purple-100 text-purple-700">
-                                                        {record.hajiriCount} Hajiri
-                                                    </Badge>
-                                                    <p className="text-sm font-semibold text-green-600 mt-1">
-                                                        {formatCurrency(record.hajiriCount * record.staffId.dailyRate)}
-                                                    </p>
-                                                    {record.advancePayment > 0 && (
-                                                        <p className="text-xs text-orange-500">
-                                                            Advance: {formatCurrency(record.advancePayment)}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="text-red-500 hover:text-red-700 hover:bg-red-100"
-                                                    onClick={() => setDeleteId(record._id)}
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </Button>
-                                            </div>
-                                        </motion.div>
-                                    ))}
-                                </div>
-                            </AnimatePresence>
-                        )}
-                    </CardContent>
-                </Card>
+                                                        <Trash2 className="w-4 h-4 mr-2" />
+                                                        Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </div>
+                        </AnimatePresence>
+                    )}
+                </div>
             </div>
+
+            {/* Date Selection Dialog */}
+            <Dialog open={isDateDialogOpen} onOpenChange={setIsDateDialogOpen}>
+                <DialogContent className="sm:max-w-[300px]">
+                    <DialogHeader>
+                        <DialogTitle>Select Date</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Input
+                            type="date"
+                            value={tempDate}
+                            onChange={(e) => setTempDate(e.target.value)}
+                            className="w-full"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button onClick={applyDateFilter} className="bg-black hover:bg-black/90 text-white w-full">
+                            Apply
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Add Attendance Dialog */}
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogContent className="sm:max-w-[500px]">
+                <DialogContent className="sm:max-w-[400px]">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <Clock className="w-5 h-5 text-purple-500" />
+                            <Clock className="w-5 h-5" />
                             Mark Attendance
                         </DialogTitle>
                     </DialogHeader>
 
-                    <form onSubmit={handleAdd} className="space-y-4 mt-4">
+                    <form onSubmit={handleAdd} className="space-y-4 mt-2">
                         {/* Staff Selection */}
                         <div className="space-y-2">
                             <Label>Staff Member *</Label>
                             <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Select staff member" />
+                                    <SelectValue placeholder="Select staff" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {staff.map((s) => (
                                         <SelectItem key={s._id} value={s._id}>
-                                            {s.name} ({s.staffId}) - {formatCurrency(s.dailyRate)}/day
+                                            {s.name} - {formatCurrency(s.dailyRate)}/day
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -484,17 +501,13 @@ export default function AttendanceSheet() {
                             <Label>Project (Optional)</Label>
                             <Select value={selectedProjectId || "none"} onValueChange={(v) => setSelectedProjectId(v === "none" ? "" : v)}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Select project site" />
+                                    <SelectValue placeholder="Select project" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none">No Project</SelectItem>
                                     {projects.map((p) => (
                                         <SelectItem key={p._id} value={p._id}>
-                                            <div className="flex items-center gap-2">
-                                                <Building2 className="w-4 h-4" />
-                                                {p.clientName}
-                                                <span className="text-slate-400">({p.projectId})</span>
-                                            </div>
+                                            {p.clientName}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -516,21 +529,19 @@ export default function AttendanceSheet() {
                                         key={option.value}
                                         type="button"
                                         variant={hajiriCount === option.value ? "default" : "outline"}
-                                        className={hajiriCount === option.value ? "bg-purple-500 hover:bg-purple-600" : ""}
+                                        className={hajiriCount === option.value ? "bg-black hover:bg-black/90" : ""}
                                         onClick={() => setHajiriCount(option.value)}
+                                        size="sm"
                                     >
-                                        {option.value}
+                                        {option.label}
                                     </Button>
                                 ))}
                             </div>
-                            <p className="text-xs text-slate-500">
-                                0.5 = Half Day, 1 = Full Day (9-5), 1.5 = With Overtime, 2 = Double Shift
-                            </p>
                         </div>
 
                         {/* Advance Payment */}
                         <div className="space-y-2">
-                            <Label>Advance Payment (₹)</Label>
+                            <Label>Advance (₹)</Label>
                             <Input
                                 type="number"
                                 placeholder="0"
@@ -542,9 +553,9 @@ export default function AttendanceSheet() {
 
                         {/* Notes */}
                         <div className="space-y-2">
-                            <Label>Notes (Optional)</Label>
+                            <Label>Notes</Label>
                             <Textarea
-                                placeholder="Work details, overtime reason..."
+                                placeholder="Optional notes..."
                                 value={notes}
                                 onChange={(e) => setNotes(e.target.value)}
                                 rows={2}
@@ -552,7 +563,7 @@ export default function AttendanceSheet() {
                         </div>
 
                         {/* Submit */}
-                        <div className="flex justify-end gap-2 pt-4">
+                        <div className="flex gap-2 pt-2">
                             <Button
                                 type="button"
                                 variant="outline"
@@ -561,15 +572,16 @@ export default function AttendanceSheet() {
                                     resetForm();
                                 }}
                                 disabled={saving}
+                                className="flex-1"
                             >
                                 Cancel
                             </Button>
                             <Button
                                 type="submit"
                                 disabled={saving}
-                                className="bg-purple-500 hover:bg-purple-600"
+                                className="flex-1 bg-black hover:bg-black/90 text-white"
                             >
-                                {saving ? "Saving..." : "Mark Attendance"}
+                                {saving ? "Saving..." : "Save"}
                             </Button>
                         </div>
                     </form>
@@ -582,7 +594,7 @@ export default function AttendanceSheet() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Delete Attendance</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to delete this attendance record?
+                            Are you sure you want to delete this record?
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

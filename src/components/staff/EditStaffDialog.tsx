@@ -120,7 +120,7 @@ export default function EditStaffDialog({
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Edit className="w-5 h-5 text-orange-500" />
+                        <Edit className="w-5 h-5 text-black" />
                         Edit Staff - {staff.staffId}
                     </DialogTitle>
                 </DialogHeader>
@@ -225,7 +225,7 @@ export default function EditStaffDialog({
                         <Button
                             type="submit"
                             disabled={loading}
-                            className="bg-orange-500 hover:bg-orange-600"
+                            className="bg-black hover:bg-black/90 text-white"
                         >
                             {loading ? (
                                 <>
