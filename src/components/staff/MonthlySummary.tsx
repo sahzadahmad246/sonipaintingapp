@@ -11,6 +11,7 @@ import {
     ChevronRight,
     TrendingUp,
     Wallet,
+    Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,11 +24,14 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import SendReportDialog from "./SendReportDialog";
+import type { AttendanceRecord as ReportAttendanceRecord } from "@/app/lib/generate-employee-report-pdf";
 
 interface Staff {
     _id: string;
     staffId: string;
     name: string;
+    mobile: string;
     dailyRate: number;
 }
 
@@ -68,6 +72,7 @@ export default function MonthlySummary() {
     });
     const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
     const [loading, setLoading] = useState(false);
+    const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
 
     // Fetch staff list
     const fetchStaff = useCallback(async () => {
@@ -203,16 +208,26 @@ export default function MonthlySummary() {
                         {/* Staff Info */}
                         <Card className="bg-gradient-to-r from-teal-500 to-cyan-600 text-white border-0 shadow-lg">
                             <CardContent className="p-6">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center text-2xl font-bold">
-                                        {summaryData.staff.name.charAt(0).toUpperCase()}
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center text-2xl font-bold">
+                                            {summaryData.staff.name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <h2 className="text-2xl font-bold">{summaryData.staff.name}</h2>
+                                            <p className="text-white/80">
+                                                {summaryData.staff.staffId} • Rate: {formatCurrency(summaryData.staff.dailyRate)}/hajiri
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h2 className="text-2xl font-bold">{summaryData.staff.name}</h2>
-                                        <p className="text-white/80">
-                                            {summaryData.staff.staffId} • Rate: {formatCurrency(summaryData.staff.dailyRate)}/hajiri
-                                        </p>
-                                    </div>
+                                    <Button
+                                        onClick={() => setIsReportDialogOpen(true)}
+                                        className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+                                        disabled={summaryData.attendanceRecords.length === 0}
+                                    >
+                                        <Send className="w-4 h-4 mr-2" />
+                                        Send Report
+                                    </Button>
                                 </div>
                             </CardContent>
                         </Card>
@@ -369,6 +384,30 @@ export default function MonthlySummary() {
                                 )}
                             </CardContent>
                         </Card>
+
+                        {/* Send Report Dialog */}
+                        <SendReportDialog
+                            open={isReportDialogOpen}
+                            onOpenChange={setIsReportDialogOpen}
+                            staff={summaryData.staff}
+                            month={parseInt(selectedMonth.split("-")[1]) - 1}
+                            year={parseInt(selectedMonth.split("-")[0])}
+                            attendanceData={summaryData.attendanceRecords.map((record) => ({
+                                date: record.date,
+                                hajiriCount: record.hajiriCount,
+                                advancePayment: record.advancePayment,
+                                projectInfo: record.projectInfo ? {
+                                    projectId: "",
+                                    clientName: record.projectInfo.clientName,
+                                    clientAddress: "",
+                                } : undefined,
+                                notes: record.notes,
+                            })) as ReportAttendanceRecord[]}
+                            monthlyTotals={{
+                                hajiri: summaryData.summary.totalHajiri,
+                                advance: summaryData.summary.totalAdvance,
+                            }}
+                        />
                     </>
                 ) : (
                     <div className="text-center py-12 text-slate-500">

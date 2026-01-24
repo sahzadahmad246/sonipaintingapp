@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
             _id: unknown;
             staffId: string;
             name: string;
+            mobile: string;
             dailyRate: number;
         } | null;
         if (!staff) {
@@ -97,6 +98,7 @@ export async function GET(request: NextRequest) {
                 _id: staff._id,
                 staffId: staff.staffId,
                 name: staff.name,
+                mobile: staff.mobile,
                 dailyRate,
             },
             period: {
