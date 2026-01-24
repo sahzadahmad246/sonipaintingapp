@@ -70,9 +70,27 @@ export async function sendEmployeeReportWhatsApp(
 
         let messageInstance;
 
-        // Try sending freeform message with PDF attachment first
-        // This works when the recipient has messaged in last 24 hours
-        const messageBody = `📊 *Monthly Attendance Report*
+        // Use template FIRST for production (works without session window)
+        if (templateSid) {
+            console.log("Using template:", templateSid, "with mediaUrl:", pdfUrl);
+            messageInstance = await client.messages.create({
+                from: `whatsapp:${process.env.TWILIO_PHONE_NUMBER}`,
+                to: `whatsapp:${formattedNumber}`,
+                contentSid: templateSid,
+                contentVariables: JSON.stringify({
+                    "1": staffName,
+                    "2": month,
+                    "3": totalHajiri.toString(),
+                    "4": formatRupees(earnings),
+                    "5": formatRupees(advance),
+                    "6": formatRupees(netPayable),
+                }),
+                mediaUrl: [pdfUrl],
+            });
+            console.log("Sent using template with mediaUrl");
+        } else {
+            // Fallback: freeform (only works within 24h session)
+            const messageBody = `📊 *Monthly Attendance Report*
 
 Hi ${staffName}!
 
@@ -87,39 +105,13 @@ Please find the detailed PDF report attached.
 
 _Soni Painting_`;
 
-        try {
-            // First try freeform with media (works within session)
             messageInstance = await client.messages.create({
                 from: `whatsapp:${process.env.TWILIO_PHONE_NUMBER}`,
                 to: `whatsapp:${formattedNumber}`,
                 body: messageBody,
                 mediaUrl: [pdfUrl],
             });
-            console.log("Sent as freeform message with PDF");
-        } catch (freeformError: unknown) {
-            const errorMsg = freeformError instanceof Error ? freeformError.message : String(freeformError);
-            console.log("Freeform failed:", errorMsg, "- trying template...");
-
-            // If freeform fails (outside session), try template
-            if (templateSid) {
-                messageInstance = await client.messages.create({
-                    from: `whatsapp:${process.env.TWILIO_PHONE_NUMBER}`,
-                    to: `whatsapp:${formattedNumber}`,
-                    contentSid: templateSid,
-                    contentVariables: JSON.stringify({
-                        "1": staffName,
-                        "2": month,
-                        "3": totalHajiri.toString(),
-                        "4": formatRupees(earnings),
-                        "5": formatRupees(advance),
-                        "6": formatRupees(netPayable),
-                        "media_url": pdfUrl,
-                    }),
-                });
-                console.log("Sent using template with PDF via contentVariables");
-            } else {
-                throw freeformError;
-            }
+            console.log("Sent as freeform message");
         }
 
         console.log(
