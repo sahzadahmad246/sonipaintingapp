@@ -70,9 +70,9 @@ export async function sendEmployeeReportWhatsApp(
 
         let messageInstance;
 
-        // Use template FIRST for production (works without session window)
+        // Use template with PDF link in body (since mediaUrl doesn't work with templates)
         if (templateSid) {
-            console.log("Using template:", templateSid, "with mediaUrl:", pdfUrl);
+            console.log("Using template:", templateSid, "with PDF link:", pdfUrl);
             messageInstance = await client.messages.create({
                 from: `whatsapp:${process.env.TWILIO_PHONE_NUMBER}`,
                 to: `whatsapp:${formattedNumber}`,
@@ -84,10 +84,10 @@ export async function sendEmployeeReportWhatsApp(
                     "4": formatRupees(earnings),
                     "5": formatRupees(advance),
                     "6": formatRupees(netPayable),
+                    "7": pdfUrl,  // PDF download link in body
                 }),
-                mediaUrl: [pdfUrl],
             });
-            console.log("Sent using template with mediaUrl");
+            console.log("Sent using template with PDF link in body");
         } else {
             // Fallback: freeform (only works within 24h session)
             const messageBody = `📊 *Monthly Attendance Report*
@@ -101,7 +101,7 @@ Here is your attendance report for *${month}*:
 🔴 *Advance:* ₹${formatRupees(advance)}
 ✅ *Net Payable:* ₹${formatRupees(netPayable)}
 
-Please find the detailed PDF report attached.
+📎 Download PDF: ${pdfUrl}
 
 _Soni Painting_`;
 
@@ -109,9 +109,8 @@ _Soni Painting_`;
                 from: `whatsapp:${process.env.TWILIO_PHONE_NUMBER}`,
                 to: `whatsapp:${formattedNumber}`,
                 body: messageBody,
-                mediaUrl: [pdfUrl],
             });
-            console.log("Sent as freeform message");
+            console.log("Sent as freeform message with PDF link");
         }
 
         console.log(

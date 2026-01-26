@@ -130,11 +130,14 @@ export default function StaffHistoryDialog({
         // Add current month days
         for (let day = 1; day <= lastDay.getDate(); day++) {
             const date = new Date(year, month, day);
-            const dateStr = date.toISOString().split("T")[0];
+            // Use local date format YYYY-MM-DD for comparison (avoiding timezone issues)
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
             const dayAttendance = attendanceData.filter((a) => {
-                const aDate = new Date(a.date).toISOString().split("T")[0];
-                return aDate === dateStr;
+                // Parse the attendance date and compare using local date
+                const aDate = new Date(a.date);
+                const aDateStr = `${aDate.getFullYear()}-${String(aDate.getMonth() + 1).padStart(2, '0')}-${String(aDate.getDate()).padStart(2, '0')}`;
+                return aDateStr === dateStr;
             });
 
             const totalHajiri = dayAttendance.reduce((sum, a) => sum + a.hajiriCount, 0);
