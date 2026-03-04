@@ -35,6 +35,7 @@ import { useSession } from "next-auth/react"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { DEFAULT_SITE_NAME } from "@/lib/brand"
 
 interface QuotationViewProps {
   quotationNumber: string
@@ -63,7 +64,7 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
     try {
       const data = await getGeneralInfo()
       const validatedData: GeneralInfo = {
-        siteName: data.siteName || "SoniPainting",
+        siteName: data.siteName || DEFAULT_SITE_NAME,
         mobileNumber1: data.mobileNumber1 || "+91 98765 43210",
         mobileNumber2: data.mobileNumber2,
         address: data.address || "123 Main Street, New Delhi, India 110001",
@@ -73,7 +74,7 @@ export default function QuotationView({ quotationNumber }: QuotationViewProps) {
     } catch {
       toast.error("Failed to load business information")
       setGeneralInfo({
-        siteName: "SoniPainting",
+        siteName: DEFAULT_SITE_NAME,
         mobileNumber1: "+91 98765 43210",
         mobileNumber2: undefined,
         address: "123 Main Street, New Delhi, India 110001",

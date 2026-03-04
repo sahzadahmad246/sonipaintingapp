@@ -2,8 +2,8 @@ import { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
     return {
-        name: 'Soni Painting Application',
-        short_name: 'Soni Painting',
+        name: 'Zycra',
+        short_name: 'Zycra',
         description: 'Professional Painting Services Application',
         start_url: '/',
         display: 'standalone',

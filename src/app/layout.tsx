@@ -5,11 +5,12 @@ import "./globals.css";
 
 import ClientWrapper from "@/components/helpers/ClientWrapper";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { DEFAULT_SITE_NAME } from "@/lib/brand";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Soni Painting- Interior Contractor",
+  title: `${DEFAULT_SITE_NAME} - Interior Contractor`,
   description: "Interior painting, POP, carpentry, and tiling services",
   manifest: "/manifest.json",
   icons: {

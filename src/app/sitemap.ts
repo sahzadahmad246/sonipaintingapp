@@ -5,11 +5,13 @@ import Post from "@/models/Post";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   await dbConnect();
 
-  const baseUrl = "https://sonipainting.com"; // Replace with actual domain if env var available, or use a default
+  const baseUrl = "https://www.zycrainterior.com"; // Replace with actual domain if env var available, or use a default
 
   // Static pages
   const staticRoutes = [
     "",
+    "/privacy-policy",
+    "/terms-of-service",
     "/blog",
     "/auth/signin",
   ].map((route) => ({

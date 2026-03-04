@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 
 const testimonials = [
     {
-        text: "The team at Soni Painting was incredible. They finished my entire 3BHK in 6 days as promised. The quality is unmatched.",
+        text: "The team at Zycra Interior (formerly Soni Painting) was incredible. They finished my entire 3BHK in 6 days as promised. The quality is unmatched.",
         name: "Aditya Tiwari",
         role: "Thane, Local Guide",
         image: "/hero-interior.png" // Placeholder

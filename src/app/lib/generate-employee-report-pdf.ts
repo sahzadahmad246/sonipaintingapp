@@ -70,19 +70,19 @@ const formatCurrency = (amount: number): string => {
 // Common function to add company header to PDF (matches existing quotation/invoice style)
 const addCompanyHeader = (doc: jsPDF) => {
     try {
-        doc.addImage("/logo.png", "PNG", 20, 15, 25, 25);
+        doc.addImage("/logo.png", "PNG", 20, 15, 18, 18);
     } catch {
         // Fallback: create a blue diamond shape
-        doc.setFillColor(41, 128, 185);
+        doc.setFillColor(31, 41, 55);
         doc.rect(20, 15, 10, 10, "F");
-        doc.setFillColor(52, 152, 219);
+        doc.setFillColor(51, 65, 85);
         doc.rect(25, 20, 10, 10, "F");
     }
 
     // Company name and details
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text("Soni Painting", 50, 25);
+    doc.text("Zycra Interior (formerly Soni Painting)", 50, 25);
 
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
@@ -131,12 +131,12 @@ export const generateEmployeeReportPDF = (
 
     // Report title
     doc.setFontSize(16);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.setFont("helvetica", "bold");
     doc.text("EMPLOYEE ATTENDANCE REPORT", 105, 50, { align: "center" });
 
     // Blue line below title
-    doc.setDrawColor(0, 102, 204);
+    doc.setDrawColor(31, 41, 55);
     doc.setLineWidth(0.5);
     doc.line(20, 55, 190, 55);
 
@@ -193,7 +193,7 @@ export const generateEmployeeReportPDF = (
         startY: 90,
         theme: "grid",
         headStyles: {
-            fillColor: [41, 128, 185],
+            fillColor: [31, 41, 55],
             textColor: [255, 255, 255],
             fontStyle: "bold",
             fontSize: 9,
@@ -230,7 +230,7 @@ export const generateEmployeeReportPDF = (
     // Summary section
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("MONTHLY SUMMARY", 20, finalY);
     finalY += 10;
 
@@ -277,14 +277,14 @@ export const generateEmployeeReportPDF = (
 
     // Row 3 - Net Payable (highlighted)
     finalY += 15;
-    doc.setDrawColor(0, 102, 204);
+    doc.setDrawColor(31, 41, 55);
     doc.setLineWidth(0.5);
     doc.line(25, finalY, 185, finalY);
 
     finalY += 8;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("NET PAYABLE:", summaryX1, finalY);
     doc.text(formatCurrency(netPayable), valueX2, finalY, { align: "right" });
 
@@ -300,7 +300,7 @@ export const generateEmployeeReportPDF = (
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(12);
-        doc.setTextColor(0, 102, 204);
+        doc.setTextColor(31, 41, 55);
         doc.text("ADVANCE PAYMENTS", 20, finalY);
         finalY += 5;
 
@@ -401,12 +401,12 @@ export const generatePDFFromSavedReport = (data: SavedReportData): ArrayBuffer =
 
     // Report title
     doc.setFontSize(16);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.setFont("helvetica", "bold");
     doc.text("EMPLOYEE ATTENDANCE REPORT", 105, 50, { align: "center" });
 
     // Blue line below title
-    doc.setDrawColor(0, 102, 204);
+    doc.setDrawColor(31, 41, 55);
     doc.setLineWidth(0.5);
     doc.line(20, 55, 190, 55);
 
@@ -464,7 +464,7 @@ export const generatePDFFromSavedReport = (data: SavedReportData): ArrayBuffer =
             startY: 90,
             theme: "grid",
             headStyles: {
-                fillColor: [41, 128, 185],
+                fillColor: [31, 41, 55],
                 textColor: [255, 255, 255],
                 fontStyle: "bold",
                 fontSize: 9,
@@ -482,7 +482,7 @@ export const generatePDFFromSavedReport = (data: SavedReportData): ArrayBuffer =
     // Summary section
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("MONTHLY SUMMARY", 20, finalY);
     finalY += 10;
 
@@ -523,14 +523,14 @@ export const generatePDFFromSavedReport = (data: SavedReportData): ArrayBuffer =
 
     // Row 3 - Net Payable
     finalY += 15;
-    doc.setDrawColor(0, 102, 204);
+    doc.setDrawColor(31, 41, 55);
     doc.setLineWidth(0.5);
     doc.line(25, finalY, 185, finalY);
 
     finalY += 8;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("NET PAYABLE:", summaryX1, finalY);
     doc.text(formatCurrency(data.netPayable), valueX2, finalY, { align: "right" });
 

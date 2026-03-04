@@ -3,10 +3,12 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Phone, MapPin, Send } from "lucide-react";
+import { DEFAULT_SITE_NAME } from "@/lib/brand";
 
 export default function About() {
+  const siteName = DEFAULT_SITE_NAME;
   const generalInfo = {
-    siteName: "Soni Painting",
+    siteName,
     mobileNumber1: "+919022846640",
     mobileNumber2: "+918452085416",
     address:
@@ -21,7 +23,7 @@ export default function About() {
         <div className="absolute inset-0 z-0">
           <Image
             src="/images/painting.jpg"
-            alt="Soni Painting interior work in Mumbai and Thane"
+            alt={`${siteName} interior work in Mumbai and Thane`}
             fill
             className="object-cover brightness-[0.7]"
             priority
@@ -37,10 +39,10 @@ export default function About() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="max-w-3xl">
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-              About Soni Painting
+              About {siteName}
             </h1>
             <p className="text-xl text-white/90">
-              Founded by Omprakash Gupta, Soni Painting delivers premium interior
+              Founded by Omprakash Gupta, {siteName} delivers premium interior
               contracting services across Mumbai and Thane.
             </p>
           </div>
@@ -60,7 +62,7 @@ export default function About() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p>
-                  Soni Painting was founded by Omprakash Gupta, a visionary with
+                  {siteName} was founded by Omprakash Gupta, a visionary with
                   over 7 years of experience in the interior contracting industry.
                   Based in Thane, our company has grown to become a trusted name
                   in Mumbai and Thane, delivering high-quality interior solutions
@@ -70,11 +72,11 @@ export default function About() {
                   Omprakash’s expertise spans all types of interior work,
                   including painting, carpentry, POP (Plaster of Paris), tiles,
                   wood polish, waterproofing, and false ceilings. His commitment
-                  to excellence and customer satisfaction drives Soni Painting to
+                  to excellence and customer satisfaction drives {siteName} to
                   transform spaces with precision and creativity.
                 </p>
                 <p>
-                  At Soni Painting, we pride ourselves on using premium materials,
+                  At {siteName}, we pride ourselves on using premium materials,
                   skilled craftsmanship, and innovative techniques to meet the
                   unique needs of our clients in Mumbai and Thane.
                 </p>

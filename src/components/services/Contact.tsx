@@ -15,6 +15,7 @@ import { Phone, MapPin, Send } from "lucide-react";
 import { getGeneralInfo, apiFetch } from "@/app/lib/api";
 import { GeneralInfo } from "@/app/types";
 import { toast } from "sonner";
+import { DEFAULT_SITE_NAME } from "@/lib/brand";
 
 // Form validation schema
 const contactFormSchema = z.object({
@@ -67,7 +68,7 @@ export default function Contact() {
       try {
         const data = await getGeneralInfo();
         setGeneralInfo({
-          siteName: data.siteName || "Soni Painting",
+          siteName: data.siteName || DEFAULT_SITE_NAME,
           mobileNumber1: data.mobileNumber1 || "+919022846640",
           mobileNumber2: data.mobileNumber2 || "+918452085416",
           address:
@@ -78,7 +79,7 @@ export default function Contact() {
       } catch {
         toast.error("Failed to load contact information");
         setGeneralInfo({
-          siteName: "Soni Painting",
+          siteName: DEFAULT_SITE_NAME,
           mobileNumber1: "+919022846640",
           mobileNumber2: "+918452085416",
           address:
@@ -123,7 +124,7 @@ export default function Contact() {
   }
 
   const {
-    siteName = "Soni Painting",
+    siteName = DEFAULT_SITE_NAME,
     mobileNumber1 = "+919022846640",
     mobileNumber2 = "+918452085416",
     address = "Hiranandani Estate, Patlipada, Ghodbunder Road, Thane (West), Maharashtra - 400607, India",

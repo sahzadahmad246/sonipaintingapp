@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { useSiteName } from "@/hooks/use-site-name";
 
 interface ReportData {
     reportId: string;
@@ -42,6 +43,7 @@ interface PageParams {
 export default function ReportPage({ params }: { params: Promise<PageParams> }) {
     const resolvedParams = use(params);
     const reportId = resolvedParams.id;
+    const siteName = useSiteName();
 
     const [loading, setLoading] = useState(true);
     const [verifying, setVerifying] = useState(false);
@@ -191,7 +193,7 @@ export default function ReportPage({ params }: { params: Promise<PageParams> }) 
                     <h1 className="text-2xl font-bold text-white mb-1">
                         Attendance Report
                     </h1>
-                    <p className="text-slate-400">Soni Painting</p>
+                    <p className="text-slate-400">{siteName}</p>
                 </motion.div>
 
                 <AnimatePresence mode="wait">

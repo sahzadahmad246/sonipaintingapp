@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { useSession } from "next-auth/react"
 import { signOut } from "next-auth/react"
 import { LayoutDashboard, FileText, Briefcase, Camera, Shield, Settings, DollarSign, LogOut, Mail, Star, BookOpen, Users, Calendar, Wallet } from "lucide-react"
@@ -29,12 +30,17 @@ export default function DashboardSidebar({ pendingQuotations = 0 }: DashboardSid
   return (
     <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
       <div className="flex flex-col flex-grow border-r border-gray-200 bg-white pt-5 pb-4 overflow-y-auto">
-        <div className="flex items-center flex-shrink-0 px-4 mb-5">
-          <div className="h-8 w-8 rounded-md bg-primary flex items-center justify-center">
-            <Briefcase className="h-5 w-5 text-white" />
-          </div>
-          <span className="ml-2 text-xl font-semibold">PaintPro</span>
-        </div>
+        <Link href="/" className="flex items-center flex-shrink-0 px-4 mb-5">
+          <Image
+            src="/logo.png"
+            alt="Zycra Interior Logo"
+            width={36}
+            height={36}
+            className="h-9 w-9 rounded-md object-cover"
+            priority
+          />
+          <span className="ml-2 text-xl font-semibold">Zycra Interior</span>
+        </Link>
 
         <div className="mt-5 flex-grow flex flex-col">
           <nav className="flex-1 px-2 space-y-1">

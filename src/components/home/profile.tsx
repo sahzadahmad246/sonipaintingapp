@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { format } from "date-fns"
 import { SessionUser } from "@/lib/auth"
+import { useSiteName } from "@/hooks/use-site-name"
 
 interface UserData extends SessionUser {
   createdAt: string
@@ -18,6 +19,7 @@ interface UserData extends SessionUser {
 
 export default function Profile() {
   const { data: session, status } = useSession()
+  const siteName = useSiteName()
   const [userData, setUserData] = useState<UserData | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -58,7 +60,7 @@ export default function Profile() {
         <Card className="text-center">
           <CardContent className="flex flex-col items-center py-10">
             <User className="h-24 w-24 text-gray-300 mb-6" />
-            <h2 className="text-2xl font-bold mb-2">Welcome to SoniPainting</h2>
+            <h2 className="text-2xl font-bold mb-2">Welcome to {siteName}</h2>
             <p className="text-gray-600 mb-8">Sign in to access your profile and manage your quotations</p>
             <Button onClick={() => signIn("google", { callbackUrl: "/profile" })} className="w-full max-w-xs">
               Sign In with Google
@@ -110,7 +112,7 @@ export default function Profile() {
         {/* Cover Photo */}
         <div className="relative w-full h-48 md:h-64 bg-gradient-to-r from-primary/20 to-primary/40 rounded-t-xl overflow-hidden">
           <div className="absolute inset-0 flex items-center justify-center text-white/30 text-4xl font-bold">
-            SoniPainting
+            {siteName}
           </div>
         </div>
 

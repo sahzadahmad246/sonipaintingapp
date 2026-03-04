@@ -70,19 +70,19 @@ export async function POST(
             const logoPath = path.join(process.cwd(), "public", "logo.png");
             const logoBuffer = fs.readFileSync(logoPath);
             const logoBase64 = `data:image/png;base64,${logoBuffer.toString("base64")}`;
-            doc.addImage(logoBase64, "PNG", 20, 15, 25, 25);
+            doc.addImage(logoBase64, "PNG", 20, 15, 18, 18);
         } catch {
             // Fallback: create blue squares
-            doc.setFillColor(41, 128, 185);
+            doc.setFillColor(31, 41, 55);
             doc.rect(20, 15, 10, 10, "F");
-            doc.setFillColor(52, 152, 219);
+            doc.setFillColor(51, 65, 85);
             doc.rect(25, 20, 10, 10, "F");
         }
 
         // Company header
         doc.setFontSize(18);
         doc.setFont("helvetica", "bold");
-        doc.text("Soni Painting", 50, 25);
+        doc.text("Zycra Interior (formerly Soni Painting)", 50, 25);
 
         doc.setFontSize(10);
         doc.setFont("helvetica", "normal");
@@ -96,11 +96,11 @@ export async function POST(
 
         // Report title
         doc.setFontSize(16);
-        doc.setTextColor(0, 102, 204);
+        doc.setTextColor(31, 41, 55);
         doc.setFont("helvetica", "bold");
         doc.text("EMPLOYEE ATTENDANCE REPORT", 105, 50, { align: "center" });
 
-        doc.setDrawColor(0, 102, 204);
+        doc.setDrawColor(31, 41, 55);
         doc.setLineWidth(0.5);
         doc.line(20, 55, 190, 55);
 
@@ -153,7 +153,7 @@ export async function POST(
                 margin: { left: 20, right: 20 },
                 tableWidth: "auto",
                 headStyles: {
-                    fillColor: [41, 128, 185],
+                    fillColor: [31, 41, 55],
                     textColor: [255, 255, 255],
                     fontStyle: "bold",
                     fontSize: 9,
@@ -185,7 +185,7 @@ export async function POST(
         // Summary section
         doc.setFont("helvetica", "bold");
         doc.setFontSize(12);
-        doc.setTextColor(0, 102, 204);
+        doc.setTextColor(31, 41, 55);
         doc.text("MONTHLY SUMMARY", 20, finalY);
         finalY += 10;
 
@@ -225,14 +225,14 @@ export async function POST(
         doc.text(formatCurrency(report.advance), valueX2, finalY + 5);
 
         finalY += 15;
-        doc.setDrawColor(0, 102, 204);
+        doc.setDrawColor(31, 41, 55);
         doc.setLineWidth(0.5);
         doc.line(25, finalY, 185, finalY);
 
         finalY += 8;
         doc.setFont("helvetica", "bold");
         doc.setFontSize(12);
-        doc.setTextColor(0, 102, 204);
+        doc.setTextColor(31, 41, 55);
         doc.text("NET PAYABLE:", summaryX1, finalY);
         doc.text(formatCurrency(report.netPayable), valueX2, finalY, { align: "right" });
 

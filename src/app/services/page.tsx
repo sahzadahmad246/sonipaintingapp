@@ -6,21 +6,21 @@ import { services } from "../lib/servicesData";
 // Define metadata for SEO
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: "Soni Painting Services - Interior Contracting in Mumbai & Thane",
+  title: "Zycra Interior (formerly Soni Painting) Services - Interior Contracting in Mumbai & Thane",
   description:
-    "Explore Soni Painting's premium interior contracting services in Mumbai and Thane, including painting, carpentry, POP, tiles, wood polish, waterproofing, and false ceilings. Transform your space with our expert team.",
+    "Explore Zycra Interior (formerly Soni Painting)'s premium interior contracting services in Mumbai and Thane, including painting, carpentry, POP, tiles, wood polish, waterproofing, and false ceilings. Transform your space with our expert team.",
   openGraph: {
-    title: "Soni Painting Services - Interior Contracting in Mumbai & Thane",
+    title: "Zycra Interior (formerly Soni Painting) Services - Interior Contracting in Mumbai & Thane",
     description:
-      "Premium interior services in Mumbai and Thane: painting, carpentry, POP, tiles, wood polish, waterproofing, and false ceilings by Soni Painting.",
-    url: "https://www.sonipainting.com/services",
-    siteName: "Soni Painting",
+      "Premium interior services in Mumbai and Thane: painting, carpentry, POP, tiles, wood polish, waterproofing, and false ceilings by Zycra Interior (formerly Soni Painting).",
+    url: "https://www.zycrainterior.com/services",
+    siteName: "Zycra Interior (formerly Soni Painting)",
     images: [
       {
         url: "/images/painting.jpg",
         width: 1200,
         height: 630,
-        alt: "Soni Painting Services",
+        alt: "Zycra Interior (formerly Soni Painting) Services",
       },
     ],
     locale: "en_US",
@@ -28,16 +28,16 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Soni Painting Services - Interior Contracting in Mumbai & Thane",
+    title: "Zycra Interior (formerly Soni Painting) Services - Interior Contracting in Mumbai & Thane",
     description:
       "Premium interior services in Mumbai and Thane: painting, carpentry, POP, tiles, wood polish, waterproofing, and false ceilings.",
     images: ["/images/painting.jpg"],
   },
   alternates: {
-    canonical: "https://www.sonipainting.com/services",
+    canonical: "https://www.zycrainterior.com/services",
     languages: {
-      en: "https://www.sonipainting.com/services",
-      "x-default": "https://www.sonipainting.com/services",
+      en: "https://www.zycrainterior.com/services",
+      "x-default": "https://www.zycrainterior.com/services",
     },
   },
 };
@@ -46,10 +46,10 @@ export const metadata: Metadata = {
 const jsonLd = {
   "@context": "https://schema.org",
   "@type": "LocalBusiness",
-  name: "Soni Painting",
+  name: "Zycra Interior (formerly Soni Painting)",
   description:
     "Premium interior contracting services in Mumbai and Thane, including painting, carpentry, POP, tiles, wood polish, waterproofing, and false ceilings.",
-  url: "https://www.sonipainting.com",
+  url: "https://www.zycrainterior.com",
   telephone: "+919022846640",
   contactPoint: [
     {
@@ -109,11 +109,11 @@ const jsonLd = {
     longitude: "72.9813",
   },
   openingHours: "Mo-Sa 09:00-18:00",
-  image: "https://www.sonipainting.com/images/painting.jpg",
+  image: "https://www.zycrainterior.com/images/painting.jpg",
   sameAs: [
-    "https://www.facebook.com/sonipainting",
-    "https://www.instagram.com/sonipainting",
-    "https://www.linkedin.com/company/sonipainting",
+    "https://www.facebook.com/zycrainterior",
+    "https://www.instagram.com/zycrainterior",
+    "https://www.linkedin.com/company/zycrainterior",
   ],
   hasOfferCatalog: {
     "@type": "OfferCatalog",
@@ -122,8 +122,8 @@ const jsonLd = {
       "@type": "Service",
       name: service.title,
       description: service.description,
-      url: `https://www.sonipainting.com/services#${service.slug}`,
-      image: `https://www.sonipainting.com${service.image}`,
+      url: `https://www.zycrainterior.com/services#${service.slug}`,
+      image: `https://www.zycrainterior.com${service.image}`,
       areaServed: ["Mumbai", "Thane"],
     })),
   },
@@ -142,7 +142,7 @@ export default function ServicesPage() {
           Our Services in Mumbai & Thane
         </h1>
         <p className="text-center text-muted-foreground mb-12 max-w-2xl mx-auto">
-          Discover Soni Painting’s premium interior contracting services,
+          Discover Zycra Interior (formerly Soni Painting)’s premium interior contracting services,
           tailored for homes and offices in Mumbai and Thane. From painting to
           false ceilings, we deliver quality and excellence.
         </p>

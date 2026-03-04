@@ -65,7 +65,7 @@ export default async function BlogPage({
                         Blog List
                     </h1>
                     <p className="mt-5 max-w-xl mx-auto text-xl text-gray-500">
-                        Insights, tips, and updates from the Soni Painting team.
+                        Insights, tips, and updates from the Zycra Interior (formerly Soni Painting) team.
                     </p>
 
                     <div className="mt-8 max-w-lg mx-auto relative">

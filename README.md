@@ -1,8 +1,8 @@
-# Soni Painting App
+# Zycra Interior (formerly Soni Painting) App
 
-![Soni Painting Logo](./public/logo.png) 
+![Zycra Interior (formerly Soni Painting) Logo](./public/logo.png) 
 
-Soni Painting App is a comprehensive web application designed for painting contractors to manage their business operations efficiently. It enables contractors to generate quotations, create invoices, and track projects (including payments and extra work), while providing clients with a portal to view their quotations, invoices, and learn about Soni Painting’s services.
+Zycra Interior (formerly Soni Painting) App is a comprehensive web application designed for painting contractors to manage their business operations efficiently. It enables contractors to generate quotations, create invoices, and track projects (including payments and extra work), while providing clients with a portal to view their quotations, invoices, and learn about Zycra Interior (formerly Soni Painting)’s services.
 
 ## Features
 
@@ -23,14 +23,14 @@ Soni Painting App is a comprehensive web application designed for painting contr
 - **Audit Logs**:
   - Log admin actions (e.g., updating settings, accepting quotations) for accountability.
 - **Portfolio**:
-  - Showcase completed projects with images to highlight Soni Painting’s work.
+  - Showcase completed projects with images to highlight Zycra Interior (formerly Soni Painting)’s work.
 
 ### For Clients
 - **Quotation & Invoice Access**:
   - View personalized quotations and invoices via secure links.
   - Download PDFs for records.
 - **Company Information**:
-  - Learn about Soni Painting’s services, contact details, and portfolio.
+  - Learn about Zycra Interior (formerly Soni Painting)’s services, contact details, and portfolio.
 - **Project Updates**:
   - Check project progress, including payments and site images (if shared by staff).
 

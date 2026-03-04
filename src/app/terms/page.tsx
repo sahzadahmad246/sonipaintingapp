@@ -7,6 +7,7 @@ import { FileText } from "lucide-react";
 import { getGeneralInfo } from "@/app/lib/api";
 import { GeneralInfo } from "@/app/types";
 import { toast } from "sonner";
+import { DEFAULT_SITE_NAME } from "@/lib/brand";
 
 export default function TermsPage() {
   const [generalInfo, setGeneralInfo] = useState<GeneralInfo | null>(null);
@@ -17,7 +18,7 @@ export default function TermsPage() {
       try {
         const data = await getGeneralInfo();
         setGeneralInfo({
-          siteName: data.siteName || "SoniPainting",
+          siteName: data.siteName || DEFAULT_SITE_NAME,
           mobileNumber1: data.mobileNumber1 || "+91 98765 43210",
           mobileNumber2: data.mobileNumber2,
           address: data.address || "123 Main Street, New Delhi, India 110001",
@@ -43,7 +44,7 @@ export default function TermsPage() {
       } catch {
         toast.error("Failed to load terms and conditions");
         setGeneralInfo({
-          siteName: "SoniPainting",
+          siteName: DEFAULT_SITE_NAME,
           mobileNumber1: "+91 98765 43210",
           mobileNumber2: undefined,
           address: "123 Main Street, New Delhi, India 110001",
@@ -82,7 +83,7 @@ export default function TermsPage() {
     );
   }
 
-  const { siteName = "SoniPainting", logoUrl = "/logo.png", termsAndConditions = [] } = generalInfo || {};
+  const { siteName = DEFAULT_SITE_NAME, logoUrl = "/logo.png", termsAndConditions = [] } = generalInfo || {};
 
   return (
     <div className="min-h-screen bg-gray-50">

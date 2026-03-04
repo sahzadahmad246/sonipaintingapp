@@ -99,7 +99,7 @@ export default function CreateBlogPost() {
         setUploadingImage(true);
         const formData = new FormData();
         formData.append("file", file);
-        formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "sonipainting");
+        formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "zycrainterior");
 
         try {
             const res = await axios.post(

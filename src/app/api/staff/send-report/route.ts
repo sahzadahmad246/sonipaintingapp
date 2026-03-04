@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
         console.log("Report saved to database:", employeeReport.reportId);
 
         // Build report URL
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://sonipainting.com";
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://www.zycrainterior.com";
         const reportUrl = `${baseUrl}/report/${employeeReport.reportId}`;
 
         console.log("Report URL:", reportUrl);

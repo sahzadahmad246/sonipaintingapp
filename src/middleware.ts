@@ -1,9 +1,19 @@
 import { withAuth } from "next-auth/middleware"
 import { NextResponse } from "next/server"
 
-export default withAuth(
+const adminProtectedPath = (path: string) =>
+  path.startsWith("/dashboard") || path.startsWith("/projects") || path.startsWith("/settings")
+
+const authMiddleware = withAuth(
   function middleware(req) {
-    // This function is only called if `authorized` returns true.
+    const host = (req.headers.get("host") || "").toLowerCase().split(":")[0]
+    const isOldDomain = host === "sonipainting.com" || host === "www.sonipainting.com"
+
+    // Permanent redirect from old domain to new domain, preserving path + query.
+    if (isOldDomain) {
+      const redirectUrl = new URL(req.nextUrl.pathname + req.nextUrl.search, "https://www.zycrainterior.com")
+      return NextResponse.redirect(redirectUrl, 308)
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const token = req.nextauth.token as any;
@@ -11,7 +21,7 @@ export default withAuth(
 
     // Check for admin role on dashboard routes
     // (Double check path because matcher catches them, but safe to check)
-    if (path.startsWith("/dashboard") || path.startsWith("/projects") || path.startsWith("/settings")) {
+    if (adminProtectedPath(path)) {
       if (token?.role !== "admin") {
         const url = req.nextUrl.clone();
         url.pathname = "/";
@@ -26,6 +36,15 @@ export default withAuth(
     callbacks: {
       authorized: ({ req, token }) => {
         const path = req.nextUrl.pathname;
+        const isAuthProtected =
+          path.startsWith("/dashboard") ||
+          path.startsWith("/projects") ||
+          path.startsWith("/portfolio") ||
+          path.startsWith("/settings") ||
+          path === "/audit-logs" ||
+          path.startsWith("/audit-logs");
+
+        if (!isAuthProtected) return true;
         if (path.startsWith("/invoices/")) return true;
 
         // If user is NOT logged in, return false (redirects to sign-in)
@@ -38,6 +57,10 @@ export default withAuth(
   }
 )
 
+export default function middleware(req: Parameters<typeof authMiddleware>[0]) {
+  return authMiddleware(req)
+}
+
 export const config = {
-  matcher: ["/dashboard/:path*", "/projects/:path*", "/invoices/:path*", "/portfolio/:path*", "/settings", "/audit-logs"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api).*)"],
 };

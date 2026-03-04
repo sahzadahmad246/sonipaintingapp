@@ -86,16 +86,13 @@ export default function Navbar() {
           <div className="relative flex items-center">
             <Image
               src="/logo.png"
-              alt="PaintPro Logo"
-              width={60}
-              height={40}
-              className="w-[40px] md:w-[60px] h-auto"
+              alt="Zycra Logo"
+              width={64}
+              height={64}
+              className="w-[48px] md:w-[64px] h-auto"
               priority
             />
-            <div className="ml-2 font-bold text-lg md:text-xl text-primary">
-              <span className="hidden sm:inline">Soni Painting</span>
-              <span className="sm:hidden">Soni Painting</span>
-            </div>
+            
           </div>
         </Link>
 

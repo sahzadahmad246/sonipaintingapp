@@ -4,21 +4,21 @@ import { Metadata } from "next";
 
 // Define metadata for SEO
 export const metadata: Metadata = {
-  title: "Soni Painting - Interior Painting & Contracting Services",
+  title: "Zycra Interior (formerly Soni Painting) - Interior Painting & Contracting Services",
   description:
-    "Soni Painting offers premium interior contracting services in Thane, including house painting, office painting, POP, plumbing, carpentry, tiles, and more. Transform your space with our expert team.",
+    "Zycra Interior (formerly Soni Painting) offers premium interior contracting services in Thane, including house painting, office painting, POP, plumbing, carpentry, tiles, and more. Transform your space with our expert team.",
   openGraph: {
-    title: "Soni Painting - Interior Painting & Contracting Services",
+    title: "Zycra Interior (formerly Soni Painting) - Interior Painting & Contracting Services",
     description:
-      "Transform your home or office with Soni Painting's premium interior services: painting, POP, plumbing, carpentry, tiles, and more.",
-    url: "https://www.sonipainting.com",
-    siteName: "Soni Painting",
+      "Transform your home or office with Zycra Interior (formerly Soni Painting)'s premium interior services: painting, POP, plumbing, carpentry, tiles, and more.",
+    url: "https://www.zycrainterior.com",
+    siteName: "Zycra Interior (formerly Soni Painting)",
     images: [
       {
         url: "/images/painting.jpg",
         width: 1200,
         height: 630,
-        alt: "Soni Painting Interior Work",
+        alt: "Zycra Interior (formerly Soni Painting) Interior Work",
       },
     ],
     locale: "en_US",
@@ -26,16 +26,16 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Soni Painting - Interior Painting & Contracting Services",
+    title: "Zycra Interior (formerly Soni Painting) - Interior Painting & Contracting Services",
     description:
-      "Premium interior services by Soni Painting: painting, POP, plumbing, carpentry, tiles, and more.",
+      "Premium interior services by Zycra Interior (formerly Soni Painting): painting, POP, plumbing, carpentry, tiles, and more.",
     images: ["/images/painting.jpg"],
   },
   alternates: {
-    canonical: "https://www.sonipainting.com",
+    canonical: "https://www.zycrainterior.com",
     languages: {
-      en: "https://www.sonipainting.com",
-      "x-default": "https://www.sonipainting.com",
+      en: "https://www.zycrainterior.com",
+      "x-default": "https://www.zycrainterior.com",
     },
   },
   icons: {
@@ -47,10 +47,10 @@ export const metadata: Metadata = {
 const jsonLd = {
   "@context": "https://schema.org",
   "@type": "LocalBusiness",
-  name: "Soni Painting",
+  name: "Zycra Interior (formerly Soni Painting)",
   description:
     "Premium interior contracting services including painting, POP, plumbing, carpentry, tiles, and more in Thane, Maharashtra.",
-  url: "https://www.sonipainting.com",
+  url: "https://www.zycrainterior.com",
   telephone: "+919022846640",
   contactPoint: [
     {
@@ -105,11 +105,11 @@ const jsonLd = {
     addressCountry: "IN",
   },
   openingHours: "Mo-Sa 09:00-18:00",
-  image: "https://www.sonipainting.com/images/painting.jpg",
+  image: "https://www.zycrainterior.com/images/painting.jpg",
   sameAs: [
-    "https://www.facebook.com/sonipainting",
-    "https://www.instagram.com/sonipainting",
-    "https://www.linkedin.com/company/sonipainting",
+    "https://www.facebook.com/zycrainterior",
+    "https://www.instagram.com/zycrainterior",
+    "https://www.linkedin.com/company/zycrainterior",
   ],
   geo: {
     "@type": "GeoCoordinates",

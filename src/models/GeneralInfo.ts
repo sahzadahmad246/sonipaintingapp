@@ -3,7 +3,7 @@ import mongoose, { Schema, Document } from "mongoose";
 export interface IGeneralInfo extends Document {
   logoUrl: string; // Cloudinary URL for logo
   publicId?: string; // Cloudinary public ID for logo (optional)
-  siteName: string; // e.g., "Soni Painting"
+  siteName: string; // e.g., "Zycra Interior (formerly Soni Painting)"
   gstNumber: string; // GST number
   gstPercent: number; // GST percentage (e.g., 18)
   termsAndConditions: string[]; // Default terms for quotations

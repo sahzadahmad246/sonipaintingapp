@@ -7,8 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MessageSquare, Star } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Customer Reviews - SoniPainting",
-  description: "Read customer reviews and share your experience with SoniPainting services",
+  title: "Customer Reviews - Zycra Interior (formerly Soni Painting)",
+  description: "Read customer reviews and share your experience with Zycra Interior (formerly Soni Painting) services",
 };
 
 export default function ReviewsPage() {

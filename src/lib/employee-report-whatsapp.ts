@@ -103,7 +103,7 @@ Here is your attendance report for *${month}*:
 
 📎 Download PDF: ${pdfUrl}
 
-_Soni Painting_`;
+_Zycra Interior (formerly Soni Painting)_`;
 
             messageInstance = await client.messages.create({
                 from: `whatsapp:${process.env.TWILIO_PHONE_NUMBER}`,

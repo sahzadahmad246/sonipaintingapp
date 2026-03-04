@@ -56,7 +56,7 @@ export async function generateMetadata(
             images: [post.coverImage],
             type: "article",
             publishedTime: post.publishedAt?.toString(),
-            authors: ["Soni Painting Team"],
+            authors: ["Zycra Interior (formerly Soni Painting) Team"],
             tags: post.seo?.keywords || post.tags,
         },
         twitter: {
@@ -86,8 +86,8 @@ export default async function BlogPostPage({ params }: Props) {
         dateModified: post.updatedAt,
         author: [{
             "@type": "Organization", // Or Person if we had full person data
-            name: "Soni Painting Team",
-            url: "https://sonipainting.com"
+            name: "Zycra Interior (formerly Soni Painting) Team",
+            url: "https://www.zycrainterior.com"
         }],
         description: post.excerpt,
     };
@@ -151,8 +151,8 @@ export default async function BlogPostPage({ params }: Props) {
                                     </Avatar>
                                     <div className="text-left">
                                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                                        <p className="text-sm font-bold text-gray-900 leading-none">{(post.author as any)?.name || "Soni Painting Team"}</p>
-                                        <p className="text-xs text-primary font-medium mt-1">Staff at Soni Painting</p>
+                                        <p className="text-sm font-bold text-gray-900 leading-none">{(post.author as any)?.name || "Zycra Interior (formerly Soni Painting) Team"}</p>
+                                        <p className="text-xs text-primary font-medium mt-1">Staff at Zycra Interior (formerly Soni Painting)</p>
                                     </div>
                                 </div>
 

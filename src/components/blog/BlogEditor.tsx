@@ -42,7 +42,7 @@ const MenuBar = ({ editor }: { editor: Editor | null }) => {
         if (!file) return;
 
         const formData = new FormData();
-        const preset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "sonipainting";
+        const preset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "zycrainterior";
         const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
 
         console.log("DEBUG: Uploading with preset:", preset);

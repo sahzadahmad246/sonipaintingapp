@@ -25,19 +25,19 @@ const formatCurrency = (amount: number): string => {
 // Common function to add company header to PDF
 const addCompanyHeader = (doc: jsPDF) => {
   try {
-    doc.addImage("/logo.png", "PNG", 20, 15, 25, 25);
+    doc.addImage("/logo.png", "PNG", 20, 15, 18, 18);
   } catch {
     // Fallback: create a blue diamond shape
-    doc.setFillColor(41, 128, 185);
+    doc.setFillColor(31, 41, 55);
     doc.rect(20, 15, 10, 10, "F");
-    doc.setFillColor(52, 152, 219);
+    doc.setFillColor(51, 65, 85);
     doc.rect(25, 20, 10, 10, "F");
   }
 
   // Company name and details
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
-  doc.text("Soni Painting", 50, 25);
+  doc.text("Zycra Interior (formerly Soni Painting)", 50, 25);
 
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
@@ -61,12 +61,12 @@ export const generateQuotationPDF = (quotation: Quotation) => {
 
   // Quotation title with professional styling
   doc.setFontSize(16);
-  doc.setTextColor(0, 102, 204); // Blue color for title
+  doc.setTextColor(31, 41, 55); // Blue color for title
   doc.setFont("helvetica", "bold");
   doc.text("QUOTATION", 105, 50, { align: "center" });
 
   // Blue line below title
-  doc.setDrawColor(0, 102, 204);
+  doc.setDrawColor(31, 41, 55);
   doc.setLineWidth(0.5);
   doc.line(20, 55, 190, 55);
 
@@ -134,7 +134,7 @@ export const generateQuotationPDF = (quotation: Quotation) => {
     startY: 90,
     theme: "grid",
     headStyles: {
-      fillColor: [41, 128, 185],
+      fillColor: [31, 41, 55],
       textColor: [255, 255, 255],
       fontStyle: "bold",
     },
@@ -204,7 +204,7 @@ export const generateQuotationPDF = (quotation: Quotation) => {
   }
 
   if (quotation.grandTotal) {
-    doc.setDrawColor(0, 102, 204);
+    doc.setDrawColor(31, 41, 55);
     doc.setLineWidth(0.5);
     doc.line(
       totalLabelX - 5,
@@ -214,7 +214,7 @@ export const generateQuotationPDF = (quotation: Quotation) => {
     );
 
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("Grand Total: ", totalLabelX, currentTotalY + 4);
     doc.text(
       formatCurrency(quotation.grandTotal),
@@ -239,7 +239,7 @@ export const generateQuotationPDF = (quotation: Quotation) => {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("Additional Notes", 20, currentY);
     currentY += 8;
 
@@ -268,7 +268,7 @@ export const generateQuotationPDF = (quotation: Quotation) => {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("Terms & Conditions", 20, currentY);
     currentY += 8;
 
@@ -282,7 +282,7 @@ export const generateQuotationPDF = (quotation: Quotation) => {
         currentY = 20;
         doc.setFont("helvetica", "bold");
         doc.setFontSize(12);
-        doc.setTextColor(0, 102, 204);
+        doc.setTextColor(31, 41, 55);
         doc.text("Terms & Conditions (continued)", 20, currentY);
         currentY += 8;
         doc.setFont("helvetica", "normal");
@@ -307,7 +307,7 @@ export const generateQuotationPDF = (quotation: Quotation) => {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("Site Images", 20, currentY);
     currentY += 10;
     doc.setTextColor(0, 0, 0);
@@ -327,7 +327,7 @@ export const generateQuotationPDF = (quotation: Quotation) => {
         doc.addPage();
         currentY = 20;
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(0, 102, 204);
+        doc.setTextColor(31, 41, 55);
         doc.text("Site Images (continued)", 20, currentY);
         doc.setTextColor(0, 0, 0);
         currentY += 10;
@@ -404,7 +404,7 @@ export const generateQuotationPDF = (quotation: Quotation) => {
     doc.setFontSize(8);
     doc.setTextColor(100, 100, 100);
     doc.text(`Page ${i} of ${pageCount}`, 105, 290, { align: "center" });
-    doc.text("Soni Painting - Professional Painting Services", 105, 295, {
+    doc.text("Zycra Interior (formerly Soni Painting) - Professional Painting Services", 105, 295, {
       align: "center",
     });
   }
@@ -422,12 +422,12 @@ export const generateInvoicePDF = (invoice: Invoice) => {
 
   // Invoice title
   doc.setFontSize(16);
-  doc.setTextColor(0, 102, 204); // Blue color for title
+  doc.setTextColor(31, 41, 55); // Blue color for title
   doc.setFont("helvetica", "bold");
   doc.text("INVOICE", 105, 50, { align: "center" });
 
   // Blue line below title
-  doc.setDrawColor(0, 102, 204);
+  doc.setDrawColor(31, 41, 55);
   doc.setLineWidth(0.5);
   doc.line(20, 55, 190, 55);
 
@@ -508,7 +508,7 @@ export const generateInvoicePDF = (invoice: Invoice) => {
     startY: 90,
     theme: "grid",
     headStyles: {
-      fillColor: [41, 128, 185],
+      fillColor: [31, 41, 55],
       textColor: [255, 255, 255],
       fontStyle: "bold",
     },
@@ -544,7 +544,7 @@ export const generateInvoicePDF = (invoice: Invoice) => {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("Extra Work", 20, finalY);
     finalY += 5;
     doc.setTextColor(0, 0, 0);
@@ -564,7 +564,7 @@ export const generateInvoicePDF = (invoice: Invoice) => {
       startY: finalY,
       theme: "grid",
       headStyles: {
-        fillColor: [41, 128, 185],
+        fillColor: [31, 41, 55],
         textColor: [255, 255, 255],
         fontStyle: "bold",
       },
@@ -635,7 +635,7 @@ export const generateInvoicePDF = (invoice: Invoice) => {
     currentTotalY += 7;
   }
 
-  doc.setDrawColor(0, 102, 204);
+  doc.setDrawColor(31, 41, 55);
   doc.setLineWidth(0.5);
   doc.line(
     totalLabelX - 5,
@@ -645,7 +645,7 @@ export const generateInvoicePDF = (invoice: Invoice) => {
   );
 
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(0, 102, 204);
+  doc.setTextColor(31, 41, 55);
   doc.text("Grand Total: ", totalLabelX, currentTotalY + 4);
   doc.text(formatCurrency(invoice.grandTotal), totalValueX, currentTotalY + 4, {
     align: "right",
@@ -693,7 +693,7 @@ export const generateInvoicePDF = (invoice: Invoice) => {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("Payment History", 20, currentY);
     doc.setTextColor(0, 0, 0);
 
@@ -720,7 +720,7 @@ export const generateInvoicePDF = (invoice: Invoice) => {
       startY: currentY,
       theme: "grid",
       headStyles: {
-        fillColor: [41, 128, 185],
+        fillColor: [31, 41, 55],
         textColor: [255, 255, 255],
         fontStyle: "bold",
       },
@@ -747,7 +747,7 @@ export const generateInvoicePDF = (invoice: Invoice) => {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("Additional Notes", 20, currentY);
     currentY += 8;
     doc.setTextColor(0, 0, 0);
@@ -776,7 +776,7 @@ export const generateInvoicePDF = (invoice: Invoice) => {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("Terms & Conditions", 20, currentY);
     currentY += 8;
     doc.setTextColor(0, 0, 0);
@@ -790,7 +790,7 @@ export const generateInvoicePDF = (invoice: Invoice) => {
         currentY = 20;
         doc.setFont("helvetica", "bold");
         doc.setFontSize(12);
-        doc.setTextColor(0, 102, 204);
+        doc.setTextColor(31, 41, 55);
         doc.text("Terms & Conditions (continued)", 20, currentY);
         currentY += 8;
         doc.setTextColor(0, 0, 0);
@@ -816,7 +816,7 @@ export const generateInvoicePDF = (invoice: Invoice) => {
     doc.setFontSize(8);
     doc.setTextColor(100, 100, 100);
     doc.text(`Page ${i} of ${pageCount}`, 105, 290, { align: "center" });
-    doc.text("Soni Painting - Professional Painting Services", 105, 295, {
+    doc.text("Zycra Interior (formerly Soni Painting) - Professional Painting Services", 105, 295, {
       align: "center",
     });
   }
@@ -836,12 +836,12 @@ export const generateProjectPDF = (project: Project) => {
 
   // Project title
   doc.setFontSize(16);
-  doc.setTextColor(0, 102, 204); // Blue color for title
+  doc.setTextColor(31, 41, 55); // Blue color for title
   doc.setFont("helvetica", "bold");
   doc.text("PROJECT REPORT", 105, 50, { align: "center" });
 
   // Blue line below title
-  doc.setDrawColor(0, 102, 204);
+  doc.setDrawColor(31, 41, 55);
   doc.setLineWidth(0.5);
   doc.line(20, 55, 190, 55);
 
@@ -917,7 +917,7 @@ export const generateProjectPDF = (project: Project) => {
     startY: 90,
     theme: "grid",
     headStyles: {
-      fillColor: [41, 128, 185],
+      fillColor: [31, 41, 55],
       textColor: [255, 255, 255],
       fontStyle: "bold",
     },
@@ -953,7 +953,7 @@ export const generateProjectPDF = (project: Project) => {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("Extra Work", 20, finalY);
     finalY += 5;
     doc.setTextColor(0, 0, 0);
@@ -973,7 +973,7 @@ export const generateProjectPDF = (project: Project) => {
       startY: finalY,
       theme: "grid",
       headStyles: {
-        fillColor: [41, 128, 185],
+        fillColor: [31, 41, 55],
         textColor: [255, 255, 255],
         fontStyle: "bold",
       },
@@ -1035,7 +1035,7 @@ export const generateProjectPDF = (project: Project) => {
     currentTotalY += 7;
   }
 
-  doc.setDrawColor(0, 102, 204);
+  doc.setDrawColor(31, 41, 55);
   doc.setLineWidth(0.5);
   doc.line(
     totalLabelX - 5,
@@ -1045,7 +1045,7 @@ export const generateProjectPDF = (project: Project) => {
   );
 
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(0, 102, 204);
+  doc.setTextColor(31, 41, 55);
   doc.text("Grand Total: ", totalLabelX, currentTotalY + 4);
   doc.text(formatCurrency(project.grandTotal || 0), totalValueX, currentTotalY + 4, {
     align: "right",
@@ -1092,7 +1092,7 @@ export const generateProjectPDF = (project: Project) => {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("Payment History", 20, currentY);
     doc.setTextColor(0, 0, 0);
     currentY += 5;
@@ -1111,7 +1111,7 @@ export const generateProjectPDF = (project: Project) => {
       startY: currentY,
       theme: "grid",
       headStyles: {
-        fillColor: [41, 128, 185],
+        fillColor: [31, 41, 55],
         textColor: [255, 255, 255],
         fontStyle: "bold",
       },
@@ -1139,7 +1139,7 @@ export const generateProjectPDF = (project: Project) => {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("Notes", 20, currentY);
     currentY += 8;
 
@@ -1167,7 +1167,7 @@ export const generateProjectPDF = (project: Project) => {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(0, 102, 204);
+    doc.setTextColor(31, 41, 55);
     doc.text("Site Images", 20, currentY);
     currentY += 10;
     doc.setTextColor(0, 0, 0);
@@ -1187,7 +1187,7 @@ export const generateProjectPDF = (project: Project) => {
         doc.addPage();
         currentY = 20;
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(0, 102, 204);
+        doc.setTextColor(31, 41, 55);
         doc.text("Site Images (continued)", 20, currentY);
         doc.setTextColor(0, 0, 0);
         currentY += 10;
@@ -1242,7 +1242,7 @@ export const generateProjectPDF = (project: Project) => {
     doc.setFontSize(8);
     doc.setTextColor(100, 100, 100);
     doc.text(`Page ${i} of ${pageCount}`, 105, 290, { align: "center" });
-    doc.text("Soni Painting - Professional Painting Services", 105, 295, {
+    doc.text("Zycra Interior (formerly Soni Painting) - Professional Painting Services", 105, 295, {
       align: "center",
     });
   }

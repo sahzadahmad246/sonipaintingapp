@@ -1,9 +1,15 @@
+"use client"
+
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Facebook, Instagram, Linkedin, MapPin, Phone, Mail } from "lucide-react"
+import { useSiteName } from "@/hooks/use-site-name"
 
 export default function NewsletterFooter() {
+    const siteName = useSiteName()
+
     return (
         <footer className="bg-[#0B0F19] border text-white pt-40 pb-12 relative mt-24 sm:mt-32">
             {/* Floating Newsletter Card */}
@@ -23,7 +29,16 @@ export default function NewsletterFooter() {
             <div className="container mx-auto px-4 sm:px-6 lg:px-8 pt-10 sm:pt-0">
                 <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-8 md:gap-12 border-b border-white/10 pb-12 mb-8 md:mb-12">
                     <div className="sm:col-span-2 md:col-span-1">
-                        <div className="text-xl font-bold mb-4">Soni Painting</div>
+                        <div className="flex items-center gap-3 mb-4">
+                            <Image
+                                src="/logo.png"
+                                alt={`${siteName} Logo`}
+                                width={48}
+                                height={48}
+                                className="h-12 w-12 rounded-md object-cover"
+                            />
+                            <div className="text-xl font-bold leading-tight">{siteName}</div>
+                        </div>
                         <p className="text-sm text-slate-400 leading-relaxed mb-6">
                             Your trusted partner for premium interior painting and contracting services. Quality guaranteed.
                         </p>
@@ -69,17 +84,17 @@ export default function NewsletterFooter() {
                             </li>
                             <li className="flex items-center gap-3">
                                 <Mail className="w-4 h-4 shrink-0" />
-                                <span>contact@sonipainting.com</span>
+                                <span>contact@zycrainterior.com</span>
                             </li>
                         </ul>
                     </div>
                 </div>
 
                 <div className="flex flex-col sm:flex-row justify-between items-center text-xs sm:text-sm text-slate-500 gap-4">
-                    <p>&copy; {new Date().getFullYear()} Soni Painting. All rights reserved.</p>
+                    <p>&copy; {new Date().getFullYear()} {siteName}. All rights reserved.</p>
                     <div className="flex gap-6">
-                        <Link href="#" className="hover:text-white">Privacy Policy</Link>
-                        <Link href="#" className="hover:text-white">Terms of use</Link>
+                        <Link href="/privacy-policy" className="hover:text-white">Privacy Policy</Link>
+                        <Link href="/terms-of-service" className="hover:text-white">Terms of Use</Link>
                     </div>
                 </div>
             </div>
