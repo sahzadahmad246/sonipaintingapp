@@ -57,9 +57,7 @@ const authMiddleware = withAuth(
   }
 )
 
-export default function middleware(req: Parameters<typeof authMiddleware>[0]) {
-  return authMiddleware(req)
-}
+export default authMiddleware
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|api).*)"],

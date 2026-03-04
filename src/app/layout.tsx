@@ -9,7 +9,22 @@ import { DEFAULT_SITE_NAME } from "@/lib/brand";
 
 const inter = Inter({ subsets: ["latin"] });
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_FRONTEND_URL ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  process.env.NEXTAUTH_URL ||
+  "http://localhost:3000";
+
+const metadataBase = (() => {
+  try {
+    return new URL(siteUrl);
+  } catch {
+    return new URL("http://localhost:3000");
+  }
+})();
+
 export const metadata: Metadata = {
+  metadataBase,
   title: `${DEFAULT_SITE_NAME} - Interior Contractor`,
   description: "Interior painting, POP, carpentry, and tiling services",
   manifest: "/manifest.json",
