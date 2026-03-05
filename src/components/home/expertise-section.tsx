@@ -1,36 +1,42 @@
 import { Palette, Layers, Hammer, Grid, Droplet } from "lucide-react"
 import Image from "next/image"
+import Link from "next/link"
 
 const expertiseItems = [
     {
         icon: Palette,
         title: "Painting",
         desc: "High-quality interior and exterior painting with premium finishes.",
-        image: "/images/painting.jpg"
+        image: "/images/painting.jpg",
+        slug: "painting"
     },
     {
         icon: Layers,
         title: "False Ceilings",
         desc: "Modern POP designs and lighting integration.",
-        image: "/images/false-ceiling.jpg"
+        image: "/images/false-ceiling.jpg",
+        slug: "false-ceiling"
     },
     {
         icon: Grid,
         title: "Tiles Work",
         desc: "Professional tiling for floors and walls.",
-        image: "/images/tiles.jpg"
+        image: "/images/tiles.jpg",
+        slug: "tiles"
     },
     {
         icon: Hammer,
         title: "Carpentry",
         desc: "Custom furniture, wardrobes, and structural woodwork.",
-        image: "/images/carpentry.jpg"
+        image: "/images/carpentry.jpg",
+        slug: "carpentry"
     },
     {
         icon: Droplet,
         title: "Waterproofing",
         desc: "Advanced solutions to prevent leakage and dampness.",
-        image: "/images/waterproofing.jpg"
+        image: "/images/waterproofing.jpg",
+        slug: "waterproofing"
     }
 
 ]
@@ -48,7 +54,12 @@ export default function ExpertiseSection() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {expertiseItems.map((item, index) => (
-                        <div key={index} className="flex flex-col gap-6 group">
+                        <Link
+                            key={index}
+                            href={`/services/${item.slug}`}
+                            className="flex flex-col gap-6 group rounded-3xl p-2 transition-all duration-300 hover:bg-slate-50"
+                            aria-label={`Open ${item.title} service page`}
+                        >
                             {/* Card Image */}
                             <div className="relative aspect-video w-full rounded-[2rem] overflow-hidden shadow-lg bg-slate-100">
                                 <Image
@@ -70,9 +81,12 @@ export default function ExpertiseSection() {
                                     <p className="text-slate-500 leading-relaxed text-sm">
                                         {item.desc}
                                     </p>
+                                    <span className="inline-flex mt-2 text-sm font-medium text-primary group-hover:underline">
+                                        View service details
+                                    </span>
                                 </div>
                             </div>
-                        </div>
+                        </Link>
                     ))}
                 </div>
             </div>

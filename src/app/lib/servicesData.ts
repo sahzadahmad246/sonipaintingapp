@@ -93,4 +93,18 @@ export const services: Service[] = [
       process: ["Design consultation", "Framework installation", "Panel fitting", "Finishing"],
     },
   },
+  {
+    id: "modular-kitchens",
+    title: "Modular Kitchens",
+    description: "Functional and stylish modular kitchen design and installation services.",
+    icon: "Users",
+    image: "/images/carpentry.jpg",
+    slug: "modular-kitchens",
+    details: {
+      overview:
+        "Get a practical and elegant modular kitchen with optimized storage, durable finishes, and a layout built around your daily workflow.",
+      benefits: ["Smart space planning", "Custom cabinets and shutters", "Durable hardware and finishes"],
+      process: ["Kitchen measurement", "Layout and design finalization", "Factory-ready module preparation", "On-site installation"],
+    },
+  },
 ];

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { motion } from "framer-motion"
-import { Home, Brush, ImageIcon, Phone, User, Menu, BookOpen } from "lucide-react"
+import { Home, Brush, ImageIcon, Phone, User, Menu, BookOpen, Info } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { cn } from "@/lib/utils"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -38,9 +38,15 @@ export default function MobileNav() {
     { href: "/services", label: "Services", icon: <Brush className="h-5 w-5" /> },
     { href: "/portfolio", label: "Portfolio", icon: <ImageIcon className="h-5 w-5" /> },
     { href: "/blog", label: "Blog", icon: <BookOpen className="h-5 w-5" /> },
+    { href: "/about", label: "About", icon: <Info className="h-5 w-5" /> },
     { href: "/contact", label: "Contact", icon: <Phone className="h-5 w-5" /> },
     ...(session ? [{ href: "/profile", label: "Profile", icon: <User className="h-5 w-5" /> }] : []),
   ]
+
+  const isRouteActive = (href: string) => {
+    if (href === "/") return pathname === "/";
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
 
   return (
     <>
@@ -58,7 +64,7 @@ export default function MobileNav() {
               href={item.href}
               className={cn(
                 "flex flex-col items-center justify-center py-2 px-1 rounded-md transition-colors",
-                pathname === item.href ? "text-primary" : "text-gray-500 hover:text-primary hover:bg-gray-50",
+                isRouteActive(item.href) ? "text-primary" : "text-gray-500 hover:text-primary hover:bg-gray-50",
               )}
             >
               {item.icon}

@@ -5,6 +5,11 @@ import { Button } from "@/components/ui/button"
 import { ArrowRight, Star, } from "lucide-react"
 
 export default function HeroSection() {
+    const whatsappNumber = "919022846640"
+    const whatsappMessage =
+        "Hi Zycra Interior, I need a quote for interior work. Please share details for inspection and pricing."
+    const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(whatsappMessage)}`
+
     return (
         <section className="relative bg-white pt-24 pb-12 lg:pt-32 lg:pb-20 overflow-hidden">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -25,11 +30,10 @@ export default function HeroSection() {
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-4 mb-10">
-                            <Button size="lg" className="w-full sm:w-auto rounded-xl px-10 py-7 text-base font-bold bg-[#0B0F19] text-white hover:bg-slate-800 shadow-xl shadow-slate-900/10">
-                                Get a Quote <ArrowRight className="ml-2 h-4 w-4" />
-                            </Button>
-                            <Button size="lg" variant="ghost" className="w-full sm:w-auto rounded-xl px-10 py-7 text-base font-bold text-slate-900 hover:bg-slate-50">
-                                View Projects
+                            <Button asChild size="lg" className="w-full sm:w-auto rounded-xl px-10 py-7 text-base font-bold bg-[#0B0F19] text-white hover:bg-slate-800 shadow-xl shadow-slate-900/10">
+                                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
+                                    Get a Quote <ArrowRight className="ml-2 h-4 w-4" />
+                                </a>
                             </Button>
                         </div>
 

@@ -9,6 +9,25 @@ import { useSiteName } from "@/hooks/use-site-name"
 
 export default function NewsletterFooter() {
     const siteName = useSiteName()
+    const socialLinks = [
+        { href: "https://www.facebook.com/zycrainterior", icon: Facebook, label: "Facebook" },
+        { href: "https://www.instagram.com/zycrainterior", icon: Instagram, label: "Instagram" },
+        { href: "https://www.linkedin.com/company/zycrainterior", icon: Linkedin, label: "LinkedIn" },
+    ]
+
+    const serviceLinks = [
+        { href: "/services/painting", label: "Interior Painting" },
+        { href: "/services/false-ceiling", label: "False Ceilings" },
+        { href: "/services/waterproofing", label: "Waterproofing" },
+        { href: "/services/modular-kitchens", label: "Modular Kitchens" },
+    ]
+
+    const companyLinks = [
+        { href: "/about", label: "About Us" },
+        { href: "/portfolio", label: "Our Projects" },
+        { href: "/blog", label: "Blog" },
+        { href: "/contact", label: "Contact" },
+    ]
 
     return (
         <footer className="bg-[#0B0F19] border text-white pt-40 pb-12 relative mt-24 sm:mt-32">
@@ -43,8 +62,15 @@ export default function NewsletterFooter() {
                             Your trusted partner for premium interior painting and contracting services. Quality guaranteed.
                         </p>
                         <div className="flex gap-4">
-                            {[Facebook, Instagram, Linkedin].map((Icon, i) => (
-                                <Link key={i} href="#" className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-primary transition-colors">
+                            {socialLinks.map(({ href, icon: Icon, label }) => (
+                                <Link
+                                    key={label}
+                                    href={href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label={label}
+                                    className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-primary transition-colors"
+                                >
                                     <Icon className="w-4 h-4" />
                                 </Link>
                             ))}
@@ -54,20 +80,26 @@ export default function NewsletterFooter() {
                     <div>
                         <h4 className="font-bold text-base mb-4">Services</h4>
                         <ul className="space-y-3 text-sm text-slate-400">
-                            <li><Link href="#" className="hover:text-white transition-colors">Interior Painting</Link></li>
-                            <li><Link href="#" className="hover:text-white transition-colors">False Ceilings</Link></li>
-                            <li><Link href="#" className="hover:text-white transition-colors">Waterproofing</Link></li>
-                            <li><Link href="#" className="hover:text-white transition-colors">Modular Kitchens</Link></li>
+                            {serviceLinks.map((item) => (
+                                <li key={item.href}>
+                                    <Link href={item.href} className="hover:text-white transition-colors">
+                                        {item.label}
+                                    </Link>
+                                </li>
+                            ))}
                         </ul>
                     </div>
 
                     <div>
                         <h4 className="font-bold text-base mb-4">Company</h4>
                         <ul className="space-y-3 text-sm text-slate-400">
-                            <li><Link href="#" className="hover:text-white transition-colors">About Us</Link></li>
-                            <li><Link href="#" className="hover:text-white transition-colors">Our Projects</Link></li>
-                            <li><Link href="#" className="hover:text-white transition-colors">Blog</Link></li>
-                            <li><Link href="#" className="hover:text-white transition-colors">Contact</Link></li>
+                            {companyLinks.map((item) => (
+                                <li key={item.href}>
+                                    <Link href={item.href} className="hover:text-white transition-colors">
+                                        {item.label}
+                                    </Link>
+                                </li>
+                            ))}
                         </ul>
                     </div>
 

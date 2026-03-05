@@ -33,7 +33,7 @@ interface CustomNavLinkProps {
 
 const CustomNavLink = ({ href, children, className, ...props }: CustomNavLinkProps) => {
   const pathname = usePathname()
-  const isActive = pathname === href
+  const isActive = href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`)
 
   return (
     <NavigationMenuLink
@@ -53,6 +53,7 @@ const CustomNavLink = ({ href, children, className, ...props }: CustomNavLinkPro
 
 export default function Navbar() {
   const { data: session } = useSession()
+  const pathname = usePathname()
   const [isScrolled, setIsScrolled] = useState(false)
   
 
@@ -74,11 +75,13 @@ export default function Navbar() {
     { href: "/about", label: "About" },
   ]
 
+  const isHomePage = pathname === "/"
+
   return (
     <header
       className={cn(
         "sticky top-0 z-50 transition-all duration-300 w-full",
-        isScrolled ? "bg-white shadow-md py-2" : "bg-transparent py-4",
+        !isHomePage || isScrolled ? "bg-white shadow-md py-2" : "bg-transparent py-4",
       )}
     >
       <div className="container mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8">

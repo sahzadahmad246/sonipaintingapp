@@ -1,6 +1,7 @@
 import { MetadataRoute } from "next";
 import dbConnect from "@/lib/mongodb";
 import Post from "@/models/Post";
+import { services } from "@/app/lib/servicesData";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   await dbConnect();
@@ -10,6 +11,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Static pages
   const staticRoutes = [
     "",
+    "/services",
+    "/about",
+    "/contact",
+    "/portfolio",
+    "/reviews",
     "/privacy-policy",
     "/terms-of-service",
     "/blog",
@@ -31,5 +37,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  return [...staticRoutes, ...blogRoutes];
+  const serviceRoutes = services.map((service) => ({
+    url: `${baseUrl}/services/${service.slug}`,
+    lastModified: new Date(),
+    changeFrequency: "weekly" as const,
+    priority: 0.8,
+  }));
+
+  return [...staticRoutes, ...serviceRoutes, ...blogRoutes];
 }

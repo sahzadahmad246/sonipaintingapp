@@ -122,7 +122,7 @@ const jsonLd = {
       "@type": "Service",
       name: service.title,
       description: service.description,
-      url: `https://www.zycrainterior.com/services#${service.slug}`,
+      url: `https://www.zycrainterior.com/services/${service.slug}`,
       image: `https://www.zycrainterior.com${service.image}`,
       areaServed: ["Mumbai", "Thane"],
     })),
