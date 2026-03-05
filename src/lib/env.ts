@@ -30,12 +30,14 @@ const envSchema = z.object({
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_PHONE_NUMBER: z.string().optional(),
+  TWILIO_VERIFY_SERVICE_SID: z.string().optional(),
   TWILIO_QUOTATION_CREATED_SID: z.string().optional(),
   TWILIO_QUOTATION_ACCEPTED_SID: z.string().optional(),
   TWILIO_QUOTATION_REJECTED_SID: z.string().optional(),
   TWILIO_QUOTATION_UPDATED_SID: z.string().optional(),
   TWILIO_PAYMENT_RECEIVED_SID: z.string().optional(),
   TWILIO_PROJECT_UPDATED_SID: z.string().optional(),
+  WORKER_AUTH_SECRET: z.string().optional(),
   
   // Frontend
   NEXT_PUBLIC_FRONTEND_URL: z.string().url("NEXT_PUBLIC_FRONTEND_URL must be a valid URL"),

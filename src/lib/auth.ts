@@ -10,12 +10,12 @@ export interface SessionUser {
   name?: string
   email?: string
   image?: string
-  role?: "user" | "staff" | "admin"
+  role?: "user" | "admin"
 }
 
 export interface ExtendedJWT extends JWT {
   id?: string
-  role?: "user" | "staff" | "admin"
+  role?: "user" | "admin"
 }
 
 export const authOptions: NextAuthOptions = {

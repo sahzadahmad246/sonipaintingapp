@@ -4,18 +4,18 @@ declare module "next-auth" {
   interface Session {
     user: {
       id?: string
-      role?: "user" | "staff" | "admin"
+      role?: "user" | "admin"
     } & DefaultSession["user"]
   }
 
   interface User {
-    role?: "user" | "staff" | "admin"
+    role?: "user" | "admin"
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     id?: string
-    role?: "user" | "staff" | "admin"
+    role?: "user" | "admin"
   }
 }

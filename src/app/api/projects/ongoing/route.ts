@@ -4,7 +4,7 @@ import Project from "@/models/Project";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
-// GET - Fetch list of ongoing projects (for dropdown selection in attendance)
+// GET - Fetch list of ongoing projects
 export async function GET() {
     try {
         await dbConnect();

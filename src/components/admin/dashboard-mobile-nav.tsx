@@ -19,8 +19,7 @@ import {
   Star,
   BookOpen,
   User as UserIcon,
-  Users,
-  Calendar,
+  UsersRound,
   Wallet,
   X
 } from "lucide-react";
@@ -85,8 +84,7 @@ export default function DashboardMobileNav({
     { href: "/profile", label: "Profile", icon: <UserIcon className="h-5 w-5" /> },
     { href: "/dashboard/invoices", label: "Invoices", icon: <DollarSign className="h-5 w-5" /> },
     { href: "/dashboard/expenses", label: "Expenses", icon: <Wallet className="h-5 w-5" /> },
-    { href: "/dashboard/staff", label: "Staff", icon: <Users className="h-5 w-5" /> },
-    { href: "/dashboard/attendance", label: "Attendance", icon: <Calendar className="h-5 w-5" /> },
+    { href: "/dashboard/workforce", label: "Workforce", icon: <UsersRound className="h-5 w-5" /> },
     { href: "/dashboard/portfolio", label: "Portfolio", icon: <Camera className="h-5 w-5" /> },
     { href: "/dashboard/settings", label: "Settings", icon: <Settings className="h-5 w-5" /> },
     { href: "/dashboard/contact", label: "Contact Messages", icon: <MessageSquare className="h-5 w-5" /> },

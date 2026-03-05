@@ -4,7 +4,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useSession } from "next-auth/react"
 import { signOut } from "next-auth/react"
-import { LayoutDashboard, FileText, Briefcase, Camera, Shield, Settings, DollarSign, LogOut, Mail, Star, BookOpen, Users, Calendar, Wallet } from "lucide-react"
+import { LayoutDashboard, FileText, Briefcase, Camera, Shield, Settings, DollarSign, LogOut, Mail, Star, BookOpen, Wallet, UsersRound } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -88,18 +88,11 @@ export default function DashboardSidebar({ pendingQuotations = 0 }: DashboardSid
               Expenses
             </Link>
             <Link
-              href="/dashboard/staff"
+              href="/dashboard/workforce"
               className="flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900 group transition-colors"
             >
-              <Users className="h-5 w-5 mr-3 text-gray-500 group-hover:text-gray-700" />
-              Staff
-            </Link>
-            <Link
-              href="/dashboard/attendance"
-              className="flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900 group transition-colors"
-            >
-              <Calendar className="h-5 w-5 mr-3 text-gray-500 group-hover:text-gray-700" />
-              Attendance
+              <UsersRound className="h-5 w-5 mr-3 text-gray-500 group-hover:text-gray-700" />
+              Workforce
             </Link>
             <Link
               href="/dashboard/portfolio"

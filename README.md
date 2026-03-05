@@ -54,6 +54,20 @@ Zycra Interior (formerly Soni Painting) App is a comprehensive web application d
 - **Validation**: Zod
 - **Deployment**: Vercel
 
+## Worker OTP + Attendance Setup
+
+To use the new worker mobile OTP and attendance system, add these environment variables:
+
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_VERIFY_SERVICE_SID`
+- `WORKER_AUTH_SECRET` (recommended random 32+ chars; falls back to `NEXTAUTH_SECRET` if missing)
+
+Notes:
+
+- In local development, if Twilio Verify env vars are missing, OTP works in dev mode with code `000000`.
+- In production, Twilio Verify env vars are required for OTP to work.
+
 ## Prerequisites
 
 - Node.js 18.x or higher
