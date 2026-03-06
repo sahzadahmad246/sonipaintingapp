@@ -1,4 +1,5 @@
 # Zycra Interior (formerly Soni Painting) App
+<!-- Deployment trigger: non-functional documentation update -->
 
 ![Zycra Interior (formerly Soni Painting) Logo](./public/logo.png) 
 
