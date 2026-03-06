@@ -69,6 +69,12 @@ Notes:
 - In local development, if Twilio Verify env vars are missing, OTP works in dev mode with code `000000`.
 - In production, Twilio Verify env vars are required for OTP to work.
 
+## Loyalty Program Docs
+
+Detailed rules for point credits/debits, daily limits, and weekly payout:
+
+- [LOYALTY_PROGRAM.md](./LOYALTY_PROGRAM.md)
+
 ## Prerequisites
 
 - Node.js 18.x or higher

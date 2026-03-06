@@ -38,6 +38,7 @@ function SearchParamHandler() {
 export default function ClientWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isDashboardRoute = pathname?.startsWith("/dashboard");
+  const isWorkerRoute = pathname?.startsWith("/worker");
 
   useEffect(() => {
     initializeAccessibility({
@@ -55,7 +56,7 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
           <SearchParamHandler />
         </Suspense>
 
-        {!isDashboardRoute && <Navbar />}
+        {!isDashboardRoute && !isWorkerRoute && <Navbar />}
 
         {isDashboardRoute && <DashboardSidebar />}
 
@@ -65,7 +66,7 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
           {children}
         </main>
 
-        {isDashboardRoute ? <DashboardMobileNav /> : <MobileNav />}
+        {isDashboardRoute ? <DashboardMobileNav /> : !isWorkerRoute ? <MobileNav /> : null}
 
         <Toaster position="top-right" richColors />
       </ThemeProvider>

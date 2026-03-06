@@ -6,7 +6,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { useSession, signIn, signOut } from "next-auth/react"
+import { useSession, signOut } from "next-auth/react"
 import { User, LogOut, LogIn, LayoutDashboard } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -163,17 +163,12 @@ export default function Navbar() {
             </DropdownMenu>
           ) : (
             <div className="flex items-center gap-2">
-              <Button asChild variant="outline" className="hidden sm:inline-flex">
-                <Link href="/worker/login">Worker Login</Link>
-              </Button>
-              <Button
-                onClick={() => signIn("google", { callbackUrl: "/profile" })}
-                variant="default"
-                className="flex items-center gap-2"
-              >
+              <Button asChild variant="default" className="flex items-center gap-2">
+                <Link href="/signin">
                 <LogIn className="h-4 w-4" />
-                <span className="hidden sm:inline">Admin Sign In</span>
+                <span className="hidden sm:inline">Sign In</span>
                 <span className="sm:hidden">Sign In</span>
+                </Link>
               </Button>
             </div>
           )}

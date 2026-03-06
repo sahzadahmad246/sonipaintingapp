@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Users, CalendarCheck, IndianRupee, Calculator, Loader2, Pencil, Trash2 } from "lucide-react";
 
@@ -72,6 +72,28 @@ type AdvanceEntry = {
   workerId: Worker;
 };
 
+type LoyaltyEntryType = "credit" | "debit";
+type LoyaltyHistoryEntry = {
+  _id: string;
+  date: string;
+  entryType: LoyaltyEntryType;
+  points: number;
+  category: string;
+  reason: string;
+  note?: string;
+  imageUrl?: string;
+  workerId: { workerCode: string; name: string; mobile: string };
+  isReversal?: boolean;
+};
+
+type LoyaltyLeaderboardEntry = {
+  rank: number;
+  workerCode: string;
+  name: string;
+  totalPoints: number;
+  totalRupees: number;
+};
+
 const TODAY = new Date().toISOString().slice(0, 10);
 const COUNTRY_CODES = [
   { code: "+91", label: "India (+91)", localLength: 10 },
@@ -81,9 +103,59 @@ const COUNTRY_CODES = [
   { code: "+971", label: "UAE (+971)", localLength: 9 },
 ];
 
+const LOYALTY_CREDIT_CATEGORIES = [
+  { value: "on_time", label: "On Time" },
+  { value: "attendance_consistency", label: "Attendance Consistency" },
+  { value: "quality_work", label: "Quality Work" },
+  { value: "zero_rework_day", label: "Zero Rework Day" },
+  { value: "productivity_target_met", label: "Productivity Target Met" },
+  { value: "ahead_of_schedule", label: "Ahead Of Schedule" },
+  { value: "customer_praise", label: "Customer Praise" },
+  { value: "site_cleanliness", label: "Site Cleanliness" },
+  { value: "material_saving", label: "Material Saving" },
+  { value: "tool_care", label: "Tool Care" },
+  { value: "safety_followed", label: "Safety Followed" },
+  { value: "team_support", label: "Team Support" },
+  { value: "issue_reporting", label: "Issue Reporting" },
+  { value: "professional_behavior", label: "Professional Behavior" },
+  { value: "documentation_support", label: "Documentation Support" },
+];
+
+const LOYALTY_DEBIT_CATEGORIES = [
+  { value: "late_arrival", label: "Late Arrival" },
+  { value: "unauthorized_absence", label: "Unauthorized Absence" },
+  { value: "early_leave_without_approval", label: "Early Leave Without Approval" },
+  { value: "customer_complaint", label: "Customer Complaint" },
+  { value: "rework_needed", label: "Rework Needed" },
+  { value: "damage_to_work", label: "Damage To Work" },
+  { value: "material_wastage", label: "Material Wastage" },
+  { value: "unsafe_practice", label: "Unsafe Practice" },
+  { value: "site_mess", label: "Site Mess" },
+  { value: "tool_damage_or_loss", label: "Tool Damage Or Loss" },
+  { value: "instruction_non_compliance", label: "Instruction Non Compliance" },
+  { value: "misconduct", label: "Misconduct" },
+  { value: "mobile_misuse", label: "Mobile Misuse" },
+  { value: "false_update", label: "False Update" },
+  { value: "delay_caused_to_team", label: "Delay Caused To Team" },
+];
+
 export default function WorkforcePage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading...</div>}>
+      <WorkforcePageContent />
+    </Suspense>
+  );
+}
+
+function WorkforcePageContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab");
+  const validTab = initialTab === "workers" || initialTab === "attendance" || initialTab === "advances" || initialTab === "payroll"
+    ? initialTab
+    : "workers";
+  const [activeTab, setActiveTab] = useState<"workers" | "attendance" | "advances" | "payroll">(validTab);
 
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
@@ -132,7 +204,49 @@ export default function WorkforcePage() {
       totalAdvance: number;
       netPayable: number;
     };
+    loyalty: {
+      rules: {
+        dailyMaxEarnPoints: number;
+        pointValueInRupees: number;
+        weeklyPayoutSeparateFromWages: boolean;
+      };
+      totalPoints: number;
+      earnedPoints: number;
+      deductedPoints: number;
+      pointsRupees: number;
+      weeklyPayouts: Array<{
+        isoWeekYear: number;
+        isoWeek: number;
+        weekStart: string;
+        weekEnd: string;
+        earnedPoints: number;
+        deductedPoints: number;
+        netPoints: number;
+        weeklyPayoutRupees: number;
+        payoutStatus: "pending" | "paid";
+        paidAt: string | null;
+        payoutRecordId: string | null;
+      }>;
+    };
   }>(null);
+  const [savingLoyalty, setSavingLoyalty] = useState(false);
+  const [loyaltyHistory, setLoyaltyHistory] = useState<LoyaltyHistoryEntry[]>([]);
+  const [loyaltyLeaderboard, setLoyaltyLeaderboard] = useState<LoyaltyLeaderboardEntry[]>([]);
+  const [reversingEntryId, setReversingEntryId] = useState("");
+  const [reverseDialogOpen, setReverseDialogOpen] = useState(false);
+  const [reverseTargetEntry, setReverseTargetEntry] = useState<LoyaltyHistoryEntry | null>(null);
+  const [reverseReason, setReverseReason] = useState("");
+  const [updatingPayoutKey, setUpdatingPayoutKey] = useState("");
+  const [loyaltyForm, setLoyaltyForm] = useState({
+    date: TODAY,
+    entryType: "credit" as LoyaltyEntryType,
+    points: "",
+    category: LOYALTY_CREDIT_CATEGORIES[0].value,
+    reason: "",
+    note: "",
+    imageUrl: "",
+  });
+  const [uploadingLoyaltyImage, setUploadingLoyaltyImage] = useState(false);
   const [editingAttendance, setEditingAttendance] = useState<AttendanceEntry | null>(null);
   const [editingAttendanceUnits, setEditingAttendanceUnits] = useState("1");
   const [editingAttendanceNote, setEditingAttendanceNote] = useState("");
@@ -151,6 +265,8 @@ export default function WorkforcePage() {
     COUNTRY_CODES.find((item) => item.code === newWorker.countryCode) || COUNTRY_CODES[0];
   const newWorkerExpectedLength = selectedWorkerCountry.localLength;
   const isValidNewWorkerMobileLength = newWorker.mobileLocal.length === newWorkerExpectedLength;
+  const loyaltyCategoryOptions =
+    loyaltyForm.entryType === "credit" ? LOYALTY_CREDIT_CATEGORIES : LOYALTY_DEBIT_CATEGORIES;
 
   const fetchWorkers = async () => {
     const response = await fetch("/api/workers?status=all");
@@ -196,7 +312,168 @@ export default function WorkforcePage() {
     setPayrollSummary({
       worker: data.worker,
       summary: data.summary,
+      loyalty: data.loyalty,
     });
+  };
+
+  const getMonthDateRange = (monthValue: string) => {
+    const [yearStr, monthStr] = monthValue.split("-");
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    const start = new Date(year, month - 1, 1);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(year, month, 0);
+    end.setHours(23, 59, 59, 999);
+    return {
+      startDate: start.toISOString().slice(0, 10),
+      endDate: end.toISOString().slice(0, 10),
+    };
+  };
+
+  const fetchLoyaltyHistory = async () => {
+    if (!selectedWorkerForPayroll) return;
+    const { startDate, endDate } = getMonthDateRange(payrollMonth);
+    const response = await fetch(
+      `/api/workers/loyalty?workerId=${selectedWorkerForPayroll}&startDate=${startDate}&endDate=${endDate}`
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to fetch loyalty history");
+    setLoyaltyHistory(data.entries || []);
+  };
+
+  const fetchLoyaltyLeaderboard = async () => {
+    const response = await fetch("/api/workers/loyalty/leaderboard?period=weekly");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to fetch loyalty leaderboard");
+    setLoyaltyLeaderboard(data.leaderboard || []);
+  };
+
+  const addLoyaltyEntry = async () => {
+    if (!selectedWorkerForPayroll) return;
+    try {
+      setSavingLoyalty(true);
+      const response = await fetch("/api/workers/loyalty", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workerId: selectedWorkerForPayroll,
+          date: loyaltyForm.date,
+          entryType: loyaltyForm.entryType,
+          points: Number(loyaltyForm.points),
+          category: loyaltyForm.category,
+          reason: loyaltyForm.reason,
+          note: loyaltyForm.note,
+          imageUrl: loyaltyForm.imageUrl || undefined,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to save loyalty points");
+
+      toast.success("Loyalty points updated");
+      setLoyaltyForm((prev) => ({ ...prev, points: "", reason: "", note: "", imageUrl: "" }));
+      await fetchPayrollSummary();
+      await fetchLoyaltyHistory();
+      await fetchLoyaltyLeaderboard();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to save loyalty points");
+    } finally {
+      setSavingLoyalty(false);
+    }
+  };
+
+  const uploadLoyaltyEvidence = async (file: File) => {
+    try {
+      setUploadingLoyaltyImage(true);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "loyalty/evidence");
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to upload image");
+      }
+
+      if (!data?.secure_url) {
+        throw new Error("Cloudinary upload did not return a secure URL");
+      }
+
+      setLoyaltyForm((prev) => ({ ...prev, imageUrl: data.secure_url }));
+      toast.success("Evidence image uploaded");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to upload image");
+    } finally {
+      setUploadingLoyaltyImage(false);
+    }
+  };
+
+  const openReverseLoyaltyDialog = (entry: LoyaltyHistoryEntry) => {
+    setReverseTargetEntry(entry);
+    setReverseReason("");
+    setReverseDialogOpen(true);
+  };
+
+  const reverseLoyaltyEntry = async () => {
+    if (!reverseTargetEntry) return;
+    const reason = reverseReason.trim();
+    if (!reason) {
+      toast.error("Reversal reason is required");
+      return;
+    }
+    try {
+      setReversingEntryId(reverseTargetEntry._id);
+      const response = await fetch("/api/workers/loyalty/reverse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entryId: reverseTargetEntry._id, reason }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to reverse loyalty entry");
+      toast.success("Loyalty entry reversed");
+      setReverseDialogOpen(false);
+      setReverseTargetEntry(null);
+      setReverseReason("");
+      await fetchPayrollSummary();
+      await fetchLoyaltyHistory();
+      await fetchLoyaltyLeaderboard();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to reverse loyalty entry");
+    } finally {
+      setReversingEntryId("");
+    }
+  };
+
+  const updateWeeklyPayoutStatus = async (
+    isoWeekYear: number,
+    isoWeek: number,
+    status: "pending" | "paid"
+  ) => {
+    if (!selectedWorkerForPayroll) return;
+    const key = `${isoWeekYear}-${isoWeek}`;
+    try {
+      setUpdatingPayoutKey(key);
+      const response = await fetch("/api/workers/loyalty/payouts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workerId: selectedWorkerForPayroll,
+          isoWeekYear,
+          isoWeek,
+          status,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to update payout status");
+      toast.success(`Weekly payout marked as ${status}`);
+      await fetchPayrollSummary();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update payout status");
+    } finally {
+      setUpdatingPayoutKey("");
+    }
   };
 
   useEffect(() => {
@@ -243,8 +520,23 @@ export default function WorkforcePage() {
     fetchPayrollSummary().catch((error) => {
       toast.error(error instanceof Error ? error.message : "Failed to load payroll summary");
     });
+    fetchLoyaltyHistory().catch((error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to load loyalty history");
+    });
+    fetchLoyaltyLeaderboard().catch((error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to load loyalty leaderboard");
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWorkerForPayroll, payrollMonth]);
+
+  useEffect(() => {
+    const categories = loyaltyForm.entryType === "credit" ? LOYALTY_CREDIT_CATEGORIES : LOYALTY_DEBIT_CATEGORIES;
+    setLoyaltyForm((prev) => {
+      const exists = categories.some((item) => item.value === prev.category);
+      if (exists) return prev;
+      return { ...prev, category: categories[0].value };
+    });
+  }, [loyaltyForm.entryType]);
 
   const addWorker = async () => {
     try {
@@ -475,7 +767,7 @@ export default function WorkforcePage() {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="workers" className="w-full">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "workers" | "attendance" | "advances" | "payroll")} className="w-full">
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-6 bg-white border border-slate-200 rounded-lg p-1">
             <TabsTrigger value="workers" className="text-sm sm:text-base">Workers</TabsTrigger>
             <TabsTrigger value="attendance" className="text-sm sm:text-base">Attendance</TabsTrigger>
@@ -815,7 +1107,7 @@ export default function WorkforcePage() {
                 <Calculator className="h-6 w-6 text-purple-600" />
                 Payroll Summary
               </h2>
-              <p className="text-slate-600 text-sm mb-6">Net = (Units × Daily Wage) − Advances</p>
+              <p className="text-slate-600 text-sm mb-6">Wages and loyalty points payout are tracked separately.</p>
               
               <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
                 <div>
@@ -845,6 +1137,142 @@ export default function WorkforcePage() {
               </div>
             </div>
 
+            <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-slate-900 mb-1">Loyalty Points Update</h3>
+              <p className="text-slate-600 text-sm mb-4">
+                Daily max earn points per worker: 100. 1 point = Rs.1. Weekly payout is separate from wage payout.
+              </p>
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <Label className="text-slate-700 font-medium mb-2 block">Date</Label>
+                  <Input
+                    type="date"
+                    value={loyaltyForm.date}
+                    onChange={(e) => setLoyaltyForm((prev) => ({ ...prev, date: e.target.value }))}
+                    className="border-slate-200"
+                  />
+                </div>
+                <div>
+                  <Label className="text-slate-700 font-medium mb-2 block">Type</Label>
+                  <Select
+                    value={loyaltyForm.entryType}
+                    onValueChange={(value: LoyaltyEntryType) =>
+                      setLoyaltyForm((prev) => ({ ...prev, entryType: value }))
+                    }
+                  >
+                    <SelectTrigger className="border-slate-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="credit">Credit (+)</SelectItem>
+                      <SelectItem value="debit">Debit (-)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-slate-700 font-medium mb-2 block">Points</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={loyaltyForm.points}
+                    onChange={(e) => setLoyaltyForm((prev) => ({ ...prev, points: e.target.value }))}
+                    placeholder="10"
+                    className="border-slate-200"
+                  />
+                </div>
+                <div>
+                  <Label className="text-slate-700 font-medium mb-2 block">Category</Label>
+                  <Select
+                    value={loyaltyForm.category}
+                    onValueChange={(value) => setLoyaltyForm((prev) => ({ ...prev, category: value }))}
+                  >
+                    <SelectTrigger className="border-slate-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {loyaltyCategoryOptions.map((category) => (
+                        <SelectItem key={category.value} value={category.value}>
+                          {category.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-slate-700 font-medium mb-2 block">Reason</Label>
+                  <Input
+                    value={loyaltyForm.reason}
+                    onChange={(e) => setLoyaltyForm((prev) => ({ ...prev, reason: e.target.value }))}
+                    placeholder="Short reason for this points update"
+                    className="border-slate-200"
+                  />
+                </div>
+                <div className="sm:col-span-2 lg:col-span-3">
+                  <Label className="text-slate-700 font-medium mb-2 block">Note (optional)</Label>
+                  <Input
+                    value={loyaltyForm.note}
+                    onChange={(e) => setLoyaltyForm((prev) => ({ ...prev, note: e.target.value }))}
+                    placeholder="Optional additional note"
+                    className="border-slate-200"
+                  />
+                </div>
+                <div className="sm:col-span-2 lg:col-span-3">
+                  <Label className="text-slate-700 font-medium mb-2 block">Evidence Image (optional)</Label>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      className="border-slate-200"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          uploadLoyaltyEvidence(file);
+                          e.target.value = "";
+                        }
+                      }}
+                    />
+                    {loyaltyForm.imageUrl ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setLoyaltyForm((prev) => ({ ...prev, imageUrl: "" }))}
+                      >
+                        Remove Image
+                      </Button>
+                    ) : null}
+                  </div>
+                  {uploadingLoyaltyImage ? (
+                    <p className="mt-2 text-xs text-slate-500">Uploading image...</p>
+                  ) : null}
+                  {loyaltyForm.imageUrl ? (
+                    <a
+                      href={loyaltyForm.imageUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-block text-xs text-blue-600 hover:underline"
+                    >
+                      View uploaded image
+                    </a>
+                  ) : null}
+                </div>
+                <div className="sm:col-span-2 lg:col-span-3">
+                  <Button
+                    onClick={addLoyaltyEntry}
+                    disabled={
+                      savingLoyalty ||
+                      uploadingLoyaltyImage ||
+                      !selectedWorkerForPayroll ||
+                      !loyaltyForm.points ||
+                      !loyaltyForm.reason.trim()
+                    }
+                    className="bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    {savingLoyalty ? "Saving..." : "Save Loyalty Points"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
             {payrollSummary && (
               <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                 <div className="p-6 border-b border-slate-200">
@@ -852,7 +1280,7 @@ export default function WorkforcePage() {
                     {payrollSummary.worker.name || "Worker"} ({payrollSummary.worker.workerCode})
                   </h3>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 p-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4 p-6">
                   <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
                     <p className="text-sm font-medium text-blue-600 mb-1">Daily Wage</p>
                     <p className="text-2xl font-bold text-blue-900">₹{payrollSummary.worker.dailyWage}</p>
@@ -873,11 +1301,191 @@ export default function WorkforcePage() {
                     <p className="text-sm font-medium text-emerald-600 mb-1">Net Payable</p>
                     <p className="text-2xl font-bold text-emerald-900">₹{Math.round(payrollSummary.summary.netPayable)}</p>
                   </div>
+                  <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+                    <p className="text-sm font-medium text-indigo-600 mb-1">Net Points</p>
+                    <p className="text-2xl font-bold text-indigo-900">{payrollSummary.loyalty.totalPoints}</p>
+                  </div>
+                  <div className="bg-cyan-50 rounded-lg p-4 border border-cyan-200">
+                    <p className="text-sm font-medium text-cyan-700 mb-1">Points Value</p>
+                    <p className="text-2xl font-bold text-cyan-900">₹{payrollSummary.loyalty.pointsRupees}</p>
+                  </div>
                 </div>
                 <div className="px-6 py-4 bg-slate-50 border-t border-slate-200">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-600">Total Advances Deducted:</span>
                     <span className="font-bold text-slate-900">₹{payrollSummary.summary.totalAdvance}</span>
+                  </div>
+                </div>
+                <div className="px-6 py-4 bg-white border-t border-slate-200">
+                  <h4 className="text-sm font-semibold text-slate-900 mb-2">
+                    Weekly Loyalty Payout (separate from wages)
+                  </h4>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50">
+                          <TableHead>Week</TableHead>
+                          <TableHead>Earned</TableHead>
+                          <TableHead>Deducted</TableHead>
+                          <TableHead>Net Points</TableHead>
+                          <TableHead>Weekly Payout</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {payrollSummary.loyalty.weeklyPayouts.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center text-slate-500">
+                              No loyalty entries for this month
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          payrollSummary.loyalty.weeklyPayouts.map((week) => (
+                            <TableRow key={`${week.isoWeekYear}-${week.isoWeek}`}>
+                              <TableCell>
+                                W{week.isoWeek} ({new Date(week.weekStart).toLocaleDateString()} -{" "}
+                                {new Date(week.weekEnd).toLocaleDateString()})
+                              </TableCell>
+                              <TableCell>{week.earnedPoints}</TableCell>
+                              <TableCell>{week.deductedPoints}</TableCell>
+                              <TableCell>{week.netPoints}</TableCell>
+                              <TableCell className="font-semibold">₹{week.weeklyPayoutRupees}</TableCell>
+                              <TableCell>
+                                <span
+                                  className={`rounded px-2 py-1 text-xs font-medium ${
+                                    week.payoutStatus === "paid"
+                                      ? "bg-green-100 text-green-700"
+                                      : "bg-yellow-100 text-yellow-700"
+                                  }`}
+                                >
+                                  {week.payoutStatus}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={updatingPayoutKey === `${week.isoWeekYear}-${week.isoWeek}`}
+                                  onClick={() =>
+                                    updateWeeklyPayoutStatus(
+                                      week.isoWeekYear,
+                                      week.isoWeek,
+                                      week.payoutStatus === "paid" ? "pending" : "paid"
+                                    )
+                                  }
+                                >
+                                  {week.payoutStatus === "paid" ? "Mark Pending" : "Mark Paid"}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+                <div className="px-6 py-4 bg-white border-t border-slate-200">
+                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Loyalty History (selected month)</h4>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50">
+                          <TableHead>Date</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Points</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead>Reason</TableHead>
+                          <TableHead>Evidence</TableHead>
+                          <TableHead>Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {loyaltyHistory.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center text-slate-500">
+                              No loyalty entries for this month
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          loyaltyHistory.map((entry) => (
+                            <TableRow key={entry._id}>
+                              <TableCell>{new Date(entry.date).toLocaleDateString()}</TableCell>
+                              <TableCell>
+                                <span
+                                  className={`rounded px-2 py-1 text-xs font-medium ${
+                                    entry.entryType === "credit"
+                                      ? "bg-green-100 text-green-700"
+                                      : "bg-red-100 text-red-700"
+                                  }`}
+                                >
+                                  {entry.entryType}
+                                </span>
+                              </TableCell>
+                              <TableCell className="font-medium">{entry.points}</TableCell>
+                              <TableCell>{entry.category}</TableCell>
+                              <TableCell>{entry.reason}</TableCell>
+                              <TableCell>
+                                {entry.imageUrl ? (
+                                  <a href={entry.imageUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                                    View
+                                  </a>
+                                ) : (
+                                  "-"
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={
+                                    reversingEntryId === entry._id ||
+                                    entry.isReversal ||
+                                    entry.category === "reversal"
+                                  }
+                                  onClick={() => openReverseLoyaltyDialog(entry)}
+                                >
+                                  Reverse
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+                <div className="px-6 py-4 bg-white border-t border-slate-200">
+                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Weekly Leaderboard</h4>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50">
+                          <TableHead>Rank</TableHead>
+                          <TableHead>Worker</TableHead>
+                          <TableHead>Points</TableHead>
+                          <TableHead>Value</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {loyaltyLeaderboard.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center text-slate-500">
+                              No leaderboard data yet
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          loyaltyLeaderboard.map((row) => (
+                            <TableRow key={`${row.rank}-${row.workerCode}`}>
+                              <TableCell>#{row.rank}</TableCell>
+                              <TableCell>{row.name || row.workerCode}</TableCell>
+                              <TableCell>{row.totalPoints}</TableCell>
+                              <TableCell>₹{row.totalRupees}</TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
                   </div>
                 </div>
               </div>
@@ -1028,6 +1636,56 @@ export default function WorkforcePage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingAttendance(null)}>Cancel</Button>
             <Button onClick={updateAttendance}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={reverseDialogOpen}
+        onOpenChange={(open) => {
+          setReverseDialogOpen(open);
+          if (!open) {
+            setReverseTargetEntry(null);
+            setReverseReason("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reverse Loyalty Entry</DialogTitle>
+            <DialogDescription>
+              {reverseTargetEntry
+                ? `Add a reason to reverse ${reverseTargetEntry.entryType} ${reverseTargetEntry.points} points.`
+                : "Add a reason to reverse this loyalty entry."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div>
+              <Label>Reason *</Label>
+              <Textarea
+                value={reverseReason}
+                onChange={(e) => setReverseReason(e.target.value)}
+                placeholder="Enter reason for reversal"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReverseDialogOpen(false);
+                setReverseTargetEntry(null);
+                setReverseReason("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={reverseLoyaltyEntry}
+              disabled={!reverseReason.trim() || reversingEntryId === reverseTargetEntry?._id}
+            >
+              {reversingEntryId === reverseTargetEntry?._id ? "Reversing..." : "Confirm Reverse"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

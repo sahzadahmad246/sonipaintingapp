@@ -3,6 +3,8 @@ import dbConnect from "@/lib/mongodb";
 import Worker from "@/models/Worker";
 import WorkerAttendance from "@/models/WorkerAttendance";
 import WorkerAdvance from "@/models/WorkerAdvance";
+import WorkerLoyaltyEntry from "@/models/WorkerLoyaltyEntry";
+import WorkerLoyaltyWeeklyPayout from "@/models/WorkerLoyaltyWeeklyPayout";
 import { getAdminSession } from "@/lib/admin-auth";
 import { getWorkerSessionFromCookie } from "@/lib/worker-auth";
 
@@ -28,6 +30,20 @@ function getMonthRange(month: string) {
   end.setHours(23, 59, 59, 999);
 
   return { start, end };
+}
+
+function getWeekRange(date: Date) {
+  const day = date.getDay();
+  const diffToMonday = (day + 6) % 7;
+  const weekStart = new Date(date);
+  weekStart.setDate(date.getDate() - diffToMonday);
+  weekStart.setHours(0, 0, 0, 0);
+
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+
+  return { weekStart, weekEnd };
 }
 
 export async function GET(req: NextRequest) {
@@ -63,7 +79,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Worker not found" }, { status: 404 });
     }
 
-    const [attendanceAgg, advancesAgg, attendanceEntries, advances] = await Promise.all([
+    const [attendanceAgg, advancesAgg, loyaltyAgg, weeklyLoyaltyAgg, attendanceEntries, advances, loyaltyEntries] = await Promise.all([
       WorkerAttendance.aggregate([
         {
           $match: {
@@ -97,6 +113,60 @@ export async function GET(req: NextRequest) {
           },
         },
       ]),
+      WorkerLoyaltyEntry.aggregate([
+        {
+          $match: {
+            workerId: worker._id,
+            date: { $gte: monthRange.start, $lte: monthRange.end },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalPoints: { $sum: "$points" },
+            earnedPoints: {
+              $sum: {
+                $cond: [{ $gt: ["$points", 0] }, "$points", 0],
+              },
+            },
+            deductedPoints: {
+              $sum: {
+                $cond: [{ $lt: ["$points", 0] }, "$points", 0],
+              },
+            },
+          },
+        },
+      ]),
+      WorkerLoyaltyEntry.aggregate([
+        {
+          $match: {
+            workerId: worker._id,
+            date: { $gte: monthRange.start, $lte: monthRange.end },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              isoWeekYear: { $isoWeekYear: "$date" },
+              isoWeek: { $isoWeek: "$date" },
+            },
+            totalPoints: { $sum: "$points" },
+            earnedPoints: {
+              $sum: {
+                $cond: [{ $gt: ["$points", 0] }, "$points", 0],
+              },
+            },
+            deductedPoints: {
+              $sum: {
+                $cond: [{ $lt: ["$points", 0] }, "$points", 0],
+              },
+            },
+            firstDate: { $min: "$date" },
+            lastDate: { $max: "$date" },
+          },
+        },
+        { $sort: { "_id.isoWeekYear": 1, "_id.isoWeek": 1 } },
+      ]),
       WorkerAttendance.find({
         workerId: worker._id,
         date: { $gte: monthRange.start, $lte: monthRange.end },
@@ -109,6 +179,12 @@ export async function GET(req: NextRequest) {
       })
         .sort({ date: -1, createdAt: -1 })
         .lean(),
+      WorkerLoyaltyEntry.find({
+        workerId: worker._id,
+        date: { $gte: monthRange.start, $lte: monthRange.end },
+      })
+        .sort({ date: -1, createdAt: -1 })
+        .lean(),
     ]);
 
     const totalUnits = attendanceAgg[0]?.totalUnits || 0;
@@ -116,6 +192,44 @@ export async function GET(req: NextRequest) {
     const grossWage = totalUnits * (worker.dailyWage || 0);
     const totalAdvance = advancesAgg[0]?.totalAdvance || 0;
     const netPayable = grossWage - totalAdvance;
+    const totalPoints = loyaltyAgg[0]?.totalPoints || 0;
+    const earnedPoints = loyaltyAgg[0]?.earnedPoints || 0;
+    const deductedPoints = Math.abs(loyaltyAgg[0]?.deductedPoints || 0);
+    const pointsRupees = totalPoints;
+
+    const weekKeys = weeklyLoyaltyAgg.map((week) => ({
+      isoWeekYear: week._id.isoWeekYear,
+      isoWeek: week._id.isoWeek,
+    }));
+    const payoutRecords = weekKeys.length
+      ? await WorkerLoyaltyWeeklyPayout.find({
+          workerId: worker._id,
+          $or: weekKeys,
+        }).lean()
+      : [];
+    const payoutMap = new Map(
+      payoutRecords.map((payout) => [`${payout.isoWeekYear}-${payout.isoWeek}`, payout])
+    );
+
+    const weeklyPayouts = weeklyLoyaltyAgg.map((week) => {
+      const { weekStart, weekEnd } = getWeekRange(new Date(week.firstDate));
+      const netPoints = week.totalPoints || 0;
+      const key = `${week._id.isoWeekYear}-${week._id.isoWeek}`;
+      const payoutRecord = payoutMap.get(key);
+      return {
+        isoWeekYear: week._id.isoWeekYear,
+        isoWeek: week._id.isoWeek,
+        weekStart,
+        weekEnd,
+        earnedPoints: week.earnedPoints || 0,
+        deductedPoints: Math.abs(week.deductedPoints || 0),
+        netPoints,
+        weeklyPayoutRupees: Math.max(0, netPoints),
+        payoutStatus: payoutRecord?.status || "pending",
+        paidAt: payoutRecord?.paidAt || null,
+        payoutRecordId: payoutRecord?._id || null,
+      };
+    });
 
     return NextResponse.json({
       worker: {
@@ -137,8 +251,21 @@ export async function GET(req: NextRequest) {
         totalAdvance,
         netPayable,
       },
+      loyalty: {
+        rules: {
+          dailyMaxEarnPoints: 100,
+          pointValueInRupees: 1,
+          weeklyPayoutSeparateFromWages: true,
+        },
+        totalPoints,
+        earnedPoints,
+        deductedPoints,
+        pointsRupees,
+        weeklyPayouts,
+      },
       attendanceEntries,
       advances,
+      loyaltyEntries,
     });
   } catch (error) {
     console.error("Error generating payroll summary:", error);

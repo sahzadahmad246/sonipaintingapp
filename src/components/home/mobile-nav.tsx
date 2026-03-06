@@ -40,7 +40,9 @@ export default function MobileNav() {
     { href: "/blog", label: "Blog", icon: <BookOpen className="h-5 w-5" /> },
     { href: "/about", label: "About", icon: <Info className="h-5 w-5" /> },
     { href: "/contact", label: "Contact", icon: <Phone className="h-5 w-5" /> },
-    ...(session ? [{ href: "/profile", label: "Profile", icon: <User className="h-5 w-5" /> }] : []),
+    ...(session
+      ? [{ href: "/profile", label: "Profile", icon: <User className="h-5 w-5" /> }]
+      : [{ href: "/signin", label: "Sign In", icon: <User className="h-5 w-5" /> }]),
   ]
 
   const isRouteActive = (href: string) => {

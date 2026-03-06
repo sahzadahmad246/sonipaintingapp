@@ -13,6 +13,11 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get("file") as File;
+    const folderInput = formData.get("folder");
+    const folder =
+      typeof folderInput === "string" && folderInput.trim()
+        ? folderInput.trim().replace(/[^a-zA-Z0-9/_-]/g, "")
+        : "blog";
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -23,7 +28,7 @@ export async function POST(req: NextRequest) {
 
     const uploadResult = await new Promise((resolve, reject) => {
       cloudinary.uploader.upload_stream(
-        { folder: "blog" }, // Optional: organize in folders
+        { folder },
         (error, result) => {
           if (error) reject(error);
           else resolve(result);
