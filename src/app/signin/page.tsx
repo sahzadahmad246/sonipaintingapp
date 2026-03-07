@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowRight, BriefcaseBusiness, ShieldCheck } from "lucide-react";
+import { signIn } from "next-auth/react";
 
 import { Button } from "@/components/ui/button";
 
@@ -17,9 +20,9 @@ export default function SignInSelectionPage() {
           </p>
 
           <div className="mt-6 space-y-3">
-            <Link
-              href="/auth/signin?callbackUrl=/dashboard"
-              className="group block rounded-2xl border border-slate-200 p-4 transition hover:border-slate-300 hover:bg-slate-50"
+            <button
+              onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+              className="group block w-full text-left rounded-2xl border border-slate-200 p-4 transition hover:border-slate-300 hover:bg-slate-50"
             >
               <div className="flex items-start gap-3">
                 <div className="rounded-xl bg-slate-900 p-2 text-white">
@@ -33,7 +36,7 @@ export default function SignInSelectionPage() {
                 </div>
                 <ArrowRight className="mt-1 h-4 w-4 text-slate-400 transition group-hover:translate-x-0.5" />
               </div>
-            </Link>
+            </button>
 
             <Link
               href="/worker/login"
