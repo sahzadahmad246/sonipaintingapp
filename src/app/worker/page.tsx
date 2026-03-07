@@ -1,13 +1,34 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { toast } from "sonner";
-import { CalendarCheck2, CircleDollarSign, Home, Trophy } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  BarChart3,
+  CalendarCheck2,
+  ChevronDown,
+  CircleDollarSign,
+  Home,
+  Info,
+  Minus,
+  Trophy,
+  Zap,
+} from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Worker = {
   _id: string;
@@ -77,6 +98,12 @@ type LeaderboardEntry = {
 
 type WorkerTab = "home" | "payout" | "attendance" | "leaderboard";
 const WORKER_TABS: WorkerTab[] = ["home", "payout", "attendance", "leaderboard"];
+type MonthlyMetrics = {
+  netPayable: number;
+  loyaltyValue: number;
+  attendanceDays: number;
+  advances: number;
+};
 
 export default function WorkerDashboardPage() {
   return (
@@ -95,7 +122,18 @@ function WorkerDashboardContent() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [loading, setLoading] = useState(true);
+  const [isMonthLoading, setIsMonthLoading] = useState(false);
+  const [previousMonthMetrics, setPreviousMonthMetrics] = useState<MonthlyMetrics | null>(null);
   const [activeTab, setActiveTab] = useState<WorkerTab>("home");
+  const [isBottomNavVisible, setIsBottomNavVisible] = useState(true);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isInfoDialogOpen, setIsInfoDialogOpen] = useState(false);
+  const [infoDialogTitle, setInfoDialogTitle] = useState("");
+  const [infoDialogDescription, setInfoDialogDescription] = useState("");
+  const lastScrollYRef = useRef(0);
+  const hasLoadedOnceRef = useRef(false);
+  const monthPickerRef = useRef<HTMLInputElement | null>(null);
+  const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
 
   const setTabWithUrl = (tab: WorkerTab) => {
     setActiveTab(tab);
@@ -104,9 +142,19 @@ function WorkerDashboardContent() {
     router.replace(`${pathname}?${params.toString()}`);
   };
 
-  const load = async () => {
+  const shiftMonth = (monthValue: string, delta: number) => {
+    const [year, monthNum] = monthValue.split("-").map(Number);
+    const nextDate = new Date(year, monthNum - 1 + delta, 1);
+    return `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, "0")}`;
+  };
+
+  const load = async (isInitialLoad = false) => {
     try {
-      setLoading(true);
+      if (isInitialLoad) {
+        setLoading(true);
+      } else {
+        setIsMonthLoading(true);
+      }
       const response = await fetch(`/api/workers/payroll/summary?month=${month}`);
       const json = await response.json();
       if (!response.ok) {
@@ -117,6 +165,19 @@ function WorkerDashboardContent() {
         throw new Error(json.error || "Failed to load worker dashboard");
       }
       setData(json);
+      const previousMonth = shiftMonth(month, -1);
+      const previousResponse = await fetch(`/api/workers/payroll/summary?month=${previousMonth}`);
+      if (previousResponse.ok) {
+        const previousJson = await previousResponse.json();
+        setPreviousMonthMetrics({
+          netPayable: Math.round(previousJson.summary?.netPayable || 0),
+          loyaltyValue: Math.max(0, previousJson.loyalty?.pointsRupees || 0),
+          attendanceDays: Number(previousJson.summary?.attendanceDays || 0),
+          advances: Math.round(previousJson.summary?.totalAdvance || 0),
+        });
+      } else {
+        setPreviousMonthMetrics(null);
+      }
 
       const leaderboardRes = await fetch("/api/workers/loyalty/leaderboard?period=weekly");
       const leaderboardJson = await leaderboardRes.json();
@@ -126,12 +187,18 @@ function WorkerDashboardContent() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load worker dashboard");
     } finally {
-      setLoading(false);
+      if (isInitialLoad) {
+        setLoading(false);
+      } else {
+        setIsMonthLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    load();
+    const isInitialLoad = !hasLoadedOnceRef.current;
+    load(isInitialLoad);
+    hasLoadedOnceRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month]);
 
@@ -144,11 +211,49 @@ function WorkerDashboardContent() {
     setActiveTab("home");
   }, [searchParams]);
 
+  useEffect(() => {
+    const onScroll = () => {
+      const currentY = window.scrollY;
+      const lastY = lastScrollYRef.current;
+
+      if (currentY <= 24) {
+        setIsBottomNavVisible(true);
+      } else if (currentY > lastY + 6) {
+        setIsBottomNavVisible(false);
+      } else if (currentY < lastY - 6) {
+        setIsBottomNavVisible(true);
+      }
+
+      lastScrollYRef.current = currentY;
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   const monthName = useMemo(() => {
     const [year, monthNum] = month.split("-");
     const date = new Date(Number(year), Number(monthNum) - 1, 1);
     return date.toLocaleString("en-IN", { month: "long", year: "numeric" });
   }, [month]);
+
+  const openMonthPicker = () => {
+    const input = monthPickerRef.current;
+    if (!input) return;
+    const pickerInput = input as HTMLInputElement & { showPicker?: () => void };
+    if (typeof pickerInput.showPicker === "function") {
+      pickerInput.showPicker();
+      return;
+    }
+    input.focus();
+    input.click();
+  };
+
+  const openInfoDialog = (title: string, description: string) => {
+    setInfoDialogTitle(title);
+    setInfoDialogDescription(description);
+    setIsInfoDialogOpen(true);
+  };
 
   const leaderboardInsight = useMemo(() => {
     if (!data || leaderboard.length === 0) {
@@ -180,100 +285,234 @@ function WorkerDashboardContent() {
     router.push("/worker/login");
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
-  if (!data) return null;
+  if (loading || !data) return <div className="p-6">Loading...</div>;
 
   const payoutTotal = Math.round(data.summary.netPayable) + Math.max(0, data.loyalty.pointsRupees);
+  const workerDisplayName = data.worker.name || data.worker.workerCode;
+  const workerInitial = workerDisplayName.trim().charAt(0).toUpperCase() || "W";
+  const currentMetrics: MonthlyMetrics = {
+    netPayable: Math.round(data.summary.netPayable),
+    loyaltyValue: Math.max(0, data.loyalty.pointsRupees),
+    attendanceDays: data.summary.attendanceDays,
+    advances: Math.round(data.summary.totalAdvance),
+  };
+
+  const getDeltaNode = (currentValue: number, previousValue?: number) => {
+    if (previousValue === undefined) {
+      return <p className="mt-1 text-[11px] text-slate-400">No last month data</p>;
+    }
+    const delta = currentValue - previousValue;
+    if (delta > 0) {
+      return (
+        <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600">
+          <ArrowUpRight className="h-3.5 w-3.5" />+{delta} vs last month
+        </p>
+      );
+    }
+    if (delta < 0) {
+      return (
+        <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-red-600">
+          <ArrowDownRight className="h-3.5 w-3.5" />
+          {delta} vs last month
+        </p>
+      );
+    }
+    return (
+      <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-slate-500">
+        <Minus className="h-3.5 w-3.5" />
+        No change vs last month
+      </p>
+    );
+  };
   const sortedLoyaltyEntries = [...data.loyaltyEntries].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
 
   return (
-    <div className="min-h-screen bg-slate-100 px-3 py-4 sm:px-4">
+    <div className="min-h-screen bg-slate-100 px-3 pb-4 sm:px-4">
       <div className="mx-auto w-full max-w-xl space-y-4 pb-24 lg:w-1/2">
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <div className="-mx-3 border-y border-slate-200 bg-white px-4 py-4 sm:-mx-4">
           <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <h1 className="text-xl font-semibold tracking-tight">Worker Dashboard</h1>
-              <p className="text-xs text-slate-500">
-                {data.worker.name || data.worker.workerCode} | {data.worker.mobile}
-              </p>
-              <p className="text-xs font-medium text-slate-600">{monthName}</p>
+            <div className="flex h-10 items-center">
+              <Image src="/logo.png" alt="Soni Painting" width={120} height={40} className="h-10 w-auto" priority />
             </div>
-            <Button variant="outline" onClick={logout} className="h-8 px-3 text-xs">
-              Logout
-            </Button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openMonthPicker}
+                className="inline-flex h-10 items-center gap-1 rounded-full border border-slate-200 px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-indigo-700"
+                aria-label="Open month selector"
+              >
+                {monthName}
+                <ChevronDown className="h-4 w-4" />
+              </button>
+              <DropdownMenu open={isProfileMenuOpen} onOpenChange={setIsProfileMenuOpen}>
+                <DropdownMenuTrigger asChild onMouseEnter={() => setIsProfileMenuOpen(true)}>
+                  <button
+                    type="button"
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-200"
+                    aria-label="Open profile menu"
+                  >
+                    {workerInitial}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="w-56"
+                  onMouseLeave={() => setIsProfileMenuOpen(false)}
+                >
+                  <DropdownMenuLabel className="text-sm">{workerDisplayName}</DropdownMenuLabel>
+                  <p className="px-2 pb-2 text-xs text-slate-500">{data.worker.mobile}</p>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout}>Logout</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
+        <input
+          ref={monthPickerRef}
+          type="month"
+          value={month}
+          max={currentMonth}
+          onChange={(e) => {
+            const selectedMonth = e.target.value;
+            if (!selectedMonth || selectedMonth > currentMonth) return;
+            setMonth(selectedMonth);
+          }}
+          className="sr-only"
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+        <Dialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen}>
+          <DialogContent className="sm:max-w-[360px]">
+            <DialogHeader>
+              <DialogTitle>{infoDialogTitle}</DialogTitle>
+              <DialogDescription>{infoDialogDescription}</DialogDescription>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
 
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="space-y-2 p-4">
-            <label className="text-xs font-medium text-slate-600">Select Month</label>
-            <Input
-              type="month"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              className="h-9"
-            />
-          </CardContent>
-        </Card>
+        {isMonthLoading ? (
+          <Card className="border-slate-200 shadow-sm">
+            <CardContent className="p-8 text-center text-sm text-slate-500">Loading month data...</CardContent>
+          </Card>
+        ) : null}
 
-        {activeTab === "home" ? (
+        {!isMonthLoading && activeTab === "home" ? (
           <div className="space-y-4">
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Home Summary</CardTitle>
-                <CardDescription>Quick snapshot of your wages and points.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-[11px] text-slate-500">Net Wage</p>
-                  <p className="text-lg font-semibold">Rs. {Math.round(data.summary.netPayable)}</p>
-                </div>
-                <div className="rounded-xl bg-indigo-50 p-3">
-                  <p className="text-[11px] text-slate-500">Loyalty Value</p>
-                  <p className="text-lg font-semibold">Rs. {Math.max(0, data.loyalty.pointsRupees)}</p>
-                </div>
-                <div className="rounded-xl bg-emerald-50 p-3">
-                  <p className="text-[11px] text-slate-500">Attendance Days</p>
-                  <p className="text-lg font-semibold">{data.summary.attendanceDays}</p>
-                </div>
-                <div className="rounded-xl bg-amber-50 p-3">
-                  <p className="text-[11px] text-slate-500">Advances</p>
-                  <p className="text-lg font-semibold">Rs. {Math.round(data.summary.totalAdvance)}</p>
+            <Card className="gap-3 overflow-hidden rounded-2xl border-slate-200 p-0 shadow-sm">
+              <div className="flex items-center gap-2 bg-black px-4 py-2.5 text-white">
+                <BarChart3 className="h-5 w-5" />
+                <h3 className="text-xl font-semibold tracking-tight">Home Summary</h3>
+              </div>
+              <CardContent className="px-4 pb-4 pt-0">
+                <div className="grid grid-cols-2 gap-3 px-1">
+                  <div className="rounded-xl bg-slate-50 p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] text-slate-500">Net Wage</p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openInfoDialog("Net Wage", "Net wage is this month wage after advance deductions.")
+                        }
+                        className="text-slate-400 hover:text-slate-600"
+                        aria-label="Net wage info"
+                      >
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-lg font-semibold">Rs. {currentMetrics.netPayable}</p>
+                    {getDeltaNode(currentMetrics.netPayable, previousMonthMetrics?.netPayable)}
+                  </div>
+                  <div className="rounded-xl bg-indigo-50 p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] text-slate-500">Loyalty Value</p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openInfoDialog("Loyalty Value", "Loyalty value is points amount for this month.")
+                        }
+                        className="text-slate-400 hover:text-slate-600"
+                        aria-label="Loyalty value info"
+                      >
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-lg font-semibold">Rs. {currentMetrics.loyaltyValue}</p>
+                    {getDeltaNode(currentMetrics.loyaltyValue, previousMonthMetrics?.loyaltyValue)}
+                  </div>
+                  <div className="rounded-xl bg-emerald-50 p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] text-slate-500">Hajiri Days</p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openInfoDialog("Hajiri Days", "Hajiri days means total attendance days marked in this month.")
+                        }
+                        className="text-slate-400 hover:text-slate-600"
+                        aria-label="Hajiri info"
+                      >
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-lg font-semibold">{currentMetrics.attendanceDays}</p>
+                    {getDeltaNode(currentMetrics.attendanceDays, previousMonthMetrics?.attendanceDays)}
+                  </div>
+                  <div className="rounded-xl bg-amber-50 p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] text-slate-500">Advances</p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openInfoDialog("Advances", "Advances are total advance payments taken in this month.")
+                        }
+                        className="text-slate-400 hover:text-slate-600"
+                        aria-label="Advances info"
+                      >
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-lg font-semibold">Rs. {currentMetrics.advances}</p>
+                    {getDeltaNode(currentMetrics.advances, previousMonthMetrics?.advances)}
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-3 gap-2">
-                <Button variant="outline" className="h-9 text-xs" onClick={() => setTabWithUrl("payout")}>
-                  Payout
-                </Button>
-                <Button variant="outline" className="h-9 text-xs" onClick={() => setTabWithUrl("attendance")}>
-                  Attendance
-                </Button>
-                <Button variant="outline" className="h-9 text-xs" onClick={() => setTabWithUrl("leaderboard")}>
-                  Leaderboard
-                </Button>
+            <Card className="gap-3 overflow-hidden rounded-2xl border-slate-200 p-0 shadow-sm">
+              <div className="flex items-center gap-2 bg-black px-4 py-2.5 text-white">
+                <Zap className="h-5 w-5" />
+                <h3 className="text-xl font-semibold tracking-tight">Quick Actions</h3>
+              </div>
+              <CardContent className="px-4 pb-4 pt-0">
+                <div className="grid grid-cols-3 gap-2">
+                  <Button variant="outline" className="h-9 text-xs" onClick={() => setTabWithUrl("payout")}>
+                    Payout
+                  </Button>
+                  <Button variant="outline" className="h-9 text-xs" onClick={() => setTabWithUrl("attendance")}>
+                    Attendance
+                  </Button>
+                  <Button variant="outline" className="h-9 text-xs" onClick={() => setTabWithUrl("leaderboard")}>
+                    Leaderboard
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Leaderboard Insight</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <Card className="gap-3 overflow-hidden rounded-2xl border-slate-200 p-0 shadow-sm">
+              <div className="flex items-center gap-2 bg-black px-4 py-2.5 text-white">
+                <Trophy className="h-5 w-5" />
+                <h3 className="text-xl font-semibold tracking-tight">Leaderboard Insight</h3>
+              </div>
+              <CardContent className="px-4 pb-4 pt-0">
                 <p className="text-sm text-slate-600">{leaderboardInsight}</p>
               </CardContent>
             </Card>
           </div>
         ) : null}
 
-        {activeTab === "payout" ? (
+        {!isMonthLoading && activeTab === "payout" ? (
           <div className="space-y-4">
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-2">
@@ -423,7 +662,7 @@ function WorkerDashboardContent() {
           </div>
         ) : null}
 
-        {activeTab === "attendance" ? (
+        {!isMonthLoading && activeTab === "attendance" ? (
           <div className="space-y-4">
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-2">
@@ -471,7 +710,7 @@ function WorkerDashboardContent() {
           </div>
         ) : null}
 
-        {activeTab === "leaderboard" ? (
+        {!isMonthLoading && activeTab === "leaderboard" ? (
           <div className="space-y-4">
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="pb-2">
@@ -506,36 +745,48 @@ function WorkerDashboardContent() {
           </div>
         ) : null}
 
-        <div className="fixed inset-x-0 bottom-0 z-40 px-3 pb-3">
-          <div className="mx-auto w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-2 shadow-lg lg:w-1/2">
+        <div
+          className={`fixed inset-x-0 bottom-0 z-40 transform transition-transform duration-300 ${
+            isBottomNavVisible ? "translate-y-0" : "translate-y-full"
+          }`}
+        >
+          <div className="w-full border-t border-slate-200 bg-white p-2 shadow-lg">
             <div className="grid grid-cols-4 gap-1">
               <Button
-                variant={activeTab === "home" ? "default" : "ghost"}
-                className="h-11 flex-col gap-0.5 text-[11px]"
+                variant="ghost"
+                className={`h-11 flex-col gap-0.5 text-[11px] hover:bg-transparent hover:text-indigo-600 ${
+                  activeTab === "home" ? "text-indigo-700" : "text-slate-500"
+                }`}
                 onClick={() => setTabWithUrl("home")}
               >
                 <Home className="h-4 w-4" />
                 Home
               </Button>
               <Button
-                variant={activeTab === "payout" ? "default" : "ghost"}
-                className="h-11 flex-col gap-0.5 text-[11px]"
+                variant="ghost"
+                className={`h-11 flex-col gap-0.5 text-[11px] hover:bg-transparent hover:text-indigo-600 ${
+                  activeTab === "payout" ? "text-indigo-700" : "text-slate-500"
+                }`}
                 onClick={() => setTabWithUrl("payout")}
               >
                 <CircleDollarSign className="h-4 w-4" />
                 Payout
               </Button>
               <Button
-                variant={activeTab === "attendance" ? "default" : "ghost"}
-                className="h-11 flex-col gap-0.5 text-[11px]"
+                variant="ghost"
+                className={`h-11 flex-col gap-0.5 text-[11px] hover:bg-transparent hover:text-indigo-600 ${
+                  activeTab === "attendance" ? "text-indigo-700" : "text-slate-500"
+                }`}
                 onClick={() => setTabWithUrl("attendance")}
               >
                 <CalendarCheck2 className="h-4 w-4" />
                 Attendance
               </Button>
               <Button
-                variant={activeTab === "leaderboard" ? "default" : "ghost"}
-                className="h-11 flex-col gap-0.5 text-[11px]"
+                variant="ghost"
+                className={`h-11 flex-col gap-0.5 text-[11px] hover:bg-transparent hover:text-indigo-600 ${
+                  activeTab === "leaderboard" ? "text-indigo-700" : "text-slate-500"
+                }`}
                 onClick={() => setTabWithUrl("leaderboard")}
               >
                 <Trophy className="h-4 w-4" />
