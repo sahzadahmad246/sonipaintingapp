@@ -1009,12 +1009,12 @@ function WorkerDashboardContent() {
               </div>
             </div>
 
-            <Card className="gap-3 overflow-hidden rounded-2xl border-slate-200 p-0 shadow-sm">
+            <div className="-mx-1 sm:mx-0 overflow-hidden bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm">
               <div className="flex items-center gap-2 bg-black px-4 py-2.5 text-white">
                 <ClipboardCheck className="h-5 w-5" />
                 <h3 className="text-xl font-semibold tracking-tight">Attendance Calendar</h3>
               </div>
-              <CardContent className="px-4 pb-4 pt-4">
+              <div className="pb-4 pt-4">
                 {(() => {
                   const [yearStr, monthStr] = month.split("-");
                   const year = parseInt(yearStr);
@@ -1038,12 +1038,22 @@ function WorkerDashboardContent() {
 
                   return (
                     <div>
-                      <div className="grid grid-cols-7 gap-2 text-center text-xs font-medium text-slate-500 mb-2">
-                        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                      <div className="grid grid-cols-7 text-center text-[10px] sm:text-xs font-medium text-slate-500 bg-slate-50 border-y border-slate-200">
+                        <div className="py-2 border-r border-slate-200">Sun</div>
+                        <div className="py-2 border-r border-slate-200">Mon</div>
+                        <div className="py-2 border-r border-slate-200">Tue</div>
+                        <div className="py-2 border-r border-slate-200">Wed</div>
+                        <div className="py-2 border-r border-slate-200">Thu</div>
+                        <div className="py-2 border-r border-slate-200">Fri</div>
+                        <div className="py-2">Sat</div>
                       </div>
-                      <div className="grid grid-cols-7 gap-2">
+                      <div className="grid grid-cols-7 bg-white">
                         {days.map((date, idx) => {
-                          if (!date) return <div key={`empty-${idx}`} className="h-16 rounded-lg bg-slate-50/50 border border-slate-100/50"></div>;
+                          const isLastCol = (idx + 1) % 7 === 0;
+                          const rightBorder = isLastCol ? "" : "border-r border-slate-200";
+                          const bottomBorder = "border-b border-slate-200";
+                          
+                          if (!date) return <div key={`empty-${idx}`} className={`min-h-[72px] sm:min-h-[84px] bg-slate-50/30 ${rightBorder} ${bottomBorder}`}></div>;
 
                           const attEntry = data.attendanceEntries.find(e => {
                             const ed = new Date(e.date);
@@ -1058,28 +1068,22 @@ function WorkerDashboardContent() {
                           const isToday = date.getTime() === today.getTime();
                           const isFuture = date > today;
                           
-                          let statusColor = "bg-white border-slate-200 text-slate-600";
+                          let statusColor = "bg-white text-slate-600";
                           let label = "";
 
                           if (attEntry) {
-                            if (attEntry.units === 1) {
-                              label = "P";
-                              statusColor = "bg-green-50 border-green-200 text-green-700";
-                            } else if (attEntry.units === 0.5) {
-                              label = "½";
-                              statusColor = "bg-green-50 border-green-200 text-green-700";
-                            } else if (attEntry.units === 0) {
+                            if (attEntry.units === 0) {
                               label = "A";
-                              statusColor = "bg-red-50 border-red-200 text-red-700";
+                              statusColor = "bg-red-50 text-red-700";
                             } else {
-                              label = attEntry.units.toString();
-                              statusColor = "bg-green-50 border-green-200 text-green-700";
+                              label = `${attEntry.units}H`;
+                              statusColor = "bg-green-50 text-green-700";
                             }
                           } else if (isFuture) {
-                             statusColor = "bg-slate-50 border-slate-100 text-slate-300";
+                             statusColor = "bg-slate-50/50 text-slate-300";
                           } else {
                             label = "-";
-                            statusColor = "bg-slate-100 border-slate-200 text-slate-400";
+                            statusColor = "bg-slate-100/50 text-slate-400";
                           }
 
                           return (
@@ -1087,20 +1091,20 @@ function WorkerDashboardContent() {
                               type="button"
                               onClick={() => setSelectedDateInfo({ date, attendance: attEntry, advance: advEntry })}
                               key={date.toISOString()} 
-                              className={`relative flex flex-col items-center justify-center p-1 h-[72px] rounded-xl border hover:opacity-80 transition-all ${
-                                isToday ? 'bg-emerald-50 border-emerald-300 shadow-sm' : statusColor
+                              className={`relative flex flex-col items-center justify-center p-0.5 sm:p-1 min-h-[72px] sm:min-h-[84px] hover:opacity-80 transition-all overflow-hidden ${rightBorder} ${bottomBorder} ${
+                                isToday ? 'bg-emerald-100/40 shadow-inner' : statusColor
                               }`}
                             >
-                              <span className={`absolute top-1 left-2 text-[11px] font-medium ${isToday ? 'text-emerald-800 font-bold' : ''}`}>
+                              <span className={`absolute top-1 left-1 sm:left-2 text-[10px] sm:text-[11px] font-medium leading-none ${isToday ? 'text-emerald-800 font-bold' : ''}`}>
                                 {date.getDate()}
                               </span>
                               
-                              <div className="mt-4 flex flex-col items-center justify-center w-full gap-0.5">
+                              <div className="mt-3 flex flex-col items-center justify-center w-full gap-0.5 sm:gap-1">
                                 {label && (
-                                   <span className={`text-sm font-bold leading-none ${isToday && !attEntry ? 'text-emerald-600' : ''}`}>{label}</span>
+                                   <span className={`text-xs sm:text-sm font-bold leading-none ${isToday && !attEntry ? 'text-emerald-600' : ''}`}>{label}</span>
                                 )}
                                 {advEntry && (
-                                   <span className="mt-1 w-[90%] truncate rounded-[4px] bg-amber-100 px-1 py-[3px] text-center text-[10px] font-semibold leading-none text-amber-700 border border-amber-200" title={`Advance: Rs. ${advEntry.amount}`}>
+                                   <span className="mt-0.5 w-[96%] sm:w-[90%] truncate rounded-[4px] bg-amber-100 px-0.5 sm:px-1 py-[2px] sm:py-[3px] text-center text-[9px] sm:text-[10px] font-semibold leading-none text-amber-700 border border-amber-200 tracking-tighter" title={`Advance: Rs. ${advEntry.amount}`}>
                                      ₹{advEntry.amount}
                                    </span>
                                 )}
@@ -1110,7 +1114,7 @@ function WorkerDashboardContent() {
                         })}
                       </div>
 
-                      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] text-slate-600 border-t border-slate-100 pt-3">
+                      <div className="mt-4 px-4 sm:px-0 flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] text-slate-600 border-t-0 pt-1">
                         <div className="flex items-center gap-1.5 font-medium"><div className="w-2.5 h-2.5 rounded-sm bg-green-50 border border-green-200"></div> Present (P)</div>
                         <div className="flex items-center gap-1.5 font-medium"><div className="w-2.5 h-2.5 rounded-sm bg-green-50 border border-green-200"></div> Half-day (½)</div>
                         <div className="flex items-center gap-1.5 font-medium"><div className="w-2.5 h-2.5 rounded-sm bg-red-50 border border-red-200"></div> Absent (A)</div>
@@ -1120,8 +1124,8 @@ function WorkerDashboardContent() {
                     </div>
                   );
                 })()}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
             <Card className="gap-3 overflow-hidden rounded-2xl border-slate-200 p-0 shadow-sm">
               <div className="flex items-center gap-2 bg-black px-4 py-2.5 text-white">
