@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Pencil, Trash2, ArrowLeft, ChevronLeft, ChevronRight, Plus, MoreVertical } from "lucide-react";
+import { CalendarCheck, Loader2, Pencil, Trash2, ArrowLeft, ChevronLeft, ChevronRight, Plus, MoreVertical, ChevronDown } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -42,14 +42,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
 type Worker = {
   _id: string;
@@ -170,6 +162,8 @@ function WorkforcePageContent() {
   };
 
   const chipScrollRef = useRef<HTMLDivElement>(null);
+  const attendanceDateInputRef = useRef<HTMLInputElement>(null);
+  const advanceDateInputRef = useRef<HTMLInputElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
@@ -948,240 +942,332 @@ function WorkforcePageContent() {
 
           {/* Attendance Tab */}
           {activeTab === "attendance" && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                
+                {/* Black Header */}
+                <div className="bg-slate-900 px-4 py-3 sm:px-6 sm:py-4 flex flex-row items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <CalendarCheck className="h-5 w-5 text-blue-400" />
+                    <h3 className="text-lg font-semibold text-white">Logs</h3>
+                    <span className="bg-slate-800 text-slate-300 text-xs px-2 py-0.5 rounded-full ml-2">
+                      {attendance.length}
+                    </span>
+                  </div>
+                  <div className="relative flex items-center bg-slate-800 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-slate-700 transition-colors">
+                    <span className="text-white text-sm font-medium">
+                      {new Date(attendanceFilterDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                    </span>
+                    <ChevronDown className="h-4 w-4 ml-2 text-slate-400" />
+                    <input
+                      ref={attendanceDateInputRef}
+                      type="date"
+                      value={attendanceFilterDate}
+                      onChange={(e) => setAttendanceFilterDate(e.target.value)}
+                      onClick={(e) => e.currentTarget.showPicker()}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                  </div>
+                </div>
 
-            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-              <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900">Attendance Log ({attendance.length})</h3>
-                  <p className="text-slate-600 text-sm">View and manage attendance records</p>
-                </div>
-                <div className="w-full sm:w-auto">
-                  <Label className="text-slate-700 font-medium text-sm block mb-2">Filter by Date</Label>
-                  <Input
-                    type="date"
-                    value={attendanceFilterDate}
-                    onChange={(e) => setAttendanceFilterDate(e.target.value)}
-                    className="border-slate-200"
-                  />
+                {/* List Body */}
+                <div className="divide-y divide-slate-100">
+                  {attendance.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500">
+                      No attendance records found for this date.
+                    </div>
+                  ) : (
+                    attendance.map((entry) => (
+                      <div key={entry._id} className="p-4 sm:p-5 hover:bg-slate-50 transition-colors relative group">
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                          {/* Worker Details (Left) */}
+                          <div className="flex items-start gap-3 flex-1 min-w-0 pr-8">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700 font-bold text-sm">
+                              {(entry.workerId?.name || entry.workerId?.workerCode || "?").charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="text-sm font-semibold text-slate-900 truncate">
+                                {entry.workerId?.name || "Unnamed Worker"}
+                              </h4>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                {entry.workerId?.workerCode || "No Code"}
+                              </p>
+                              
+                              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                <span className="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-md font-medium border border-blue-100">
+                                  {entry.units} {entry.units > 1 ? 'Units' : 'Unit'}
+                                </span>
+                                <span className="bg-green-50 text-green-700 px-2.5 py-1 rounded-md font-medium border border-green-100">
+                                  Est. Wage: ₹{Math.round((entry.workerId?.dailyWage || 0) * entry.units)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Right Side Info */}
+                          <div className="flex flex-col sm:items-end sm:justify-start">
+                            {entry.note ? (
+                              <p className="text-xs text-slate-600 line-clamp-2 sm:text-right max-w-[200px] mt-1 sm:mt-0 italic">
+                                &quot;{entry.note}&quot;
+                              </p>
+                            ) : null}
+                          </div>
+
+                          {/* 3-dot Actions Menu (Top Right) */}
+                          <div className="absolute top-4 right-4 sm:top-5 sm:right-5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-slate-400 hover:text-slate-600 focus:opacity-100 data-[state=open]:opacity-100">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openEditAttendanceDialog(entry)}>
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  <span>Edit</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setAttendanceToDelete(entry)} className="text-red-600 focus:text-red-600">
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  <span>Delete</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-slate-200 bg-slate-50">
-                      <TableHead className="text-slate-700">Worker</TableHead>
-                      <TableHead className="text-slate-700">Date</TableHead>
-                      <TableHead className="text-slate-700">Units</TableHead>
-                      <TableHead className="text-slate-700">Est. Wage</TableHead>
-                      <TableHead className="text-slate-700">Note</TableHead>
-                      <TableHead className="text-slate-700">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {attendance.map((entry) => (
-                      <TableRow key={entry._id} className="border-slate-200 hover:bg-slate-50">
-                        <TableCell className="font-medium text-slate-900">{entry.workerId?.name || entry.workerId?.workerCode}</TableCell>
-                        <TableCell className="text-slate-700">{new Date(entry.date).toLocaleDateString()}</TableCell>
-                        <TableCell className="font-medium text-slate-700">{entry.units}</TableCell>
-                        <TableCell className="font-semibold text-slate-900">
-                          ₹{Math.round((entry.workerId?.dailyWage || 0) * entry.units)}
-                        </TableCell>
-                        <TableCell className="text-slate-600 text-sm">{entry.note || "-"}</TableCell>
-                        <TableCell className="flex gap-2">
-                          <Button variant="outline" size="sm" onClick={() => openEditAttendanceDialog(entry)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => setAttendanceToDelete(entry)} className="text-red-600 hover:text-red-700">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
             </div>
           )}
 
           {/* Advances Tab */}
           {activeTab === "advances" && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                
+                {/* Black Header */}
+                <div className="bg-slate-900 px-4 py-3 sm:px-6 sm:py-4 flex flex-row items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <CalendarCheck className="h-5 w-5 text-blue-400" />
+                    <h3 className="text-lg font-semibold text-white">Advances</h3>
+                    <span className="bg-slate-800 text-slate-300 text-xs px-2 py-0.5 rounded-full ml-2">
+                      {advances.length}
+                    </span>
+                  </div>
+                  <div className="relative flex items-center bg-slate-800 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-slate-700 transition-colors">
+                    <span className="text-white text-sm font-medium">
+                      {new Date(advanceFilterDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                    </span>
+                    <ChevronDown className="h-4 w-4 ml-2 text-slate-400" />
+                    <input
+                      ref={advanceDateInputRef}
+                      type="date"
+                      value={advanceFilterDate}
+                      onChange={(e) => setAdvanceFilterDate(e.target.value)}
+                      onClick={(e) => e.currentTarget.showPicker()}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                  </div>
+                </div>
 
-            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-              <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900">Advance Log ({advances.length})</h3>
-                  <p className="text-slate-600 text-sm">Manage advance payments</p>
-                </div>
-                <div className="w-full sm:w-auto">
-                  <Label className="text-slate-700 font-medium text-sm block mb-2">Filter by Date</Label>
-                  <Input
-                    type="date"
-                    value={advanceFilterDate}
-                    onChange={(e) => setAdvanceFilterDate(e.target.value)}
-                    className="border-slate-200"
-                  />
+                {/* List Body */}
+                <div className="divide-y divide-slate-100">
+                  {advances.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500">
+                      No advance records found for this date.
+                    </div>
+                  ) : (
+                    advances.map((entry) => (
+                      <div key={entry._id} className="p-4 sm:p-5 hover:bg-slate-50 transition-colors relative group">
+                        <div className="flex items-start gap-3 pr-8">
+                          {/* Avatar */}
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700 font-bold text-sm">
+                            {(entry.workerId?.name || entry.workerId?.workerCode || "?").charAt(0).toUpperCase()}
+                          </div>
+                          
+                          {/* Info Section */}
+                          <div className="min-w-0 flex-1">
+                            {/* Name and Amount on same line */}
+                            <div className="flex items-start justify-between gap-2">
+                              <h4 className="text-sm font-semibold text-slate-900 truncate">
+                                {entry.workerId?.name || "Unnamed Worker"}
+                              </h4>
+                              <span className="bg-green-50 text-green-700 px-2.5 py-1 rounded-md font-medium border border-green-100 text-xs shrink-0">
+                                ₹{entry.amount}
+                              </span>
+                            </div>
+                            
+                            {/* Worker ID */}
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {entry.workerId?.workerCode || "No Code"}
+                            </p>
+
+                            {/* Note below Worker ID */}
+                            {entry.note ? (
+                              <p className="text-xs text-slate-600 mt-2 italic">
+                                &quot;{entry.note}&quot;
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {/* 3-dot Actions Menu (Top Right) */}
+                        <div className="absolute top-4 right-4 sm:top-5 sm:right-5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-slate-400 hover:text-slate-600 focus:opacity-100 data-[state=open]:opacity-100">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEditAdvanceDialog(entry)}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                <span>Edit</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setAdvanceToDelete(entry)} className="text-red-600 focus:text-red-600">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                <span>Delete</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-slate-200 bg-slate-50">
-                      <TableHead className="text-slate-700">Worker</TableHead>
-                      <TableHead className="text-slate-700">Date</TableHead>
-                      <TableHead className="text-slate-700">Amount</TableHead>
-                      <TableHead className="text-slate-700">Note</TableHead>
-                      <TableHead className="text-slate-700">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {advances.map((entry) => (
-                      <TableRow key={entry._id} className="border-slate-200 hover:bg-slate-50">
-                        <TableCell className="font-medium text-slate-900">{entry.workerId?.name || entry.workerId?.workerCode}</TableCell>
-                        <TableCell className="text-slate-700">{new Date(entry.date).toLocaleDateString()}</TableCell>
-                        <TableCell className="font-semibold text-slate-900">₹{entry.amount}</TableCell>
-                        <TableCell className="text-slate-600 text-sm">{entry.note || "-"}</TableCell>
-                        <TableCell className="flex gap-2">
-                          <Button variant="outline" size="sm" onClick={() => openEditAdvanceDialog(entry)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => setAdvanceToDelete(entry)} className="text-red-600 hover:text-red-700">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
             </div>
           )}
 
           {/* Payroll Tab */}
           {activeTab === "payroll" && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm">
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
-                <div>
-                  <Label className="text-slate-700 font-medium mb-1.5 block text-sm">Worker</Label>
-                  <Select value={selectedWorkerForPayroll} onValueChange={setSelectedWorkerForPayroll}>
-                    <SelectTrigger className="border-slate-200">
-                      <SelectValue placeholder="Select worker" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {activeWorkers.map((worker) => (
-                        <SelectItem key={worker._id} value={worker._id}>
-                          {worker.workerCode} - {worker.name || worker.mobile}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {/* Filters Card */}
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                <div className="bg-slate-900 px-4 py-3 sm:px-6 sm:py-4">
+                  <h3 className="text-lg font-semibold text-white">Payroll</h3>
                 </div>
-                <div>
-                  <Label className="text-slate-700 font-medium mb-1.5 block text-sm">Month</Label>
-                  <Input
-                    type="month"
-                    value={payrollMonth}
-                    onChange={(e) => setPayrollMonth(e.target.value)}
-                    className="border-slate-200"
-                  />
+                <div className="p-4 sm:p-6 grid gap-3 grid-cols-1 sm:grid-cols-2">
+                  <div>
+                    <Label className="text-slate-700 font-medium mb-1.5 block text-sm">Worker</Label>
+                    <Select value={selectedWorkerForPayroll} onValueChange={setSelectedWorkerForPayroll}>
+                      <SelectTrigger className="border-slate-200">
+                        <SelectValue placeholder="Select worker" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {activeWorkers.map((worker) => (
+                          <SelectItem key={worker._id} value={worker._id}>
+                            {worker.workerCode} - {worker.name || worker.mobile}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-slate-700 font-medium mb-1.5 block text-sm">Month</Label>
+                    <Input
+                      type="month"
+                      value={payrollMonth}
+                      onChange={(e) => setPayrollMonth(e.target.value)}
+                      className="border-slate-200"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
 
             {payrollSummary && (
-              <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-                <div className="p-6 border-b border-slate-200">
-                  <h3 className="text-xl font-bold text-slate-900">
-                    {payrollSummary.worker.name || "Worker"} ({payrollSummary.worker.workerCode})
-                  </h3>
+              <>
+                {/* Worker Summary Card */}
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                  <div className="bg-slate-900 px-4 py-3 sm:px-6 sm:py-4">
+                    <h3 className="text-lg font-semibold text-white">
+                      {payrollSummary.worker.name || "Worker"} ({payrollSummary.worker.workerCode})
+                    </h3>
+                  </div>
+                  <div className="p-4 sm:p-6 grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                      <p className="text-xs font-medium text-blue-600 mb-1">Daily Wage</p>
+                      <p className="text-xl sm:text-2xl font-bold text-blue-900">₹{payrollSummary.worker.dailyWage}</p>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                      <p className="text-xs font-medium text-green-600 mb-1">Total Units</p>
+                      <p className="text-xl sm:text-2xl font-bold text-green-900">{payrollSummary.summary.totalUnits}</p>
+                    </div>
+                    <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                      <p className="text-xs font-medium text-yellow-600 mb-1">Days Present</p>
+                      <p className="text-xl sm:text-2xl font-bold text-yellow-900">{payrollSummary.summary.attendanceDays}</p>
+                    </div>
+                    <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                      <p className="text-xs font-medium text-purple-600 mb-1">Gross Wage</p>
+                      <p className="text-xl sm:text-2xl font-bold text-purple-900">₹{Math.round(payrollSummary.summary.grossWage)}</p>
+                    </div>
+                    <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                      <p className="text-xs font-medium text-red-600 mb-1">Advances Deducted</p>
+                      <p className="text-xl sm:text-2xl font-bold text-red-900">₹{payrollSummary.summary.totalAdvance}</p>
+                    </div>
+                    <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-200">
+                      <p className="text-xs font-medium text-emerald-600 mb-1">Net Payable</p>
+                      <p className="text-xl sm:text-2xl font-bold text-emerald-900">₹{Math.round(payrollSummary.summary.netPayable)}</p>
+                    </div>
+                    <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+                      <p className="text-xs font-medium text-indigo-600 mb-1">Net Points</p>
+                      <p className="text-xl sm:text-2xl font-bold text-indigo-900">{payrollSummary.loyalty.totalPoints}</p>
+                    </div>
+                    <div className="bg-cyan-50 rounded-lg p-4 border border-cyan-200">
+                      <p className="text-xs font-medium text-cyan-700 mb-1">Points Value</p>
+                      <p className="text-xl sm:text-2xl font-bold text-cyan-900">₹{payrollSummary.loyalty.pointsRupees}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4 p-6">
-                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                    <p className="text-sm font-medium text-blue-600 mb-1">Daily Wage</p>
-                    <p className="text-2xl font-bold text-blue-900">₹{payrollSummary.worker.dailyWage}</p>
+
+                {/* Weekly Loyalty Payouts Card */}
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                  <div className="bg-slate-900 px-4 py-3 sm:px-6 sm:py-4">
+                    <h3 className="text-lg font-semibold text-white">Weekly Loyalty Payouts</h3>
                   </div>
-                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                    <p className="text-sm font-medium text-green-600 mb-1">Total Units</p>
-                    <p className="text-2xl font-bold text-green-900">{payrollSummary.summary.totalUnits}</p>
-                  </div>
-                  <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
-                    <p className="text-sm font-medium text-yellow-600 mb-1">Days Present</p>
-                    <p className="text-2xl font-bold text-yellow-900">{payrollSummary.summary.attendanceDays}</p>
-                  </div>
-                  <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                    <p className="text-sm font-medium text-purple-600 mb-1">Gross Wage</p>
-                    <p className="text-2xl font-bold text-purple-900">₹{Math.round(payrollSummary.summary.grossWage)}</p>
-                  </div>
-                  <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-200">
-                    <p className="text-sm font-medium text-emerald-600 mb-1">Net Payable</p>
-                    <p className="text-2xl font-bold text-emerald-900">₹{Math.round(payrollSummary.summary.netPayable)}</p>
-                  </div>
-                  <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
-                    <p className="text-sm font-medium text-indigo-600 mb-1">Net Points</p>
-                    <p className="text-2xl font-bold text-indigo-900">{payrollSummary.loyalty.totalPoints}</p>
-                  </div>
-                  <div className="bg-cyan-50 rounded-lg p-4 border border-cyan-200">
-                    <p className="text-sm font-medium text-cyan-700 mb-1">Points Value</p>
-                    <p className="text-2xl font-bold text-cyan-900">₹{payrollSummary.loyalty.pointsRupees}</p>
-                  </div>
-                </div>
-                <div className="px-6 py-4 bg-slate-50 border-t border-slate-200">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-600">Total Advances Deducted:</span>
-                    <span className="font-bold text-slate-900">₹{payrollSummary.summary.totalAdvance}</span>
-                  </div>
-                </div>
-                <div className="px-6 py-4 bg-white border-t border-slate-200">
-                  <h4 className="text-sm font-semibold text-slate-900 mb-2">
-                    Weekly Loyalty Payout (separate from wages)
-                  </h4>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-slate-50">
-                          <TableHead>Week</TableHead>
-                          <TableHead>Earned</TableHead>
-                          <TableHead>Deducted</TableHead>
-                          <TableHead>Net Points</TableHead>
-                          <TableHead>Weekly Payout</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Action</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {payrollSummary.loyalty.weeklyPayouts.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={7} className="text-center text-slate-500">
-                              No loyalty entries for this month
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          payrollSummary.loyalty.weeklyPayouts.map((week) => (
-                            <TableRow key={`${week.isoWeekYear}-${week.isoWeek}`}>
-                              <TableCell>
-                                W{week.isoWeek} ({new Date(week.weekStart).toLocaleDateString()} -{" "}
-                                {new Date(week.weekEnd).toLocaleDateString()})
-                              </TableCell>
-                              <TableCell>{week.earnedPoints}</TableCell>
-                              <TableCell>{week.deductedPoints}</TableCell>
-                              <TableCell>{week.netPoints}</TableCell>
-                              <TableCell className="font-semibold">₹{week.weeklyPayoutRupees}</TableCell>
-                              <TableCell>
-                                <span
-                                  className={`rounded px-2 py-1 text-xs font-medium ${
-                                    week.payoutStatus === "paid"
-                                      ? "bg-green-100 text-green-700"
-                                      : "bg-yellow-100 text-yellow-700"
-                                  }`}
-                                >
+                  <div className="p-4 sm:p-6">
+                    {payrollSummary.loyalty.weeklyPayouts.length === 0 ? (
+                      <div className="text-center text-slate-500 py-8">
+                        No loyalty entries for this month
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {payrollSummary.loyalty.weeklyPayouts.map((week) => (
+                          <div key={`${week.isoWeekYear}-${week.isoWeek}`} className="border border-slate-200 rounded-lg p-4 hover:border-slate-300 transition-all">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-slate-900">
+                                  Week {week.isoWeek} ({new Date(week.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(week.weekEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})
+                                </p>
+                                <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                  <div>
+                                    <span className="text-slate-600">Earned:</span>
+                                    <p className="font-semibold text-slate-900">{week.earnedPoints}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-600">Deducted:</span>
+                                    <p className="font-semibold text-slate-900">{week.deductedPoints}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-600">Net:</span>
+                                    <p className="font-semibold text-slate-900">{week.netPoints}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-600">Payout:</span>
+                                    <p className="font-semibold text-slate-900">₹{week.weeklyPayoutRupees}</p>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 sm:flex-col sm:items-end">
+                                <span className={`rounded px-2 py-1 text-xs font-medium whitespace-nowrap ${
+                                  week.payoutStatus === "paid"
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-yellow-100 text-yellow-700"
+                                }`}>
                                   {week.payoutStatus}
                                 </span>
-                              </TableCell>
-                              <TableCell>
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -1193,121 +1279,118 @@ function WorkforcePageContent() {
                                       week.payoutStatus === "paid" ? "pending" : "paid"
                                     )
                                   }
+                                  className="text-xs"
                                 >
-                                  {week.payoutStatus === "paid" ? "Mark Pending" : "Mark Paid"}
+                                  {week.payoutStatus === "paid" ? "Pending" : "Paid"}
                                 </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="px-6 py-4 bg-white border-t border-slate-200">
-                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Loyalty History (selected month)</h4>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-slate-50">
-                          <TableHead>Date</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Points</TableHead>
-                          <TableHead>Category</TableHead>
-                          <TableHead>Reason</TableHead>
-                          <TableHead>Evidence</TableHead>
-                          <TableHead>Action</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {loyaltyHistory.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={7} className="text-center text-slate-500">
-                              No loyalty entries for this month
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          loyaltyHistory.map((entry) => (
-                            <TableRow key={entry._id}>
-                              <TableCell>{new Date(entry.date).toLocaleDateString()}</TableCell>
-                              <TableCell>
-                                <span
-                                  className={`rounded px-2 py-1 text-xs font-medium ${
+
+                {/* Loyalty History Card */}
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                  <div className="bg-slate-900 px-4 py-3 sm:px-6 sm:py-4">
+                    <h3 className="text-lg font-semibold text-white">Loyalty History</h3>
+                  </div>
+                  <div className="p-4 sm:p-6">
+                    {loyaltyHistory.length === 0 ? (
+                      <div className="text-center text-slate-500 py-8">
+                        No loyalty entries for this month
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {loyaltyHistory.map((entry) => (
+                          <div key={entry._id} className="border border-slate-200 rounded-lg p-4 hover:border-slate-300 transition-all">
+                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <p className="text-sm font-semibold text-slate-900">
+                                    {new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </p>
+                                  <span className={`rounded px-2 py-0.5 text-xs font-medium ${
                                     entry.entryType === "credit"
                                       ? "bg-green-100 text-green-700"
                                       : "bg-red-100 text-red-700"
-                                  }`}
-                                >
-                                  {entry.entryType}
-                                </span>
-                              </TableCell>
-                              <TableCell className="font-medium">{entry.points}</TableCell>
-                              <TableCell>{entry.category}</TableCell>
-                              <TableCell>{entry.reason}</TableCell>
-                              <TableCell>
-                                {entry.imageUrl ? (
-                                  <a href={entry.imageUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                                    View
-                                  </a>
-                                ) : (
-                                  "-"
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={
-                                    reversingEntryId === entry._id ||
-                                    entry.isReversal ||
-                                    entry.category === "reversal"
-                                  }
-                                  onClick={() => openReverseLoyaltyDialog(entry)}
-                                >
-                                  Reverse
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
+                                  }`}>
+                                    {entry.entryType === "credit" ? "+" : "-"}{entry.points}
+                                  </span>
+                                </div>
+                                <div className="text-xs space-y-0.5">
+                                  <p><span className="text-slate-600">Category:</span> <span className="font-medium text-slate-900">{entry.category}</span></p>
+                                  <p><span className="text-slate-600">Reason:</span> <span className="font-medium text-slate-900">{entry.reason}</span></p>
+                                  {entry.imageUrl && (
+                                    <p><span className="text-slate-600">Evidence:</span> <a href={entry.imageUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-medium">View</a></p>
+                                  )}
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={
+                                  reversingEntryId === entry._id ||
+                                  entry.isReversal ||
+                                  entry.category === "reversal"
+                                }
+                                onClick={() => openReverseLoyaltyDialog(entry)}
+                                className="text-xs"
+                              >
+                                Reverse
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="px-6 py-4 bg-white border-t border-slate-200">
-                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Weekly Leaderboard</h4>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-slate-50">
-                          <TableHead>Rank</TableHead>
-                          <TableHead>Worker</TableHead>
-                          <TableHead>Points</TableHead>
-                          <TableHead>Value</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {loyaltyLeaderboard.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={4} className="text-center text-slate-500">
-                              No leaderboard data yet
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          loyaltyLeaderboard.map((row) => (
-                            <TableRow key={`${row.rank}-${row.workerCode}`}>
-                              <TableCell>#{row.rank}</TableCell>
-                              <TableCell>{row.name || row.workerCode}</TableCell>
-                              <TableCell>{row.totalPoints}</TableCell>
-                              <TableCell>₹{row.totalRupees}</TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
+
+                {/* Weekly Leaderboard Card */}
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                  <div className="bg-slate-900 px-4 py-3 sm:px-6 sm:py-4">
+                    <h3 className="text-lg font-semibold text-white">Weekly Leaderboard</h3>
+                  </div>
+                  <div className="p-4 sm:p-6">
+                    {loyaltyLeaderboard.length === 0 ? (
+                      <div className="text-center text-slate-500 py-8">
+                        No leaderboard data yet
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {loyaltyLeaderboard.map((row) => (
+                          <div key={`${row.rank}-${row.workerCode}`} className="border border-slate-200 rounded-lg p-4 hover:border-slate-300 transition-all">
+                            <div className="flex items-center justify-between">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white font-bold text-sm">
+                                    #{row.rank}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-semibold text-slate-900">{row.name || row.workerCode}</p>
+                                    <p className="text-xs text-slate-600">{row.workerCode}</p>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right text-xs">
+                                <p className="text-slate-600">Points</p>
+                                <p className="font-semibold text-slate-900">{row.totalPoints}</p>
+                              </div>
+                              <div className="text-right text-xs ml-4">
+                                <p className="text-slate-600">Value</p>
+                                <p className="font-semibold text-slate-900">₹{row.totalRupees}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
+              </>
             )}
             </div>
           )}
