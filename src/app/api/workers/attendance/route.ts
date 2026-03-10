@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import Worker from "@/models/Worker";
 import WorkerAttendance from "@/models/WorkerAttendance";
+import Project from "@/models/Project";
 import { getAdminSession } from "@/lib/admin-auth";
 import { getWorkerSessionFromCookie } from "@/lib/worker-auth";
 
@@ -73,6 +74,7 @@ export async function GET(req: NextRequest) {
 
     const attendance = await WorkerAttendance.find(query)
       .populate("workerId", "workerCode name mobile dailyWage status")
+      .populate("projectId", "projectId clientName clientAddress status")
       .sort({ date: -1, createdAt: -1 })
       .lean();
 
@@ -91,6 +93,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     const workerId = body?.workerId;
+    const projectId = typeof body?.projectId === "string" && body.projectId.trim() ? body.projectId.trim() : undefined;
     const dateInput = body?.date;
     const units = Number(body?.units);
     const note = typeof body?.note === "string" ? body.note : "";
@@ -117,6 +120,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Worker not found or inactive" }, { status: 404 });
     }
 
+    if (projectId) {
+      const project = await Project.findOne({ _id: projectId, status: "ongoing" }).select("_id").lean();
+      if (!project) {
+        return NextResponse.json({ error: "Selected project not found or inactive" }, { status: 404 });
+      }
+    }
+
     const totals = await WorkerAttendance.aggregate([
       {
         $match: {
@@ -134,6 +144,25 @@ export async function POST(req: NextRequest) {
 
     const existingUnits = totals[0]?.totalUnits || 0;
 
+    const duplicateQuery: Record<string, unknown> = {
+      workerId: worker._id,
+      date: { $gte: range.start, $lte: range.end },
+    };
+
+    if (projectId) {
+      duplicateQuery.projectId = projectId;
+    } else {
+      duplicateQuery.$or = [{ projectId: { $exists: false } }, { projectId: null }];
+    }
+
+    const existingEntry = await WorkerAttendance.findOne(duplicateQuery).lean();
+    if (existingEntry) {
+      return NextResponse.json(
+        { error: projectId ? "Attendance is already linked to this project for that date" : "Attendance without a project already exists for that date" },
+        { status: 409 }
+      );
+    }
+
     if (existingUnits + units > 2) {
       return NextResponse.json(
         { error: "Total units for this worker on this date cannot exceed 2" },
@@ -143,6 +172,7 @@ export async function POST(req: NextRequest) {
 
     const attendance = await WorkerAttendance.create({
       workerId,
+      projectId,
       date: range.start,
       units,
       note,
@@ -150,6 +180,7 @@ export async function POST(req: NextRequest) {
     });
 
     await attendance.populate("workerId", "workerCode name mobile dailyWage status");
+    await attendance.populate("projectId", "projectId clientName clientAddress status");
 
     return NextResponse.json({ attendance }, { status: 201 });
   } catch (error) {

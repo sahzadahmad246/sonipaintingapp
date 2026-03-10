@@ -1,10 +1,11 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { CalendarCheck, Loader2, Pencil, Trash2, ArrowLeft, ChevronLeft, ChevronRight, Plus, MoreVertical, ChevronDown } from "lucide-react";
+import { CalendarCheck, Loader2, Pencil, Trash2, ArrowLeft, ChevronLeft, ChevronRight, Plus, MoreVertical, ChevronDown, Trophy, Coins, CalendarDays, Banknote, Wallet, Sparkles, ArrowUpRight, ArrowDownRight, Info } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -54,12 +55,21 @@ type Worker = {
   isProfileCompleted: boolean;
 };
 
+type AttendanceProject = {
+  _id: string;
+  projectId: string;
+  clientName: string;
+  clientAddress: string;
+  status?: "ongoing" | "completed";
+};
+
 type AttendanceEntry = {
   _id: string;
   date: string;
   units: number;
   note?: string;
   workerId: Worker;
+  projectId?: AttendanceProject | null;
 };
 
 type AdvanceEntry = {
@@ -164,6 +174,7 @@ function WorkforcePageContent() {
   const chipScrollRef = useRef<HTMLDivElement>(null);
   const attendanceDateInputRef = useRef<HTMLInputElement>(null);
   const advanceDateInputRef = useRef<HTMLInputElement>(null);
+  const payrollMonthInputRef = useRef<HTMLInputElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
@@ -193,7 +204,20 @@ function WorkforcePageContent() {
     el.scrollBy({ left: direction === "left" ? -120 : 120, behavior: "smooth" });
   };
 
+  const openPayrollMonthPicker = () => {
+    const input = payrollMonthInputRef.current;
+    if (!input) return;
+    const pickerInput = input as HTMLInputElement & { showPicker?: () => void };
+    if (typeof pickerInput.showPicker === "function") {
+      pickerInput.showPicker();
+      return;
+    }
+    input.focus();
+    input.click();
+  };
+
   const [workers, setWorkers] = useState<Worker[]>([]);
+  const [activeProjects, setActiveProjects] = useState<AttendanceProject[]>([]);
   const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
   const [advances, setAdvances] = useState<AdvanceEntry[]>([]);
 
@@ -220,6 +244,7 @@ function WorkforcePageContent() {
     workerId: "",
     date: TODAY,
     units: "1",
+    projectId: "",
     note: "",
   });
 
@@ -269,6 +294,10 @@ function WorkforcePageContent() {
   const [savingLoyalty, setSavingLoyalty] = useState(false);
   const [loyaltyHistory, setLoyaltyHistory] = useState<LoyaltyHistoryEntry[]>([]);
   const [loyaltyLeaderboard, setLoyaltyLeaderboard] = useState<LoyaltyLeaderboardEntry[]>([]);
+  const [leaderboardWeekLabel, setLeaderboardWeekLabel] = useState("");
+  const [selectedLeaderboardWeek, setSelectedLeaderboardWeek] = useState<number | null>(null);
+  const [selectedLeaderboardWeekYear, setSelectedLeaderboardWeekYear] = useState<number | null>(null);
+  const [isLeaderboardWeekPickerOpen, setIsLeaderboardWeekPickerOpen] = useState(false);
   const [reversingEntryId, setReversingEntryId] = useState("");
   const [reverseDialogOpen, setReverseDialogOpen] = useState(false);
   const [reverseTargetEntry, setReverseTargetEntry] = useState<LoyaltyHistoryEntry | null>(null);
@@ -286,6 +315,7 @@ function WorkforcePageContent() {
   const [uploadingLoyaltyImage, setUploadingLoyaltyImage] = useState(false);
   const [editingAttendance, setEditingAttendance] = useState<AttendanceEntry | null>(null);
   const [editingAttendanceUnits, setEditingAttendanceUnits] = useState("1");
+  const [editingAttendanceProjectId, setEditingAttendanceProjectId] = useState("");
   const [editingAttendanceNote, setEditingAttendanceNote] = useState("");
   const [attendanceToDelete, setAttendanceToDelete] = useState<AttendanceEntry | null>(null);
 
@@ -304,6 +334,85 @@ function WorkforcePageContent() {
   const isValidNewWorkerMobileLength = newWorker.mobileLocal.length === newWorkerExpectedLength;
   const loyaltyCategoryOptions =
     loyaltyForm.entryType === "credit" ? LOYALTY_CREDIT_CATEGORIES : LOYALTY_DEBIT_CATEGORIES;
+  const payrollMonthLabel = useMemo(() => {
+    const [year, month] = payrollMonth.split("-");
+    if (!year || !month) return "Current month";
+    return new Date(Number(year), Number(month) - 1, 1).toLocaleDateString("en-IN", {
+      month: "long",
+      year: "numeric",
+    });
+  }, [payrollMonth]);
+  const payoutPreview = useMemo(
+    () => payrollSummary?.loyalty.weeklyPayouts.slice(0, 3) || [],
+    [payrollSummary]
+  );
+  const loyaltyHistoryPreview = useMemo(
+    () => loyaltyHistory.slice(0, 3),
+    [loyaltyHistory]
+  );
+
+  const getCurrentISOWeek = () => {
+    const d = new Date();
+    const utc = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    utc.setUTCDate(utc.getUTCDate() + 4 - (utc.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
+    const isoWeek = Math.ceil(((utc.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    return { isoWeek, isoWeekYear: utc.getUTCFullYear() };
+  };
+
+  const currentISOWeek = useMemo(() => getCurrentISOWeek(), []);
+
+  const getWeekDateRange = (isoWeek: number, isoWeekYear: number) => {
+    const jan4 = new Date(Date.UTC(isoWeekYear, 0, 4));
+    const dayOfWeek = jan4.getUTCDay() || 7;
+    const week1Monday = new Date(jan4);
+    week1Monday.setUTCDate(jan4.getUTCDate() - (dayOfWeek - 1));
+    const start = new Date(week1Monday);
+    start.setUTCDate(week1Monday.getUTCDate() + (isoWeek - 1) * 7);
+    const end = new Date(start);
+    end.setUTCDate(start.getUTCDate() + 6);
+    return { start, end };
+  };
+
+  const leaderboardRecentWeeks = useMemo(() => {
+    const weeks: { isoWeek: number; isoWeekYear: number; start: Date; end: Date }[] = [];
+    let w = currentISOWeek.isoWeek;
+    let y = currentISOWeek.isoWeekYear;
+    for (let i = 0; i < 12; i++) {
+      const range = getWeekDateRange(w, y);
+      weeks.push({ isoWeek: w, isoWeekYear: y, ...range });
+      w -= 1;
+      if (w < 1) {
+        y -= 1;
+        const dec28 = new Date(Date.UTC(y, 11, 28));
+        const utc = new Date(Date.UTC(dec28.getFullYear(), dec28.getMonth(), dec28.getDate()));
+        utc.setUTCDate(utc.getUTCDate() + 4 - (utc.getUTCDay() || 7));
+        const ys = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
+        w = Math.ceil(((utc.getTime() - ys.getTime()) / 86400000 + 1) / 7);
+      }
+    }
+    return weeks;
+  }, [currentISOWeek]);
+
+  const formatWeekDate = (d: Date) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+
+  const getIsoWeekAndYear = (dateValue: string) => {
+    const date = new Date(dateValue);
+    const utc = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    utc.setUTCDate(utc.getUTCDate() + 4 - (utc.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
+    const isoWeek = Math.ceil(((utc.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    return { isoWeek, isoWeekYear: utc.getUTCFullYear() };
+  };
+
+  const isEntryReversible = (entry: LoyaltyHistoryEntry) => {
+    if (!payrollSummary) return false;
+    const { isoWeek, isoWeekYear } = getIsoWeekAndYear(entry.date);
+    const matchedWeek = payrollSummary.loyalty.weeklyPayouts.find(
+      (week) => week.isoWeek === isoWeek && week.isoWeekYear === isoWeekYear
+    );
+    return !matchedWeek || matchedWeek.payoutStatus === "pending";
+  };
 
   const fetchWorkers = async () => {
     const response = await fetch("/api/workers?status=all");
@@ -321,6 +430,13 @@ function WorkforcePageContent() {
         setSelectedWorkerForPayroll(firstActive._id);
       }
     }
+  };
+
+  const fetchActiveProjects = async () => {
+    const response = await fetch("/api/projects/ongoing");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to fetch active projects");
+    setActiveProjects(data.projects || []);
   };
 
   const fetchAttendance = async (date = attendanceFilterDate) => {
@@ -378,11 +494,23 @@ function WorkforcePageContent() {
     setLoyaltyHistory(data.entries || []);
   };
 
-  const fetchLoyaltyLeaderboard = async () => {
-    const response = await fetch("/api/workers/loyalty/leaderboard?period=weekly");
+  const fetchLoyaltyLeaderboard = async (week?: number, year?: number) => {
+    let url = "/api/workers/loyalty/leaderboard?period=weekly";
+    if (week !== undefined && year !== undefined) {
+      url += `&week=${week}&year=${year}`;
+    }
+    const response = await fetch(url, { cache: "no-store" });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Failed to fetch loyalty leaderboard");
     setLoyaltyLeaderboard(data.leaderboard || []);
+    if (data.isoWeek !== undefined) setSelectedLeaderboardWeek(data.isoWeek);
+    if (data.isoWeekYear !== undefined) setSelectedLeaderboardWeekYear(data.isoWeekYear);
+    if (data.isoWeek && data.isoWeekYear) {
+      const range = getWeekDateRange(data.isoWeek, data.isoWeekYear);
+      setLeaderboardWeekLabel(`Week ${data.isoWeek} · ${formatWeekDate(range.start)} - ${formatWeekDate(range.end)}`);
+    } else {
+      setLeaderboardWeekLabel("Current week");
+    }
   };
 
   const addLoyaltyEntry = async () => {
@@ -524,7 +652,7 @@ function WorkforcePageContent() {
     const load = async () => {
       try {
         setLoading(true);
-        await Promise.all([fetchWorkers(), fetchAttendance(TODAY), fetchAdvances(TODAY)]);
+        await Promise.all([fetchWorkers(), fetchActiveProjects(), fetchAttendance(TODAY), fetchAdvances(TODAY)]);
       } catch (error) {
         console.error(error);
         toast.error(error instanceof Error ? error.message : "Failed to load workforce data");
@@ -624,6 +752,7 @@ function WorkforcePageContent() {
           workerId: attendanceForm.workerId,
           date: attendanceForm.date,
           units: Number(attendanceForm.units),
+          projectId: attendanceForm.projectId || undefined,
           note: attendanceForm.note,
         }),
       });
@@ -631,7 +760,7 @@ function WorkforcePageContent() {
       if (!response.ok) throw new Error(data.error || "Failed to mark attendance");
 
       toast.success("Attendance marked");
-      setAttendanceForm((prev) => ({ ...prev, note: "" }));
+      setAttendanceForm((prev) => ({ ...prev, projectId: "", note: "" }));
       await fetchAttendance();
       await fetchPayrollSummary();
     } catch (error) {
@@ -690,6 +819,7 @@ function WorkforcePageContent() {
   const openEditAttendanceDialog = (entry: AttendanceEntry) => {
     setEditingAttendance(entry);
     setEditingAttendanceUnits(String(entry.units));
+    setEditingAttendanceProjectId(entry.projectId?._id || "");
     setEditingAttendanceNote(entry.note || "");
   };
 
@@ -704,7 +834,11 @@ function WorkforcePageContent() {
       const response = await fetch(`/api/workers/attendance/${editingAttendance._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ units, note: editingAttendanceNote }),
+        body: JSON.stringify({
+          units,
+          projectId: editingAttendanceProjectId || undefined,
+          note: editingAttendanceNote,
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to update attendance");
@@ -1000,6 +1134,11 @@ function WorkforcePageContent() {
                                 <span className="bg-green-50 text-green-700 px-2.5 py-1 rounded-md font-medium border border-green-100">
                                   Est. Wage: ₹{Math.round((entry.workerId?.dailyWage || 0) * entry.units)}
                                 </span>
+                                {entry.projectId ? (
+                                  <span className="bg-violet-50 text-violet-700 px-2.5 py-1 rounded-md font-medium border border-violet-100">
+                                    {entry.projectId.clientName} · {entry.projectId.clientAddress}
+                                  </span>
+                                ) : null}
                               </div>
                             </div>
                           </div>
@@ -1144,88 +1283,120 @@ function WorkforcePageContent() {
           {/* Payroll Tab */}
           {activeTab === "payroll" && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              {/* Filters Card */}
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                <div className="bg-slate-900 px-4 py-3 sm:px-6 sm:py-4">
-                  <h3 className="text-lg font-semibold text-white">Payroll</h3>
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0 flex-1 max-w-[220px]">
+                  <Label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    Select Worker
+                  </Label>
+                  <Select value={selectedWorkerForPayroll} onValueChange={setSelectedWorkerForPayroll}>
+                    <SelectTrigger className="h-9 rounded-full border-slate-200 bg-white px-3 text-xs shadow-none">
+                      <SelectValue placeholder="Worker" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeWorkers.map((worker) => (
+                        <SelectItem key={worker._id} value={worker._id}>
+                          {worker.name || worker.workerCode} ({worker.workerCode})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="p-4 sm:p-6 grid gap-3 grid-cols-1 sm:grid-cols-2">
-                  <div>
-                    <Label className="text-slate-700 font-medium mb-1.5 block text-sm">Worker</Label>
-                    <Select value={selectedWorkerForPayroll} onValueChange={setSelectedWorkerForPayroll}>
-                      <SelectTrigger className="border-slate-200">
-                        <SelectValue placeholder="Select worker" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {activeWorkers.map((worker) => (
-                          <SelectItem key={worker._id} value={worker._id}>
-                            {worker.workerCode} - {worker.name || worker.mobile}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-slate-700 font-medium mb-1.5 block text-sm">Month</Label>
-                    <Input
-                      type="month"
-                      value={payrollMonth}
-                      onChange={(e) => setPayrollMonth(e.target.value)}
-                      className="border-slate-200"
-                    />
-                  </div>
+                <div className="shrink-0">
+                  <Label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    Select Month
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={openPayrollMonthPicker}
+                    className="inline-flex h-9 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-none transition-colors hover:bg-slate-50"
+                  >
+                    {payrollMonthLabel}
+                    <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
+                  </button>
+                  <Input
+                    ref={payrollMonthInputRef}
+                    type="month"
+                    value={payrollMonth}
+                    onChange={(e) => setPayrollMonth(e.target.value)}
+                    className="sr-only"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  />
                 </div>
               </div>
 
             {payrollSummary && (
               <>
-                {/* Worker Summary Card */}
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                  <div className="bg-slate-900 px-4 py-3 sm:px-6 sm:py-4">
-                    <h3 className="text-lg font-semibold text-white">
-                      {payrollSummary.worker.name || "Worker"} ({payrollSummary.worker.workerCode})
-                    </h3>
-                  </div>
-                  <div className="p-4 sm:p-6 grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                      <p className="text-xs font-medium text-blue-600 mb-1">Daily Wage</p>
-                      <p className="text-xl sm:text-2xl font-bold text-blue-900">₹{payrollSummary.worker.dailyWage}</p>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Daily Wage</p>
+                        <Banknote className="h-4 w-4 text-blue-700" />
+                      </div>
+                      <p className="text-xl font-bold text-blue-950">₹{payrollSummary.worker.dailyWage}</p>
                     </div>
-                    <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                      <p className="text-xs font-medium text-green-600 mb-1">Total Units</p>
-                      <p className="text-xl sm:text-2xl font-bold text-green-900">{payrollSummary.summary.totalUnits}</p>
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Total Units</p>
+                        <CalendarCheck className="h-4 w-4 text-emerald-700" />
+                      </div>
+                      <p className="text-xl font-bold text-emerald-950">{payrollSummary.summary.totalUnits}</p>
                     </div>
-                    <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
-                      <p className="text-xs font-medium text-yellow-600 mb-1">Days Present</p>
-                      <p className="text-xl sm:text-2xl font-bold text-yellow-900">{payrollSummary.summary.attendanceDays}</p>
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Days Present</p>
+                        <CalendarDays className="h-4 w-4 text-amber-700" />
+                      </div>
+                      <p className="text-xl font-bold text-amber-950">{payrollSummary.summary.attendanceDays}</p>
                     </div>
-                    <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                      <p className="text-xs font-medium text-purple-600 mb-1">Gross Wage</p>
-                      <p className="text-xl sm:text-2xl font-bold text-purple-900">₹{Math.round(payrollSummary.summary.grossWage)}</p>
+                    <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">Gross Wage</p>
+                        <Wallet className="h-4 w-4 text-violet-700" />
+                      </div>
+                      <p className="text-xl font-bold text-violet-950">₹{Math.round(payrollSummary.summary.grossWage)}</p>
                     </div>
-                    <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-                      <p className="text-xs font-medium text-red-600 mb-1">Advances Deducted</p>
-                      <p className="text-xl sm:text-2xl font-bold text-red-900">₹{payrollSummary.summary.totalAdvance}</p>
+                    <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-rose-700">Advances</p>
+                        <ArrowDownRight className="h-4 w-4 text-rose-700" />
+                      </div>
+                      <p className="text-xl font-bold text-rose-950">₹{payrollSummary.summary.totalAdvance}</p>
                     </div>
-                    <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-200">
-                      <p className="text-xs font-medium text-emerald-600 mb-1">Net Payable</p>
-                      <p className="text-xl sm:text-2xl font-bold text-emerald-900">₹{Math.round(payrollSummary.summary.netPayable)}</p>
+                    <div className="rounded-2xl border border-green-200 bg-green-50 p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Net Payable</p>
+                        <ArrowUpRight className="h-4 w-4 text-green-700" />
+                      </div>
+                      <p className="text-xl font-bold text-green-950">₹{Math.round(payrollSummary.summary.netPayable)}</p>
                     </div>
-                    <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
-                      <p className="text-xs font-medium text-indigo-600 mb-1">Net Points</p>
-                      <p className="text-xl sm:text-2xl font-bold text-indigo-900">{payrollSummary.loyalty.totalPoints}</p>
+                    <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Net Points</p>
+                        <Sparkles className="h-4 w-4 text-indigo-700" />
+                      </div>
+                      <p className="text-xl font-bold text-indigo-950">{payrollSummary.loyalty.totalPoints}</p>
                     </div>
-                    <div className="bg-cyan-50 rounded-lg p-4 border border-cyan-200">
-                      <p className="text-xs font-medium text-cyan-700 mb-1">Points Value</p>
-                      <p className="text-xl sm:text-2xl font-bold text-cyan-900">₹{payrollSummary.loyalty.pointsRupees}</p>
+                    <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Points Value</p>
+                        <Coins className="h-4 w-4 text-cyan-700" />
+                      </div>
+                      <p className="text-xl font-bold text-cyan-950">₹{payrollSummary.loyalty.pointsRupees}</p>
                     </div>
-                  </div>
                 </div>
 
-                {/* Weekly Loyalty Payouts Card */}
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                  <div className="bg-slate-900 px-4 py-3 sm:px-6 sm:py-4">
+                  <div className="flex items-center justify-between gap-3 bg-slate-900 px-4 py-3 sm:px-6 sm:py-4">
                     <h3 className="text-lg font-semibold text-white">Weekly Loyalty Payouts</h3>
+                    {selectedWorkerForPayroll ? (
+                      <Link
+                        href={`/dashboard/workforce/payroll/payouts?workerId=${selectedWorkerForPayroll}&month=${payrollMonth}`}
+                        className="text-xs font-medium text-slate-200 transition-colors hover:text-white"
+                      >
+                        View all
+                      </Link>
+                    ) : null}
                   </div>
                   <div className="p-4 sm:p-6">
                     {payrollSummary.loyalty.weeklyPayouts.length === 0 ? (
@@ -1233,41 +1404,60 @@ function WorkforcePageContent() {
                         No loyalty entries for this month
                       </div>
                     ) : (
-                      <div className="space-y-3">
-                        {payrollSummary.loyalty.weeklyPayouts.map((week) => (
-                          <div key={`${week.isoWeekYear}-${week.isoWeek}`} className="border border-slate-200 rounded-lg p-4 hover:border-slate-300 transition-all">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="divide-y divide-slate-200">
+                        {payoutPreview.map((week) => (
+                          <div key={`${week.isoWeekYear}-${week.isoWeek}`} className="py-4 first:pt-0 last:pb-0">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-slate-900">
-                                  Week {week.isoWeek} ({new Date(week.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(week.weekEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})
-                                </p>
-                                <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-sm font-semibold text-slate-900">
+                                    Week {week.isoWeek}
+                                  </p>
+                                  <span className="text-xs text-slate-500">
+                                    {new Date(week.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric" })} - {new Date(week.weekEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                  </span>
+                                  <span
+                                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                                      week.payoutStatus === "paid"
+                                        ? "bg-green-100 text-green-700"
+                                        : "bg-yellow-100 text-yellow-700"
+                                    }`}
+                                  >
+                                    {week.payoutStatus}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      toast.info(
+                                        `Payout for this week is ${week.payoutStatus}.`
+                                      )
+                                    }
+                                    className="inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                                    aria-label={`Payout status info for week ${week.isoWeek}`}
+                                  >
+                                    <Info className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                                <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
                                   <div>
-                                    <span className="text-slate-600">Earned:</span>
-                                    <p className="font-semibold text-slate-900">{week.earnedPoints}</p>
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Earned</p>
+                                    <p className="mt-1 text-sm font-bold text-emerald-700">+{week.earnedPoints}</p>
                                   </div>
                                   <div>
-                                    <span className="text-slate-600">Deducted:</span>
-                                    <p className="font-semibold text-slate-900">{week.deductedPoints}</p>
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Deducted</p>
+                                    <p className="mt-1 text-sm font-bold text-rose-700">-{week.deductedPoints}</p>
                                   </div>
                                   <div>
-                                    <span className="text-slate-600">Net:</span>
-                                    <p className="font-semibold text-slate-900">{week.netPoints}</p>
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Net Points</p>
+                                    <p className="mt-1 text-sm font-bold text-slate-900">{week.netPoints}</p>
                                   </div>
                                   <div>
-                                    <span className="text-slate-600">Payout:</span>
-                                    <p className="font-semibold text-slate-900">₹{week.weeklyPayoutRupees}</p>
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Payout Amount</p>
+                                    <p className="mt-1 text-sm font-bold text-slate-900">₹{week.weeklyPayoutRupees}</p>
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2 sm:flex-col sm:items-end">
-                                <span className={`rounded px-2 py-1 text-xs font-medium whitespace-nowrap ${
-                                  week.payoutStatus === "paid"
-                                    ? "bg-green-100 text-green-700"
-                                    : "bg-yellow-100 text-yellow-700"
-                                }`}>
-                                  {week.payoutStatus}
-                                </span>
+                              <div className="shrink-0">
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -1279,9 +1469,13 @@ function WorkforcePageContent() {
                                       week.payoutStatus === "paid" ? "pending" : "paid"
                                     )
                                   }
-                                  className="text-xs"
+                                  className={`rounded-full text-xs font-semibold ${
+                                    week.payoutStatus === "paid"
+                                      ? "border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
+                                      : "border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
+                                  }`}
                                 >
-                                  {week.payoutStatus === "paid" ? "Pending" : "Paid"}
+                                  {week.payoutStatus === "paid" ? "Mark Pending" : "Mark Paid"}
                                 </Button>
                               </div>
                             </div>
@@ -1294,8 +1488,16 @@ function WorkforcePageContent() {
 
                 {/* Loyalty History Card */}
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                  <div className="bg-slate-900 px-4 py-3 sm:px-6 sm:py-4">
+                  <div className="flex items-center justify-between gap-3 bg-slate-900 px-4 py-3 sm:px-6 sm:py-4">
                     <h3 className="text-lg font-semibold text-white">Loyalty History</h3>
+                    {selectedWorkerForPayroll ? (
+                      <Link
+                        href={`/dashboard/workforce/payroll/history?workerId=${selectedWorkerForPayroll}&month=${payrollMonth}`}
+                        className="text-xs font-medium text-slate-200 transition-colors hover:text-white"
+                      >
+                        View all
+                      </Link>
+                    ) : null}
                   </div>
                   <div className="p-4 sm:p-6">
                     {loyaltyHistory.length === 0 ? (
@@ -1303,44 +1505,53 @@ function WorkforcePageContent() {
                         No loyalty entries for this month
                       </div>
                     ) : (
-                      <div className="space-y-3">
-                        {loyaltyHistory.map((entry) => (
-                          <div key={entry._id} className="border border-slate-200 rounded-lg p-4 hover:border-slate-300 transition-all">
-                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="divide-y divide-slate-200">
+                        {loyaltyHistoryPreview.map((entry) => (
+                          <div key={entry._id} className="py-4 first:pt-0 last:pb-0">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 mb-2">
+                                <div className="mb-3 flex flex-wrap items-center gap-2">
                                   <p className="text-sm font-semibold text-slate-900">
                                     {new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                   </p>
-                                  <span className={`rounded px-2 py-0.5 text-xs font-medium ${
+                                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                                     entry.entryType === "credit"
                                       ? "bg-green-100 text-green-700"
                                       : "bg-red-100 text-red-700"
                                   }`}>
                                     {entry.entryType === "credit" ? "+" : "-"}{entry.points}
                                   </span>
+                                  <span className="text-xs font-medium text-slate-600">{entry.category}</span>
                                 </div>
+                                <div className="space-y-3">
+                                  <div>
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Reason</p>
+                                    <p className="mt-1 text-sm font-medium text-slate-900">{entry.reason}</p>
+                                  </div>
+                                {entry.note ? (
+                                    <div>
+                                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Note</p>
+                                      <p className="mt-1 text-sm text-slate-600">{entry.note}</p>
+                                    </div>
+                                ) : null}
                                 <div className="text-xs space-y-0.5">
-                                  <p><span className="text-slate-600">Category:</span> <span className="font-medium text-slate-900">{entry.category}</span></p>
-                                  <p><span className="text-slate-600">Reason:</span> <span className="font-medium text-slate-900">{entry.reason}</span></p>
                                   {entry.imageUrl && (
-                                    <p><span className="text-slate-600">Evidence:</span> <a href={entry.imageUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-medium">View</a></p>
+                                    <p><span className="text-slate-600">Evidence:</span> <a href={entry.imageUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-medium">View image</a></p>
                                   )}
                                 </div>
+                                </div>
                               </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={
-                                  reversingEntryId === entry._id ||
-                                  entry.isReversal ||
-                                  entry.category === "reversal"
-                                }
-                                onClick={() => openReverseLoyaltyDialog(entry)}
-                                className="text-xs"
-                              >
-                                Reverse
-                              </Button>
+                              {!entry.isReversal && entry.category !== "reversal" && isEntryReversible(entry) ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={reversingEntryId === entry._id}
+                                  onClick={() => openReverseLoyaltyDialog(entry)}
+                                  className="rounded-full text-xs"
+                                >
+                                  Reverse
+                                </Button>
+                              ) : null}
                             </div>
                           </div>
                         ))}
@@ -1352,37 +1563,57 @@ function WorkforcePageContent() {
                 {/* Weekly Leaderboard Card */}
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                   <div className="bg-slate-900 px-4 py-3 sm:px-6 sm:py-4">
-                    <h3 className="text-lg font-semibold text-white">Weekly Leaderboard</h3>
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-lg font-semibold text-white">Weekly Leaderboard</h3>
+                      <button
+                        type="button"
+                        onClick={() => setIsLeaderboardWeekPickerOpen(true)}
+                        className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-white/20"
+                      >
+                        {selectedLeaderboardWeek ? `Week ${selectedLeaderboardWeek}` : "Current week"}
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <div className="p-4 sm:p-6">
+                    {leaderboardWeekLabel ? (
+                      <p className="mb-3 text-[11px] text-slate-400">{leaderboardWeekLabel}</p>
+                    ) : null}
                     {loyaltyLeaderboard.length === 0 ? (
                       <div className="text-center text-slate-500 py-8">
                         No leaderboard data yet
                       </div>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="divide-y divide-slate-100">
                         {loyaltyLeaderboard.map((row) => (
-                          <div key={`${row.rank}-${row.workerCode}`} className="border border-slate-200 rounded-lg p-4 hover:border-slate-300 transition-all">
-                            <div className="flex items-center justify-between">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-3">
-                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white font-bold text-sm">
-                                    #{row.rank}
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-semibold text-slate-900">{row.name || row.workerCode}</p>
-                                    <p className="text-xs text-slate-600">{row.workerCode}</p>
-                                  </div>
+                          <div
+                            key={`${row.rank}-${row.workerCode}`}
+                            className={`flex items-center justify-between px-1 py-3 ${
+                              row.workerCode === payrollSummary.worker.workerCode ? "bg-indigo-50/70" : ""
+                            }`}
+                          >
+                            <div className="flex items-center gap-4">
+                              <span className="w-5 shrink-0 text-center text-sm font-semibold text-slate-400">
+                                #{row.rank}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+                                  {(row.name || row.workerCode).charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <p className="flex items-center gap-1 text-sm font-medium text-slate-800">
+                                    {row.name || row.workerCode}
+                                    {row.workerCode === payrollSummary.worker.workerCode && (
+                                      <span className="text-slate-500 font-normal text-xs">(Selected)</span>
+                                    )}
+                                    {row.rank === 1 && <Trophy className="h-3.5 w-3.5 text-amber-500" />}
+                                  </p>
+                                  <p className="text-xs text-slate-500">Value: Rs. {row.totalRupees}</p>
                                 </div>
                               </div>
-                              <div className="text-right text-xs">
-                                <p className="text-slate-600">Points</p>
-                                <p className="font-semibold text-slate-900">{row.totalPoints}</p>
-                              </div>
-                              <div className="text-right text-xs ml-4">
-                                <p className="text-slate-600">Value</p>
-                                <p className="font-semibold text-slate-900">₹{row.totalRupees}</p>
-                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-semibold text-indigo-600">{row.totalPoints} pts</p>
                             </div>
                           </div>
                         ))}
@@ -1456,6 +1687,25 @@ function WorkforcePageContent() {
                     <SelectItem value="1">1</SelectItem>
                     <SelectItem value="1.5">1.5</SelectItem>
                     <SelectItem value="2">2</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-slate-700 font-medium mb-1.5 block">Project</Label>
+                <Select
+                  value={attendanceForm.projectId || "none"}
+                  onValueChange={(value) => setAttendanceForm((p) => ({ ...p, projectId: value === "none" ? "" : value }))}
+                >
+                  <SelectTrigger className="border-slate-200">
+                    <SelectValue placeholder="Select active project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No project</SelectItem>
+                    {activeProjects.map((project) => (
+                      <SelectItem key={project._id} value={project._id}>
+                        {project.clientName} - {project.clientAddress}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1670,6 +1920,55 @@ function WorkforcePageContent() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isLeaderboardWeekPickerOpen} onOpenChange={setIsLeaderboardWeekPickerOpen}>
+        <DialogContent className="sm:max-w-[380px]">
+          <DialogHeader>
+            <DialogTitle>Select Week</DialogTitle>
+            <DialogDescription>Choose a week to view leaderboard data.</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-80 -mx-2 overflow-y-auto divide-y divide-slate-100 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-200 max-sm:[&::-webkit-scrollbar]:hidden">
+            {leaderboardRecentWeeks.map((week) => {
+              const isActive =
+                week.isoWeek === (selectedLeaderboardWeek ?? currentISOWeek.isoWeek) &&
+                week.isoWeekYear === (selectedLeaderboardWeekYear ?? currentISOWeek.isoWeekYear);
+              const isCurrent =
+                week.isoWeek === currentISOWeek.isoWeek &&
+                week.isoWeekYear === currentISOWeek.isoWeekYear;
+              return (
+                <button
+                  key={`${week.isoWeekYear}-${week.isoWeek}`}
+                  type="button"
+                  onClick={() => {
+                    setIsLeaderboardWeekPickerOpen(false);
+                    fetchLoyaltyLeaderboard(week.isoWeek, week.isoWeekYear).catch((error) => {
+                      toast.error(error instanceof Error ? error.message : "Failed to load loyalty leaderboard");
+                    });
+                  }}
+                  className={`flex w-full items-center justify-between rounded-lg px-3 py-3 text-left transition-colors hover:bg-slate-50 ${
+                    isActive ? "bg-indigo-50 hover:bg-indigo-50" : ""
+                  }`}
+                >
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">
+                      Week {week.isoWeek}
+                      {isCurrent ? <span className="ml-1.5 text-[10px] font-normal text-slate-400">(Current)</span> : null}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {formatWeekDate(week.start)} - {formatWeekDate(week.end)}, {week.isoWeekYear}
+                    </p>
+                  </div>
+                  {isActive ? (
+                    <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-medium text-white">
+                      Selected
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={addWorkerDialogOpen} onOpenChange={setAddWorkerDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1798,6 +2097,25 @@ function WorkforcePageContent() {
                   <SelectItem value="1">1</SelectItem>
                   <SelectItem value="1.5">1.5</SelectItem>
                   <SelectItem value="2">2</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Project</Label>
+              <Select
+                value={editingAttendanceProjectId || "none"}
+                onValueChange={(value) => setEditingAttendanceProjectId(value === "none" ? "" : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select active project" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No project</SelectItem>
+                  {activeProjects.map((project) => (
+                    <SelectItem key={project._id} value={project._id}>
+                      {project.clientName} - {project.clientAddress}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

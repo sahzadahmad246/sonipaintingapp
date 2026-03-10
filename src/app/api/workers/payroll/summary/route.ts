@@ -171,6 +171,7 @@ export async function GET(req: NextRequest) {
         workerId: worker._id,
         date: { $gte: monthRange.start, $lte: monthRange.end },
       })
+        .populate("projectId", "projectId clientName clientAddress status")
         .sort({ date: -1, createdAt: -1 })
         .lean(),
       WorkerAdvance.find({

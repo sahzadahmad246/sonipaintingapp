@@ -1,5 +1,14 @@
 import { ApiError, AuditLog, Project, Quotation, Invoice, Portfolio } from "@/app/types";
 
+type ListQueryOptions = {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  sort?: "newest" | "oldest";
+  signal?: AbortSignal;
+};
+
 interface GeneralInfo {
   siteName: string;
   address: string;
@@ -37,31 +46,56 @@ export async function apiFetch<T>(
   return data as T;
 }
 
-export async function getQuotations(page: number = 1, limit: number = 10) {
+function buildListQuery({ page = 1, limit = 10, search, status, sort }: ListQueryOptions) {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+
+  if (search) {
+    params.set("search", search);
+  }
+  if (status) {
+    params.set("status", status);
+  }
+  if (sort) {
+    params.set("sort", sort);
+  }
+
+  return params.toString();
+}
+
+export async function getQuotations(options: ListQueryOptions = {}) {
   return apiFetch<{
     quotations: Quotation[];
     total: number;
     page: number;
     pages: number;
-  }>(`/quotations?page=${page}&limit=${limit}`);
+  }>(`/quotations?${buildListQuery(options)}`, {
+    signal: options.signal,
+  });
 }
 
-export async function getProjects(page: number = 1, limit: number = 10) {
+export async function getProjects(options: ListQueryOptions = {}) {
   return apiFetch<{
     projects: Project[];
     total: number;
     page: number;
     pages: number;
-  }>(`/projects?page=${page}&limit=${limit}`);
+  }>(`/projects?${buildListQuery(options)}`, {
+    signal: options.signal,
+  });
 }
 
-export async function getInvoices(page: number = 1, limit: number = 10) {
+export async function getInvoices(options: ListQueryOptions = {}) {
   return apiFetch<{
     invoices: Invoice[];
     total: number;
     page: number;
     pages: number;
-  }>(`/invoices?page=${page}&limit=${limit}`);
+  }>(`/invoices?${buildListQuery(options)}`, {
+    signal: options.signal,
+  });
 }
 
 export async function getPortfolio(page: number = 1, limit: number = 10) {

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useDeferredValue, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Trash2,
@@ -14,13 +14,12 @@ import {
   FileText,
   Filter,
   ArrowUpDown,
-  ChevronLeft,
-  ChevronRight,
   Download,
   Calendar,
   Phone,
   Plus,
   MapPin,
+  ArrowLeft,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -42,69 +41,153 @@ import { useRouter } from "next/navigation"
 import { getQuotations, apiFetch } from "@/app/lib/api"
 import { generateQuotationPDF } from "@/app/lib/generate-pdf"
 import type { Quotation, ApiError } from "@/app/types"
+import { InfiniteListFooter } from "@/components/admin/InfiniteListFooter"
 
 export default function QuotationList() {
   const router = useRouter()
   const [quotations, setQuotations] = useState<Quotation[]>([])
-  const [filteredQuotations, setFilteredQuotations] = useState<Quotation[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "accepted" | "rejected">("all")
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [quotationToDelete, setQuotationToDelete] = useState<string | null>(null)
   const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState<string | null>(null)
   const limit = 10
+  const deferredSearchTerm = useDeferredValue(searchTerm.trim())
+  const observerTarget = useRef<HTMLDivElement>(null)
+  const requestIdRef = useRef(0)
+  const hasLoadedOnceRef = useRef(false)
+  const lastScrollYRef = useRef(0)
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true)
 
-  const fetchQuotations = useCallback(async () => {
+  const fetchQuotations = useCallback(async (pageNum = 1, isLoadMore = false, signal?: AbortSignal) => {
+    const requestId = ++requestIdRef.current
     try {
-      const { quotations, pages } = await getQuotations(page, limit)
-      setQuotations(quotations)
-      setTotalPages(pages)
-    } catch (error: unknown) {
-      const apiError = error as ApiError
-      toast.error(apiError.error || "Failed to fetch quotations")
-    } finally {
-      setLoading(false)
-    }
-  }, [page, limit])
+      if (isLoadMore) {
+        setLoadingMore(true)
+        setLoadMoreError(null)
+      } else {
+        if (hasLoadedOnceRef.current) {
+          setIsRefreshing(true)
+        } else {
+          setLoading(true)
+        }
+      }
+      const { quotations: newQuotations = [], pages = 1, total: totalQuotations = 0, page: currentPage = pageNum } =
+        await getQuotations({
+          page: pageNum,
+          limit,
+          search: deferredSearchTerm || undefined,
+          status: statusFilter === "all" ? undefined : statusFilter,
+          sort: sortOrder,
+          signal,
+        })
 
-  const filterQuotations = useCallback(() => {
-    let filtered = [...quotations]
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (q) =>
-          q.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          q.quotationNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          q.clientAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          q.clientNumber.includes(searchTerm),
-      )
+      if (signal?.aborted || requestId !== requestIdRef.current) {
+        return
+      }
+
+      if (isLoadMore) {
+        setQuotations((prev) => [...prev, ...newQuotations])
+      } else {
+        setQuotations(newQuotations)
+      }
+
+      setTotal(totalQuotations)
+      setPage(currentPage)
+      setHasMore(currentPage < pages)
+      setLoadMoreError(null)
+      hasLoadedOnceRef.current = true
+    } catch (error: unknown) {
+      if (signal?.aborted) {
+        return
+      }
+      const apiError = error as ApiError
+      const message = apiError.error || "Failed to fetch quotations"
+      if (isLoadMore) {
+        setLoadMoreError(message)
+      } else {
+        setQuotations([])
+        setTotal(0)
+      }
+      toast.error(message)
+    } finally {
+      if (signal?.aborted || requestId !== requestIdRef.current) {
+        return
+      }
+      if (isLoadMore) {
+        setLoadingMore(false)
+      } else {
+        setLoading(false)
+        setIsRefreshing(false)
+      }
     }
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((q) => q.isAccepted === statusFilter)
-    }
-    filtered.sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime()
-      const dateB = new Date(b.createdAt).getTime()
-      return sortOrder === "newest" ? dateB - dateA : dateA - dateB
-    })
-    setFilteredQuotations(filtered)
-  }, [quotations, searchTerm, statusFilter, sortOrder])
+  }, [deferredSearchTerm, limit, sortOrder, statusFilter])
 
   useEffect(() => {
-    fetchQuotations()
+    const controller = new AbortController()
+    setPage(1)
+    setHasMore(true)
+    setLoadMoreError(null)
+    fetchQuotations(1, false, controller.signal)
+    return () => controller.abort()
   }, [fetchQuotations])
 
   useEffect(() => {
-    filterQuotations()
-  }, [filterQuotations])
+    const onScroll = () => {
+      const currentY = window.scrollY
+      const lastY = lastScrollYRef.current
+
+      if (currentY <= 24) {
+        setIsHeaderVisible(true)
+      } else if (currentY > lastY + 8) {
+        setIsHeaderVisible(false)
+      } else if (currentY < lastY - 8) {
+        setIsHeaderVisible(true)
+      }
+
+      lastScrollYRef.current = currentY
+    }
+
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const target = observerTarget.current
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading && !loadMoreError) {
+          fetchQuotations(page + 1, true)
+        }
+      },
+      { rootMargin: "400px 0px", threshold: 0 }
+    )
+
+    if (target) {
+      observer.observe(target)
+    }
+
+    return () => {
+      if (target) {
+        observer.unobserve(target)
+      }
+    }
+  }, [fetchQuotations, hasMore, loadMoreError, loading, loadingMore, page])
 
   const handleDelete = async (quotationNumber: string) => {
     try {
       await apiFetch(`/quotations/${quotationNumber}`, { method: "DELETE" })
       setQuotations((prev) => prev.filter((q) => q.quotationNumber !== quotationNumber))
+      setTotal((prev) => Math.max(0, prev - 1))
       toast.success("Quotation deleted successfully!")
     } catch (error: unknown) {
       const apiError = error as ApiError
@@ -195,7 +278,9 @@ export default function QuotationList() {
     )
   }
 
-  if (quotations.length === 0 && page === 1) {
+  const hasActiveQuery = deferredSearchTerm.length > 0 || statusFilter !== "all" || sortOrder !== "newest"
+
+  if (quotations.length === 0 && page === 1 && !hasActiveQuery) {
     return (
       <div className="min-h-screen bg-muted/30 p-4 sm:p-6 lg:p-8">
         <div className="max-w-4xl mx-auto">
@@ -220,38 +305,48 @@ export default function QuotationList() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 p-4 sm:p-6 lg:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground tracking-tight">Quotations</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Manage and track your estimates</p>
+    <div className="min-h-screen bg-muted/30">
+      <div className="max-w-4xl mx-auto">
+        {/* Sticky Header */}
+        <div
+          className={`sticky top-0 z-40 bg-background/95 backdrop-blur transition-transform duration-300 supports-[backdrop-filter]:bg-background/60 ${
+            isHeaderVisible ? "translate-y-0" : "-translate-y-full"
+          }`}
+        >
+          <div className="px-4 py-3 sm:px-6 sm:py-4 flex flex-row items-center justify-between">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => router.back()}
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="text-lg font-semibold">Quotations</h1>
+            <Button
+              size="icon"
+              className="h-8 w-8 rounded-full bg-blue-600 text-white hover:bg-blue-700"
+              onClick={() => router.push('/dashboard/quotations/create')}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
           </div>
-          <Button asChild className="rounded-full px-6">
-            <Link href="/dashboard/quotations/create">
-              <Plus className="h-4 w-4 mr-2" />
-              New Quotation
-            </Link>
-          </Button>
         </div>
-
-        {/* Search & Filters */}
-        <div className="bg-background rounded-xl border border-border/50 p-4">
-          <div className="flex flex-col sm:flex-row gap-3">
+        <div className="sticky top-0 z-30 -mt-px border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="px-4 py-3 sm:px-6 sm:py-4 flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search client, ID, phone..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 h-10 rounded-lg bg-muted/50 border-0 focus-visible:ring-1"
+                className="pl-10 h-10 rounded-xl bg-background border border-border/50 focus-visible:ring-1"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 rounded-lg border-border/50 bg-muted/50">
+                  <Button variant="outline" size="sm" className="h-10 rounded-full border-border/50 bg-background">
                     <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
                     <span className="text-sm">
                       {statusFilter === "all"
@@ -271,7 +366,7 @@ export default function QuotationList() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-10 rounded-lg border-border/50 bg-muted/50"
+                className="h-10 rounded-full border-border/50 bg-background"
                 onClick={() => setSortOrder(sortOrder === "newest" ? "oldest" : "newest")}
               >
                 <ArrowUpDown className="h-4 w-4 mr-2 text-muted-foreground" />
@@ -281,9 +376,31 @@ export default function QuotationList() {
           </div>
         </div>
 
-        {/* Quotations List */}
+        {/* Content */}
+        <div className="p-4 sm:p-6 space-y-3">
+        {isRefreshing ? (
+          <div className="rounded-2xl border border-border/50 bg-background/80 px-4 py-3 shadow-sm">
+            <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
+              <div className="h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
+              Updating quotations...
+            </div>
+            <div className="space-y-3">
+              {[1, 2].map((item) => (
+                <div key={item} className="rounded-xl border border-border/50 p-4">
+                  <div className="flex items-start gap-4">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-36" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <AnimatePresence mode="wait">
-          {filteredQuotations.length === 0 ? (
+          {quotations.length === 0 ? (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
               <div className="bg-background rounded-2xl border-2 border-dashed border-border/70 p-12 text-center">
                 <Search className="h-10 w-10 text-muted-foreground/50 mx-auto mb-3" />
@@ -293,7 +410,7 @@ export default function QuotationList() {
             </motion.div>
           ) : (
             <div className="space-y-3">
-              {filteredQuotations.map((quotation, index) => (
+              {quotations.map((quotation, index) => (
                 <motion.div
                   key={quotation.quotationNumber}
                   initial={{ opacity: 0, y: 10 }}
@@ -444,32 +561,16 @@ export default function QuotationList() {
           )}
         </AnimatePresence>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 pt-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(p - 1, 1))}
-              disabled={page === 1}
-              className="h-9 rounded-lg"
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-            </Button>
-            <div className="text-sm text-muted-foreground px-3">
-              Page {page} of {totalPages}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-              disabled={page === totalPages}
-              className="h-9 rounded-lg"
-            >
-              Next <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        )}
+        <InfiniteListFooter
+          hasMore={hasMore}
+          isLoadingMore={loadingMore}
+          loadMoreError={loadMoreError}
+          loadedCount={quotations.length}
+          totalCount={total}
+          itemLabel="Quotations"
+          observerTargetRef={observerTarget}
+          onRetry={() => fetchQuotations(page + 1, true)}
+        />
       </div>
 
       {/* Delete Confirmation Dialog */}
@@ -497,6 +598,7 @@ export default function QuotationList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
     </div>
   )
 }

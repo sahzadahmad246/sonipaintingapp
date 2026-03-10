@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import WorkerAttendance from "@/models/WorkerAttendance";
 import Worker from "@/models/Worker";
+import Project from "@/models/Project";
 import { getAdminSession } from "@/lib/admin-auth";
 
 type Params = { params: Promise<{ id: string }> };
@@ -28,6 +29,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const body = await req.json();
 
     const units = Number(body?.units);
+    const projectId = typeof body?.projectId === "string" && body.projectId.trim() ? body.projectId.trim() : undefined;
     const note = typeof body?.note === "string" ? body.note : "";
 
     if (!isValidUnits(units)) {
@@ -44,6 +46,13 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const worker = await Worker.findById(existingEntry.workerId);
     if (!worker || worker.status !== "active") {
       return NextResponse.json({ error: "Worker not found or inactive" }, { status: 404 });
+    }
+
+    if (projectId) {
+      const project = await Project.findOne({ _id: projectId, status: "ongoing" }).select("_id").lean();
+      if (!project) {
+        return NextResponse.json({ error: "Selected project not found or inactive" }, { status: 404 });
+      }
     }
 
     const day = toDayRange(existingEntry.date);
@@ -64,6 +73,27 @@ export async function PUT(req: NextRequest, { params }: Params) {
     ]);
 
     const existingUnitsExcludingCurrent = totals[0]?.totalUnits || 0;
+
+    const duplicateQuery: Record<string, unknown> = {
+      _id: { $ne: existingEntry._id },
+      workerId: existingEntry.workerId,
+      date: { $gte: day.start, $lte: day.end },
+    };
+
+    if (projectId) {
+      duplicateQuery.projectId = projectId;
+    } else {
+      duplicateQuery.$or = [{ projectId: { $exists: false } }, { projectId: null }];
+    }
+
+    const duplicateEntry = await WorkerAttendance.findOne(duplicateQuery).lean();
+    if (duplicateEntry) {
+      return NextResponse.json(
+        { error: projectId ? "Attendance is already linked to this project for that date" : "Attendance without a project already exists for that date" },
+        { status: 409 }
+      );
+    }
+
     if (existingUnitsExcludingCurrent + units > 2) {
       return NextResponse.json(
         { error: "Total units for this worker on this date cannot exceed 2" },
@@ -73,8 +103,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
     existingEntry.units = units;
     existingEntry.note = note;
+    existingEntry.projectId = projectId || null;
     await existingEntry.save();
     await existingEntry.populate("workerId", "workerCode name mobile dailyWage status");
+    await existingEntry.populate("projectId", "projectId clientName clientAddress status");
 
     return NextResponse.json({ attendance: existingEntry });
   } catch (error) {

@@ -80,7 +80,18 @@ type SummaryResponse = {
       payoutRecordId: string | null;
     }>;
   };
-  attendanceEntries: Array<{ _id: string; date: string; units: number; note?: string }>;
+  attendanceEntries: Array<{
+    _id: string;
+    date: string;
+    units: number;
+    note?: string;
+    projectId?: {
+      _id: string;
+      projectId: string;
+      clientName: string;
+      clientAddress: string;
+    } | null;
+  }>;
   advances: Array<{ _id: string; date: string; amount: number; note?: string }>;
   loyaltyEntries: Array<{
     _id: string;
@@ -107,13 +118,94 @@ const WORKER_TABS: WorkerTab[] = ["home", "payout", "attendance", "leaderboard"]
 type MonthlyMetrics = {
   netPayable: number;
   loyaltyValue: number;
-  attendanceDays: number;
+  attendanceUnits: number;
   advances: number;
 };
 
+function WorkerSkeletonBox({
+  className,
+}: {
+  className: string;
+}) {
+  return <div className={`animate-pulse rounded-2xl bg-slate-200/80 ${className}`} />;
+}
+
+function WorkerPageSkeleton({ tab = "home" }: { tab?: WorkerTab }) {
+  return (
+    <div className="min-h-screen bg-slate-100 px-3 pb-4 sm:px-4">
+      <div className="mx-auto w-full max-w-xl space-y-4 pb-24 lg:w-1/2">
+        <div className="-mx-3 border-y border-slate-200 bg-white px-4 py-4 sm:-mx-4">
+          <div className="flex items-start justify-between gap-3">
+            <WorkerSkeletonBox className="h-10 w-32 rounded-xl" />
+            <div className="flex items-center gap-2">
+              <WorkerSkeletonBox className="h-10 w-28 rounded-full" />
+              <WorkerSkeletonBox className="h-10 w-10 rounded-full" />
+            </div>
+          </div>
+        </div>
+
+        {(tab === "home" || tab === "payout" || tab === "attendance" || tab === "leaderboard") && (
+          <div className="space-y-4">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex items-center gap-2 bg-black px-4 py-2.5">
+                <WorkerSkeletonBox className="h-5 w-5 rounded-full bg-white/20" />
+                <WorkerSkeletonBox className="h-5 w-36 rounded-md bg-white/20" />
+              </div>
+              <div className="p-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <WorkerSkeletonBox className="h-24" />
+                  <WorkerSkeletonBox className="h-24" />
+                  <WorkerSkeletonBox className="h-24" />
+                  <WorkerSkeletonBox className="h-24" />
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex items-center justify-between bg-black px-4 py-2.5">
+                <WorkerSkeletonBox className="h-5 w-40 rounded-md bg-white/20" />
+                <WorkerSkeletonBox className="h-8 w-24 rounded-full bg-white/20" />
+              </div>
+              <div className="space-y-3 p-4">
+                {tab === "attendance" ? (
+                  <>
+                    <WorkerSkeletonBox className="h-72 rounded-2xl" />
+                    <WorkerSkeletonBox className="h-16" />
+                    <WorkerSkeletonBox className="h-16" />
+                  </>
+                ) : (
+                  <>
+                    <WorkerSkeletonBox className="h-16" />
+                    <WorkerSkeletonBox className="h-16" />
+                    <WorkerSkeletonBox className="h-16" />
+                  </>
+                )}
+              </div>
+            </div>
+
+            {tab !== "leaderboard" ? (
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex items-center gap-2 bg-black px-4 py-2.5">
+                  <WorkerSkeletonBox className="h-5 w-5 rounded-full bg-white/20" />
+                  <WorkerSkeletonBox className="h-5 w-32 rounded-md bg-white/20" />
+                </div>
+                <div className="space-y-3 p-4">
+                  <WorkerSkeletonBox className="h-14" />
+                  <WorkerSkeletonBox className="h-14" />
+                  <WorkerSkeletonBox className="h-14" />
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function WorkerDashboardPage() {
   return (
-    <Suspense fallback={<div className="p-6">Loading...</div>}>
+    <Suspense fallback={<WorkerPageSkeleton />}>
       <WorkerDashboardContent />
     </Suspense>
   );
@@ -144,7 +236,11 @@ function WorkerDashboardContent() {
   const [statementWeekYear, setStatementWeekYear] = useState<number | null>(null);
   const [selectedDateInfo, setSelectedDateInfo] = useState<{
     date: Date;
-    attendance?: { units: number; note?: string };
+    attendance?: {
+      units: number;
+      notes: string[];
+      projects: Array<{ _id: string; projectId: string; clientName: string; clientAddress: string }>;
+    };
     advance?: { amount: number; note?: string };
   } | null>(null);
   const [isWeekPickerOpen, setIsWeekPickerOpen] = useState(false);
@@ -295,7 +391,7 @@ function WorkerDashboardContent() {
         setPreviousMonthMetrics({
           netPayable: Math.round(previousJson.summary?.netPayable || 0),
           loyaltyValue: Math.max(0, previousJson.loyalty?.pointsRupees || 0),
-          attendanceDays: Number(previousJson.summary?.attendanceDays || 0),
+          attendanceUnits: Number(previousJson.summary?.totalUnits || 0),
           advances: Math.round(previousJson.summary?.totalAdvance || 0),
         });
       } else {
@@ -408,19 +504,53 @@ function WorkerDashboardContent() {
     return `${leaderName} is leading. Get ${diff} point${diff > 1 ? "s" : ""} to go ahead of ${above.name || above.workerCode}.`;
   }, [data, leaderboard]);
 
+  const getLocalDayKey = (dateValue: Date | string) => {
+    const date = new Date(dateValue);
+    const year = date.getFullYear();
+    const monthValue = String(date.getMonth() + 1).padStart(2, "0");
+    const dayValue = String(date.getDate()).padStart(2, "0");
+    return `${year}-${monthValue}-${dayValue}`;
+  };
+
+  const attendanceByDay = useMemo(() => {
+    const daily = new Map<
+      string,
+      {
+        units: number;
+        notes: string[];
+        projects: Array<{ _id: string; projectId: string; clientName: string; clientAddress: string }>;
+      }
+    >();
+
+    for (const entry of data?.attendanceEntries || []) {
+      const dayKey = getLocalDayKey(entry.date);
+      const current = daily.get(dayKey) || { units: 0, notes: [], projects: [] };
+      current.units += entry.units;
+      if (entry.note?.trim()) {
+        current.notes.push(entry.note.trim());
+      }
+      if (entry.projectId && !current.projects.some((project) => project._id === entry.projectId?._id)) {
+        current.projects.push(entry.projectId);
+      }
+      daily.set(dayKey, current);
+    }
+
+    return daily;
+  }, [data?.attendanceEntries]);
+
   const logout = async () => {
     await fetch("/api/worker-auth/logout", { method: "POST" });
     router.push("/worker/login");
   };
 
-  if (loading || !data) return <div className="p-6">Loading...</div>;
+  if (loading || !data) return <WorkerPageSkeleton tab={activeTab} />;
 
   const workerDisplayName = data.worker.name || data.worker.workerCode;
   const workerInitial = workerDisplayName.trim().charAt(0).toUpperCase() || "W";
   const currentMetrics: MonthlyMetrics = {
     netPayable: Math.round(data.summary.netPayable),
     loyaltyValue: Math.max(0, data.loyalty.pointsRupees),
-    attendanceDays: data.summary.totalUnits,
+    attendanceUnits: data.summary.totalUnits,
     advances: Math.round(data.summary.totalAdvance),
   };
 
@@ -586,9 +716,26 @@ function WorkerDashboardContent() {
                          selectedDateInfo.attendance!.units > 0 ? "Hajiri (Half-day)" : "Hajiri (Absent)"}
                       </span>
                     </p>
-                    {selectedDateInfo.attendance!.note && (
-                      <p className="text-sm text-slate-500 mt-1">Note: {selectedDateInfo.attendance!.note}</p>
-                    )}
+                    {selectedDateInfo.attendance!.projects.length > 0 ? (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Projects</p>
+                        {selectedDateInfo.attendance!.projects.map((project) => (
+                          <p key={project._id} className="text-sm text-slate-600">
+                            {project.clientName} · {project.clientAddress}
+                          </p>
+                        ))}
+                      </div>
+                    ) : null}
+                    {selectedDateInfo.attendance!.notes.length > 0 ? (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Notes</p>
+                        {selectedDateInfo.attendance!.notes.map((note, index) => (
+                          <p key={`${selectedDateInfo.date.toISOString()}-${index}`} className="text-sm text-slate-500">
+                            {note}
+                          </p>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <p className="text-sm text-slate-400">Not marked</p>
@@ -616,11 +763,7 @@ function WorkerDashboardContent() {
           </DialogContent>
         </Dialog>
 
-        {isMonthLoading ? (
-          <Card className="border-slate-200 shadow-sm">
-            <CardContent className="p-8 text-center text-sm text-slate-500">Loading month data...</CardContent>
-          </Card>
-        ) : null}
+        {isMonthLoading ? <WorkerPageSkeleton tab={activeTab} /> : null}
 
         {!isMonthLoading && activeTab === "home" ? (
           <div className="space-y-4">
@@ -679,8 +822,8 @@ function WorkerDashboardContent() {
                         <Info className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                    <p className="text-lg font-semibold">{currentMetrics.attendanceDays}</p>
-                    {getDeltaNode(currentMetrics.attendanceDays, previousMonthMetrics?.attendanceDays)}
+                    <p className="text-lg font-semibold">{currentMetrics.attendanceUnits}</p>
+                    {getDeltaNode(currentMetrics.attendanceUnits, previousMonthMetrics?.attendanceUnits)}
                   </div>
                   <div className="rounded-xl bg-amber-50 p-3">
                     <div className="flex items-center justify-between">
@@ -800,7 +943,7 @@ function WorkerDashboardContent() {
                   <div className="rounded-xl bg-slate-50 p-3 col-span-2">
                     <p className="text-[11px] text-slate-500">Wage & Hajiri</p>
                     <p className="text-lg font-semibold">
-                      Rs. {data.worker.dailyWage} × <button type="button" onClick={() => setTabWithUrl("attendance")} className="text-indigo-600 underline underline-offset-2">{data.summary.attendanceDays} hajiri</button>
+                      Rs. {data.worker.dailyWage} × <button type="button" onClick={() => setTabWithUrl("attendance")} className="text-indigo-600 underline underline-offset-2">{data.summary.totalUnits} hajiri</button>
                     </p>
                   </div>
                   <div className="rounded-xl bg-slate-50 p-3">
@@ -1055,10 +1198,8 @@ function WorkerDashboardContent() {
                           
                           if (!date) return <div key={`empty-${idx}`} className={`min-h-[72px] sm:min-h-[84px] bg-slate-50/30 ${rightBorder} ${bottomBorder}`}></div>;
 
-                          const attEntry = data.attendanceEntries.find(e => {
-                            const ed = new Date(e.date);
-                            return ed.getFullYear() === date.getFullYear() && ed.getMonth() === date.getMonth() && ed.getDate() === date.getDate();
-                          });
+                          const dayKey = getLocalDayKey(date);
+                          const attEntry = attendanceByDay.get(dayKey);
 
                           const advEntry = data.advances.find(e => {
                             const ed = new Date(e.date);
@@ -1230,48 +1371,50 @@ function WorkerDashboardContent() {
             isBottomNavVisible ? "translate-y-0" : "translate-y-full"
           }`}
         >
-          <div className="w-full border-t border-slate-200 bg-white p-2 shadow-lg">
-            <div className="grid grid-cols-4 gap-1">
-              <Button
-                variant="ghost"
-                className={`h-11 flex-col gap-0.5 text-[11px] hover:bg-transparent hover:text-indigo-600 ${
-                  activeTab === "home" ? "text-indigo-700" : "text-slate-500"
-                }`}
-                onClick={() => setTabWithUrl("home")}
-              >
-                <Home className="h-4 w-4" />
-                Home
-              </Button>
-              <Button
-                variant="ghost"
-                className={`h-11 flex-col gap-0.5 text-[11px] hover:bg-transparent hover:text-indigo-600 ${
-                  activeTab === "payout" ? "text-indigo-700" : "text-slate-500"
-                }`}
-                onClick={() => setTabWithUrl("payout")}
-              >
-                <CircleDollarSign className="h-4 w-4" />
-                Payout
-              </Button>
-              <Button
-                variant="ghost"
-                className={`h-11 flex-col gap-0.5 text-[11px] hover:bg-transparent hover:text-indigo-600 ${
-                  activeTab === "attendance" ? "text-indigo-700" : "text-slate-500"
-                }`}
-                onClick={() => setTabWithUrl("attendance")}
-              >
-                <CalendarCheck2 className="h-4 w-4" />
-                Attendance
-              </Button>
-              <Button
-                variant="ghost"
-                className={`h-11 flex-col gap-0.5 text-[11px] hover:bg-transparent hover:text-indigo-600 ${
-                  activeTab === "leaderboard" ? "text-indigo-700" : "text-slate-500"
-                }`}
-                onClick={() => setTabWithUrl("leaderboard")}
-              >
-                <Trophy className="h-4 w-4" />
-                Leaderboard
-              </Button>
+          <div className="mx-auto w-full max-w-xl px-3 sm:px-4 lg:w-1/2">
+            <div className="w-full border-t border-slate-200 bg-white p-2 shadow-lg">
+              <div className="grid grid-cols-4 gap-1">
+                <Button
+                  variant="ghost"
+                  className={`h-11 flex-col gap-0.5 text-[11px] hover:bg-transparent hover:text-indigo-600 ${
+                    activeTab === "home" ? "text-indigo-700" : "text-slate-500"
+                  }`}
+                  onClick={() => setTabWithUrl("home")}
+                >
+                  <Home className="h-4 w-4" />
+                  Home
+                </Button>
+                <Button
+                  variant="ghost"
+                  className={`h-11 flex-col gap-0.5 text-[11px] hover:bg-transparent hover:text-indigo-600 ${
+                    activeTab === "payout" ? "text-indigo-700" : "text-slate-500"
+                  }`}
+                  onClick={() => setTabWithUrl("payout")}
+                >
+                  <CircleDollarSign className="h-4 w-4" />
+                  Payout
+                </Button>
+                <Button
+                  variant="ghost"
+                  className={`h-11 flex-col gap-0.5 text-[11px] hover:bg-transparent hover:text-indigo-600 ${
+                    activeTab === "attendance" ? "text-indigo-700" : "text-slate-500"
+                  }`}
+                  onClick={() => setTabWithUrl("attendance")}
+                >
+                  <CalendarCheck2 className="h-4 w-4" />
+                  Attendance
+                </Button>
+                <Button
+                  variant="ghost"
+                  className={`h-11 flex-col gap-0.5 text-[11px] hover:bg-transparent hover:text-indigo-600 ${
+                    activeTab === "leaderboard" ? "text-indigo-700" : "text-slate-500"
+                  }`}
+                  onClick={() => setTabWithUrl("leaderboard")}
+                >
+                  <Trophy className="h-4 w-4" />
+                  Leaderboard
+                </Button>
+              </div>
             </div>
           </div>
         </div>

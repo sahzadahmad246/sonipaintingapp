@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "reset:workforce-data": "node scripts/reset-workforce-data.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",

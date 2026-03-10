@@ -1,13 +1,11 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useDeferredValue, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Trash2,
   Eye,
   Search,
-  ChevronLeft,
-  ChevronRight,
   Download,
   CheckCircle,
   Clock,
@@ -19,6 +17,7 @@ import {
   Phone,
   MapPin,
   Receipt,
+  ArrowLeft,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,38 +39,96 @@ import { generateInvoicePDF } from "@/app/lib/generate-pdf"
 import type { Invoice } from "@/app/types"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { InfiniteListFooter } from "@/components/admin/InfiniteListFooter"
 
 export default function InvoiceList() {
   const router = useRouter()
   const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | "paid" | "partially-paid" | "unpaid">("all")
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null)
   const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const limit = 10
+  const deferredSearchTerm = useDeferredValue(searchTerm.trim())
+  const observerTarget = useRef<HTMLDivElement>(null)
+  const requestIdRef = useRef(0)
+  const hasLoadedOnceRef = useRef(false)
+  const lastScrollYRef = useRef(0)
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true)
 
-  const fetchInvoices = useCallback(async () => {
+  const fetchInvoices = useCallback(async (pageNum = 1, isLoadMore = false, signal?: AbortSignal) => {
+    const requestId = ++requestIdRef.current
     try {
-      const { invoices, pages } = await getInvoices(page, limit)
-      setInvoices(invoices || [])
-      setTotalPages(pages || 1)
+      if (isLoadMore) {
+        setLoadingMore(true)
+        setLoadMoreError(null)
+      } else {
+        if (hasLoadedOnceRef.current) {
+          setIsRefreshing(true)
+        } else {
+          setLoading(true)
+        }
+      }
+      const { invoices: newInvoices = [], pages = 1, total: totalInvoices = 0, page: currentPage = pageNum } =
+        await getInvoices({
+          page: pageNum,
+          limit,
+          search: deferredSearchTerm || undefined,
+          status: statusFilter === "all" ? undefined : statusFilter,
+          sort: sortOrder,
+          signal,
+        })
+
+      if (signal?.aborted || requestId !== requestIdRef.current) {
+        return
+      }
+
+      if (isLoadMore) {
+        setInvoices((prev) => [...prev, ...newInvoices])
+      } else {
+        setInvoices(newInvoices)
+      }
+
+      setTotal(totalInvoices)
+      setPage(currentPage)
+      setHasMore(currentPage < pages)
+      setLoadMoreError(null)
+      hasLoadedOnceRef.current = true
     } catch (error: unknown) {
+      if (signal?.aborted) {
+        return
+      }
       console.error("Fetch invoices error:", error)
       const errorMessage = error instanceof Error ? error.message : "Failed to fetch invoices"
+      if (isLoadMore) {
+        setLoadMoreError(errorMessage)
+      } else {
+        setInvoices([])
+        setTotal(0)
+      }
       toast.error(errorMessage)
-      setInvoices([])
-      setTotalPages(1)
     } finally {
-      setLoading(false)
+      if (signal?.aborted || requestId !== requestIdRef.current) {
+        return
+      }
+      if (isLoadMore) {
+        setLoadingMore(false)
+      } else {
+        setLoading(false)
+        setIsRefreshing(false)
+      }
     }
-  }, [page, limit])
+  }, [deferredSearchTerm, limit, sortOrder, statusFilter])
 
   const getInvoiceStatus = (invoice: Invoice) => {
     const amountDue = invoice.amountDue
@@ -82,44 +139,64 @@ export default function InvoiceList() {
     return "unpaid"
   }
 
-  const filterInvoices = useCallback(() => {
-    let filtered = [...invoices]
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (i) =>
-          i.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          i.invoiceId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          i.clientAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          i.clientNumber.includes(searchTerm),
-      )
-    }
-
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((i) => getInvoiceStatus(i) === statusFilter)
-    }
-
-    filtered.sort((a, b) => {
-      const dateA = new Date(a.createdAt || a.date).getTime()
-      const dateB = new Date(b.createdAt || b.date).getTime()
-      return sortOrder === "newest" ? dateB - dateA : dateA - dateB
-    })
-
-    setFilteredInvoices(filtered)
-  }, [invoices, searchTerm, statusFilter, sortOrder])
-
   useEffect(() => {
-    fetchInvoices()
+    const controller = new AbortController()
+    setPage(1)
+    setHasMore(true)
+    setLoadMoreError(null)
+    fetchInvoices(1, false, controller.signal)
+    return () => controller.abort()
   }, [fetchInvoices])
 
   useEffect(() => {
-    filterInvoices()
-  }, [filterInvoices])
+    const onScroll = () => {
+      const currentY = window.scrollY
+      const lastY = lastScrollYRef.current
+
+      if (currentY <= 24) {
+        setIsHeaderVisible(true)
+      } else if (currentY > lastY + 8) {
+        setIsHeaderVisible(false)
+      } else if (currentY < lastY - 8) {
+        setIsHeaderVisible(true)
+      }
+
+      lastScrollYRef.current = currentY
+    }
+
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const target = observerTarget.current
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading && !loadMoreError) {
+          fetchInvoices(page + 1, true)
+        }
+      },
+      { rootMargin: "400px 0px", threshold: 0 }
+    )
+
+    if (target) {
+      observer.observe(target)
+    }
+
+    return () => {
+      if (target) {
+        observer.unobserve(target)
+      }
+    }
+  }, [fetchInvoices, hasMore, loadMoreError, loading, loadingMore, page])
 
   const handleDelete = async (invoiceId: string) => {
     try {
       setIsDeleting(invoiceId)
       await apiFetch(`/invoices/${invoiceId}`, { method: "DELETE" })
       setInvoices((prev) => prev.filter((i) => i.invoiceId !== invoiceId))
+      setTotal((prev) => Math.max(0, prev - 1))
       toast.success("Invoice deleted successfully!")
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "Failed to delete invoice"
@@ -211,7 +288,9 @@ export default function InvoiceList() {
     )
   }
 
-  if (invoices.length === 0 && page === 1) {
+  const hasActiveQuery = deferredSearchTerm.length > 0 || statusFilter !== "all" || sortOrder !== "newest"
+
+  if (invoices.length === 0 && page === 1 && !hasActiveQuery) {
     return (
       <div className="min-h-screen bg-muted/30 p-4 sm:p-6 lg:p-8">
         <div className="max-w-4xl mx-auto">
@@ -236,38 +315,48 @@ export default function InvoiceList() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 p-4 sm:p-6 lg:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground tracking-tight">Invoices</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Manage and track your billing</p>
+    <div className="min-h-screen bg-muted/30">
+      <div className="max-w-4xl mx-auto">
+        {/* Sticky Header */}
+        <div
+          className={`sticky top-0 z-40 bg-background/95 backdrop-blur transition-transform duration-300 supports-[backdrop-filter]:bg-background/60 ${
+            isHeaderVisible ? "translate-y-0" : "-translate-y-full"
+          }`}
+        >
+          <div className="px-4 py-3 sm:px-6 sm:py-4 flex flex-row items-center justify-between">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => router.back()}
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="text-lg font-semibold">Invoices</h1>
+            <Button
+              size="icon"
+              className="h-8 w-8 rounded-full bg-blue-600 text-white hover:bg-blue-700"
+              onClick={() => router.push('/dashboard/invoices/create')}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
           </div>
-          <Button asChild className="rounded-full px-6">
-            <Link href="/dashboard/invoices/create">
-              <Plus className="h-4 w-4 mr-2" />
-              New Invoice
-            </Link>
-          </Button>
         </div>
-
-        {/* Search & Filters */}
-        <div className="bg-background rounded-xl border border-border/50 p-4">
-          <div className="flex flex-col sm:flex-row gap-3">
+        <div className="sticky top-0 z-30 -mt-px border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="px-4 py-3 sm:px-6 sm:py-4 flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search client, ID, phone..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 h-10 rounded-lg bg-muted/50 border-0 focus-visible:ring-1"
+                className="pl-10 h-10 rounded-xl bg-background border border-border/50 focus-visible:ring-1"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 rounded-lg border-border/50 bg-muted/50">
+                  <Button variant="outline" size="sm" className="h-10 rounded-full border-border/50 bg-background">
                     <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
                     <span className="text-sm">
                       {statusFilter === "all"
@@ -287,7 +376,7 @@ export default function InvoiceList() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-10 rounded-lg border-border/50 bg-muted/50"
+                className="h-10 rounded-full border-border/50 bg-background"
                 onClick={() => setSortOrder(sortOrder === "newest" ? "oldest" : "newest")}
               >
                 <ArrowUpDown className="h-4 w-4 mr-2 text-muted-foreground" />
@@ -297,9 +386,32 @@ export default function InvoiceList() {
           </div>
         </div>
 
-        {/* Invoices List */}
+        {/* Content */}
+        <div className="p-4 sm:p-6 space-y-3">
+          {isRefreshing ? (
+            <div className="rounded-2xl border border-border/50 bg-background/80 px-4 py-3 shadow-sm">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
+                <div className="h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
+                Updating invoices...
+              </div>
+              <div className="space-y-3">
+                {[1, 2].map((item) => (
+                  <div key={item} className="rounded-xl border border-border/50 p-4">
+                    <div className="flex items-start gap-4">
+                      <Skeleton className="h-10 w-10 rounded-full" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-36" />
+                        <Skeleton className="h-3 w-24" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {/* Invoices List */}
         <AnimatePresence mode="wait">
-          {filteredInvoices.length === 0 ? (
+          {invoices.length === 0 ? (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
               <div className="bg-background rounded-2xl border-2 border-dashed border-border/70 p-12 text-center">
                 <Search className="h-10 w-10 text-muted-foreground/50 mx-auto mb-3" />
@@ -309,7 +421,7 @@ export default function InvoiceList() {
             </motion.div>
           ) : (
             <div className="space-y-3">
-              {filteredInvoices.map((invoice, index) => {
+              {invoices.map((invoice, index) => {
                 const status = getInvoiceStatus(invoice)
                 return (
                   <motion.div
@@ -484,32 +596,16 @@ export default function InvoiceList() {
           )}
         </AnimatePresence>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 pt-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(p - 1, 1))}
-              disabled={page === 1}
-              className="h-9 rounded-lg"
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-            </Button>
-            <div className="text-sm text-muted-foreground px-3">
-              Page {page} of {totalPages}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-              disabled={page === totalPages}
-              className="h-9 rounded-lg"
-            >
-              Next <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        )}
+        <InfiniteListFooter
+          hasMore={hasMore}
+          isLoadingMore={loadingMore}
+          loadMoreError={loadMoreError}
+          loadedCount={invoices.length}
+          totalCount={total}
+          itemLabel="Invoices"
+          observerTargetRef={observerTarget}
+          onRetry={() => fetchInvoices(page + 1, true)}
+        />
       </div>
 
       {/* Delete Confirmation Dialog */}
@@ -538,6 +634,7 @@ export default function InvoiceList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
     </div>
   )
 }

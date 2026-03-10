@@ -20,7 +20,6 @@ import {
   BookOpen,
   User as UserIcon,
   UsersRound,
-  Trophy,
   Wallet,
   X
 } from "lucide-react";
@@ -86,7 +85,6 @@ export default function DashboardMobileNav({
     { href: "/dashboard/invoices", label: "Invoices", icon: <DollarSign className="h-5 w-5" /> },
     { href: "/dashboard/expenses", label: "Expenses", icon: <Wallet className="h-5 w-5" /> },
     { href: "/dashboard/workforce", label: "Workforce", icon: <UsersRound className="h-5 w-5" /> },
-    { href: "/dashboard/workforce?tab=payroll", label: "Loyalty Program", icon: <Trophy className="h-5 w-5" /> },
     { href: "/dashboard/portfolio", label: "Portfolio", icon: <Camera className="h-5 w-5" /> },
     { href: "/dashboard/settings", label: "Settings", icon: <Settings className="h-5 w-5" /> },
     { href: "/dashboard/contact", label: "Contact Messages", icon: <MessageSquare className="h-5 w-5" /> },
