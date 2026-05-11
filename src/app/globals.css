@@ -133,4 +133,8 @@
     margin-bottom: 0;
     padding-bottom: 0;
   }
+
+  body:has([data-attendance-dialog="true"]) [data-slot="dialog-overlay"] {
+    left: 16rem;
+  }
 }

@@ -15,7 +15,8 @@ export type NotificationAction =
   | "quotation_rejected"
   | "quotation_updated"
   | "payment_received"
-  | "project_updated";
+  | "project_updated"
+  | "payroll_paid";
 
 const TEMPLATE_SIDS: Record<NotificationAction, string | undefined> = {
   quotation_created: process.env.TWILIO_QUOTATION_CREATED_SID,
@@ -24,6 +25,7 @@ const TEMPLATE_SIDS: Record<NotificationAction, string | undefined> = {
   quotation_updated: process.env.TWILIO_QUOTATION_UPDATED_SID,
   payment_received: process.env.TWILIO_PAYMENT_RECEIVED_SID,
   project_updated: process.env.TWILIO_PROJECT_UPDATED_SID,
+  payroll_paid: process.env.TWILIO_PAYROLL_PAID_SID || process.env.TWILIO_EMPLOYEE_REPORT_SID,
 };
 
 export async function sendNotification({

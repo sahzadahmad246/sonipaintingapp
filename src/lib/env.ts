@@ -37,6 +37,8 @@ const envSchema = z.object({
   TWILIO_QUOTATION_UPDATED_SID: z.string().optional(),
   TWILIO_PAYMENT_RECEIVED_SID: z.string().optional(),
   TWILIO_PROJECT_UPDATED_SID: z.string().optional(),
+  TWILIO_PAYROLL_PAID_SID: z.string().optional(),
+  TWILIO_EMPLOYEE_REPORT_SID: z.string().optional(),
   WORKER_AUTH_SECRET: z.string().optional(),
   
   // Frontend

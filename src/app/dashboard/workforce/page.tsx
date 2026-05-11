@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { CalendarCheck, Loader2, Pencil, Trash2, ArrowLeft, ChevronLeft, ChevronRight, Plus, MoreVertical, ChevronDown, Trophy, Coins, CalendarDays, Banknote, Wallet, Sparkles, ArrowUpRight, ArrowDownRight, Info } from "lucide-react";
+import { CalendarCheck, Loader2, Pencil, Trash2, ArrowLeft, ChevronLeft, ChevronRight, Plus, MoreVertical, ChevronDown, Trophy, Coins, CalendarDays, Banknote, Wallet, Sparkles, ArrowUpRight, ArrowDownRight, Info, X, UserRound, Send } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -40,9 +40,11 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Worker = {
   _id: string;
@@ -80,6 +82,25 @@ type AdvanceEntry = {
   workerId: Worker;
 };
 
+type WorkerPayPeriod = {
+  _id?: string;
+  id?: string;
+  status?: "current" | "paid" | "past_unpaid";
+  startDate: string;
+  endDate: string;
+  totalUnits: number;
+  attendanceDays: number;
+  grossWage: number;
+  totalAdvance: number;
+  netPayable: number;
+  dailyWage?: number;
+  paidAt?: string;
+  reportSentAt?: string;
+  reportError?: string;
+  attendanceEntries?: AttendanceEntry[];
+  advances?: AdvanceEntry[];
+};
+
 type LoyaltyEntryType = "credit" | "debit";
 type LoyaltyHistoryEntry = {
   _id: string;
@@ -103,6 +124,7 @@ type LoyaltyLeaderboardEntry = {
 };
 
 const TODAY = new Date().toISOString().slice(0, 10);
+const CURRENT_MONTH = new Date().toISOString().slice(0, 7);
 const COUNTRY_CODES = [
   { code: "+91", label: "India (+91)", localLength: 10 },
   { code: "+1", label: "United States (+1)", localLength: 10 },
@@ -164,15 +186,20 @@ function WorkforcePageContent() {
     ? initialTab
     : "workers";
   const activeTab = validTab as "workers" | "attendance" | "advances" | "payroll";
+  const selectedAttendanceDate = searchParams.get("attendanceDate");
+  const selectedAttendanceWorkerId = searchParams.get("attendanceWorkerId");
+  const selectedWorkerDetailMode = searchParams.get("workerDetailMode");
 
   const setTabInUrl = (tab: "workers" | "attendance" | "advances" | "payroll") => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", tab);
+    params.delete("attendanceDate");
+    params.delete("attendanceWorkerId");
+    params.delete("workerDetailMode");
     router.replace(`?${params.toString()}`, { scroll: false });
   };
 
   const chipScrollRef = useRef<HTMLDivElement>(null);
-  const attendanceDateInputRef = useRef<HTMLInputElement>(null);
   const advanceDateInputRef = useRef<HTMLInputElement>(null);
   const payrollMonthInputRef = useRef<HTMLInputElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -218,7 +245,6 @@ function WorkforcePageContent() {
 
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [activeProjects, setActiveProjects] = useState<AttendanceProject[]>([]);
-  const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
   const [advances, setAdvances] = useState<AdvanceEntry[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -227,9 +253,24 @@ function WorkforcePageContent() {
   const [savingAdvance, setSavingAdvance] = useState(false);
   const [addWorkerDialogOpen, setAddWorkerDialogOpen] = useState(false);
   const [formDialogOpen, setFormDialogOpen] = useState(false);
+  const [addManualProjectDialogOpen, setAddManualProjectDialogOpen] = useState(false);
 
-  const [attendanceFilterDate, setAttendanceFilterDate] = useState(TODAY);
   const [advanceFilterDate, setAdvanceFilterDate] = useState(TODAY);
+  const [attendanceMonth, setAttendanceMonth] = useState(CURRENT_MONTH);
+  const [attendanceMonthEntries, setAttendanceMonthEntries] = useState<AttendanceEntry[]>([]);
+  const [advanceMonthEntries, setAdvanceMonthEntries] = useState<AdvanceEntry[]>([]);
+  const [loadingAttendanceMonth, setLoadingAttendanceMonth] = useState(false);
+  const [manualProjects, setManualProjects] = useState<AttendanceProject[]>([]);
+  const [manualProjectName, setManualProjectName] = useState("");
+  const [manualProjectAddress, setManualProjectAddress] = useState("");
+  const [workerDetailMode, setWorkerDetailMode] = useState<"month" | "payperiod">("month");
+  const [payPeriods, setPayPeriods] = useState<WorkerPayPeriod[]>([]);
+  const [currentPayPeriod, setCurrentPayPeriod] = useState<WorkerPayPeriod | null>(null);
+  const [pastUnpaidPayPeriod, setPastUnpaidPayPeriod] = useState<WorkerPayPeriod | null>(null);
+  const [selectedPayPeriodKey, setSelectedPayPeriodKey] = useState("current");
+  const [loadingPayPeriods, setLoadingPayPeriods] = useState(false);
+  const [markingPayPeriodPaid, setMarkingPayPeriodPaid] = useState(false);
+  const [resendingPayPeriodReportId, setResendingPayPeriodReportId] = useState("");
 
   const [newWorker, setNewWorker] = useState({
     name: "",
@@ -328,6 +369,172 @@ function WorkforcePageContent() {
     () => workers.filter((worker) => worker.status === "active"),
     [workers]
   );
+  const getLocalDayKey = (dateValue: string | Date) => {
+    const date = typeof dateValue === "string" ? new Date(dateValue) : dateValue;
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  const formatDateLabel = (dateValue: string | Date, options?: Intl.DateTimeFormatOptions) =>
+    new Date(dateValue).toLocaleDateString("en-IN", options || { day: "numeric", month: "short", year: "numeric" });
+  const attendanceMonthLabel = useMemo(() => {
+    const [year, month] = attendanceMonth.split("-");
+    return new Date(Number(year), Number(month) - 1, 1).toLocaleDateString("en-IN", {
+      month: "long",
+      year: "numeric",
+    });
+  }, [attendanceMonth]);
+  const attendanceMonthRange = useMemo(
+    () => getMonthDateRange(attendanceMonth),
+    [attendanceMonth]
+  );
+  const attendanceByDay = useMemo(() => {
+    const map = new Map<string, { totalUnits: number; entries: AttendanceEntry[] }>();
+    for (const entry of attendanceMonthEntries) {
+      const dayKey = getLocalDayKey(entry.date);
+      const current = map.get(dayKey) || { totalUnits: 0, entries: [] };
+      current.totalUnits += Number(entry.units || 0);
+      current.entries.push(entry);
+      map.set(dayKey, current);
+    }
+    return map;
+  }, [attendanceMonthEntries]);
+  const advancesByDay = useMemo(() => {
+    const map = new Map<string, { totalAmount: number; entries: AdvanceEntry[] }>();
+    for (const entry of advanceMonthEntries) {
+      const dayKey = getLocalDayKey(entry.date);
+      const current = map.get(dayKey) || { totalAmount: 0, entries: [] };
+      current.totalAmount += Number(entry.amount || 0);
+      current.entries.push(entry);
+      map.set(dayKey, current);
+    }
+    return map;
+  }, [advanceMonthEntries]);
+  const selectedDayAttendance = useMemo(
+    () => (selectedAttendanceDate ? attendanceByDay.get(selectedAttendanceDate)?.entries || [] : []),
+    [attendanceByDay, selectedAttendanceDate]
+  );
+  const selectedDayAdvances = useMemo(
+    () => (selectedAttendanceDate ? advancesByDay.get(selectedAttendanceDate)?.entries || [] : []),
+    [advancesByDay, selectedAttendanceDate]
+  );
+  const selectedDayWorkerRows = useMemo(() => {
+    const rowMap = new Map<string, { worker: Worker; attendance: AttendanceEntry[]; advances: AdvanceEntry[]; totalUnits: number; totalAdvance: number }>();
+    for (const entry of selectedDayAttendance) {
+      if (!entry.workerId?._id) continue;
+      const current = rowMap.get(entry.workerId._id) || {
+        worker: entry.workerId,
+        attendance: [],
+        advances: [],
+        totalUnits: 0,
+        totalAdvance: 0,
+      };
+      current.attendance.push(entry);
+      current.totalUnits += Number(entry.units || 0);
+      rowMap.set(entry.workerId._id, current);
+    }
+    for (const entry of selectedDayAdvances) {
+      if (!entry.workerId?._id) continue;
+      const current = rowMap.get(entry.workerId._id) || {
+        worker: entry.workerId,
+        attendance: [],
+        advances: [],
+        totalUnits: 0,
+        totalAdvance: 0,
+      };
+      current.advances.push(entry);
+      current.totalAdvance += Number(entry.amount || 0);
+      rowMap.set(entry.workerId._id, current);
+    }
+    return Array.from(rowMap.values()).sort((a, b) =>
+      (a.worker.name || a.worker.workerCode).localeCompare(b.worker.name || b.worker.workerCode)
+    );
+  }, [selectedDayAttendance, selectedDayAdvances]);
+  const selectedAttendanceWorker = selectedAttendanceWorkerId
+    ? workers.find((worker) => worker._id === selectedAttendanceWorkerId) ||
+      attendanceMonthEntries.find((entry) => entry.workerId?._id === selectedAttendanceWorkerId)?.workerId ||
+      advanceMonthEntries.find((entry) => entry.workerId?._id === selectedAttendanceWorkerId)?.workerId
+    : null;
+  const selectedWorkerAttendanceEntries = useMemo(
+    () =>
+      selectedAttendanceWorkerId
+        ? attendanceMonthEntries.filter((entry) => entry.workerId?._id === selectedAttendanceWorkerId)
+        : [],
+    [attendanceMonthEntries, selectedAttendanceWorkerId]
+  );
+  const selectedWorkerAdvanceEntries = useMemo(
+    () =>
+      selectedAttendanceWorkerId
+        ? advanceMonthEntries.filter((entry) => entry.workerId?._id === selectedAttendanceWorkerId)
+        : [],
+    [advanceMonthEntries, selectedAttendanceWorkerId]
+  );
+  const selectedPayPeriod =
+    selectedPayPeriodKey === "current"
+      ? currentPayPeriod
+      : selectedPayPeriodKey === "past-unpaid"
+        ? pastUnpaidPayPeriod
+      : payPeriods.find((period) => period._id === selectedPayPeriodKey || period.id === selectedPayPeriodKey) || null;
+  const visibleWorkerAttendanceEntries = useMemo(
+    () =>
+      workerDetailMode === "payperiod"
+        ? selectedPayPeriod?.attendanceEntries || []
+        : selectedWorkerAttendanceEntries,
+    [selectedPayPeriod, selectedWorkerAttendanceEntries, workerDetailMode]
+  );
+  const visibleWorkerAdvanceEntries = useMemo(
+    () =>
+      workerDetailMode === "payperiod"
+        ? selectedPayPeriod?.advances || []
+        : selectedWorkerAdvanceEntries,
+    [selectedPayPeriod, selectedWorkerAdvanceEntries, workerDetailMode]
+  );
+  const selectedWorkerUnits =
+    workerDetailMode === "payperiod" && selectedPayPeriod
+      ? selectedPayPeriod.totalUnits
+      : selectedWorkerAttendanceEntries.reduce((sum, entry) => sum + Number(entry.units || 0), 0);
+  const selectedWorkerAdvanceTotal =
+    workerDetailMode === "payperiod" && selectedPayPeriod
+      ? selectedPayPeriod.totalAdvance
+      : selectedWorkerAdvanceEntries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const selectedWorkerGrossWage =
+    workerDetailMode === "payperiod" && selectedPayPeriod
+      ? Math.round(selectedPayPeriod.grossWage)
+      : Math.round((selectedAttendanceWorker?.dailyWage || 0) * selectedWorkerUnits);
+  const selectedWorkerNetWage =
+    workerDetailMode === "payperiod" && selectedPayPeriod
+      ? Math.round(selectedPayPeriod.netPayable)
+      : selectedWorkerGrossWage - selectedWorkerAdvanceTotal;
+  const selectedWorkerPeriodLabel =
+    workerDetailMode === "payperiod" && selectedPayPeriod
+      ? `${formatDateLabel(selectedPayPeriod.startDate, { day: "numeric", month: "short" })} - ${formatDateLabel(selectedPayPeriod.endDate, { day: "numeric", month: "short", year: "numeric" })}`
+      : attendanceMonthLabel;
+  const selectedPayPeriodHistoryRows = useMemo(() => {
+    const rows = new Map<string, { date: string; units: number; advance: number; attendanceNotes: string[]; advanceNotes: string[] }>();
+
+    for (const entry of visibleWorkerAttendanceEntries) {
+      const date = getLocalDayKey(entry.date);
+      const row = rows.get(date) || { date, units: 0, advance: 0, attendanceNotes: [], advanceNotes: [] };
+      row.units += Number(entry.units || 0);
+      if (entry.note) row.attendanceNotes.push(entry.note);
+      rows.set(date, row);
+    }
+
+    for (const entry of visibleWorkerAdvanceEntries) {
+      const date = getLocalDayKey(entry.date);
+      const row = rows.get(date) || { date, units: 0, advance: 0, attendanceNotes: [], advanceNotes: [] };
+      row.advance += Number(entry.amount || 0);
+      if (entry.note) row.advanceNotes.push(entry.note);
+      rows.set(date, row);
+    }
+
+    return Array.from(rows.values()).sort((a, b) => a.date.localeCompare(b.date));
+  }, [visibleWorkerAttendanceEntries, visibleWorkerAdvanceEntries]);
+  const projectOptions = useMemo(
+    () => [...manualProjects, ...activeProjects],
+    [manualProjects, activeProjects]
+  );
   const selectedWorkerCountry =
     COUNTRY_CODES.find((item) => item.code === newWorker.countryCode) || COUNTRY_CODES[0];
   const newWorkerExpectedLength = selectedWorkerCountry.localLength;
@@ -422,10 +629,9 @@ function WorkforcePageContent() {
     const fetchedWorkers: Worker[] = data.workers || [];
     setWorkers(fetchedWorkers);
 
-    if (!attendanceForm.workerId && fetchedWorkers.length > 0) {
+    if (!selectedWorkerForPayroll && fetchedWorkers.length > 0) {
       const firstActive = fetchedWorkers.find((w) => w.status === "active");
       if (firstActive) {
-        setAttendanceForm((prev) => ({ ...prev, workerId: firstActive._id }));
         setAdvanceForm((prev) => ({ ...prev, workerId: firstActive._id }));
         setSelectedWorkerForPayroll(firstActive._id);
       }
@@ -439,18 +645,57 @@ function WorkforcePageContent() {
     setActiveProjects(data.projects || []);
   };
 
-  const fetchAttendance = async (date = attendanceFilterDate) => {
-    const response = await fetch(`/api/workers/attendance?date=${date}`);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Failed to fetch attendance");
-    setAttendance(data.attendance || []);
-  };
-
   const fetchAdvances = async (date = advanceFilterDate) => {
     const response = await fetch(`/api/workers/advances?date=${date}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Failed to fetch advances");
     setAdvances(data.advances || []);
+  };
+
+  const fetchAttendanceMonth = async (month = attendanceMonth) => {
+    const { startDate, endDate } = getMonthDateRange(month);
+    const response = await fetch(`/api/workers/attendance?startDate=${startDate}&endDate=${endDate}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to fetch monthly attendance");
+    setAttendanceMonthEntries(data.attendance || []);
+  };
+
+  const fetchAdvanceMonth = async (month = attendanceMonth) => {
+    const { startDate, endDate } = getMonthDateRange(month);
+    const response = await fetch(`/api/workers/advances?startDate=${startDate}&endDate=${endDate}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to fetch monthly advances");
+    setAdvanceMonthEntries(data.advances || []);
+  };
+
+  const refreshAttendanceMonth = async (month = attendanceMonth) => {
+    setLoadingAttendanceMonth(true);
+    try {
+      await Promise.all([fetchAttendanceMonth(month), fetchAdvanceMonth(month)]);
+    } finally {
+      setLoadingAttendanceMonth(false);
+    }
+  };
+
+  const fetchWorkerPayPeriods = async (workerId = selectedAttendanceWorkerId || "") => {
+    if (!workerId) return;
+    setLoadingPayPeriods(true);
+    try {
+      const response = await fetch(`/api/workers/pay-periods?workerId=${workerId}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to load pay periods");
+      setCurrentPayPeriod(data.current || null);
+      setPastUnpaidPayPeriod(data.pastUnpaid || null);
+      setPayPeriods(data.periods || []);
+      setSelectedPayPeriodKey((prev) => {
+        if (prev === "current") return prev;
+        if (prev === "past-unpaid") return data.pastUnpaid ? prev : "current";
+        const exists = (data.periods || []).some((period: WorkerPayPeriod) => period._id === prev || period.id === prev);
+        return exists ? prev : "current";
+      });
+    } finally {
+      setLoadingPayPeriods(false);
+    }
   };
 
   const fetchPayrollSummary = async () => {
@@ -469,7 +714,7 @@ function WorkforcePageContent() {
     });
   };
 
-  const getMonthDateRange = (monthValue: string) => {
+  function getMonthDateRange(monthValue: string) {
     const [yearStr, monthStr] = monthValue.split("-");
     const year = Number(yearStr);
     const month = Number(monthStr);
@@ -481,7 +726,7 @@ function WorkforcePageContent() {
       startDate: start.toISOString().slice(0, 10),
       endDate: end.toISOString().slice(0, 10),
     };
-  };
+  }
 
   const fetchLoyaltyHistory = async () => {
     if (!selectedWorkerForPayroll) return;
@@ -641,6 +886,143 @@ function WorkforcePageContent() {
     }
   };
 
+  const changeAttendanceMonth = (direction: "previous" | "next") => {
+    const [year, month] = attendanceMonth.split("-").map(Number);
+    const nextDate = new Date(year, month - 1 + (direction === "next" ? 1 : -1), 1);
+    setAttendanceMonth(getLocalDayKey(nextDate).slice(0, 7));
+  };
+
+  const markSelectedPayPeriodPaid = async () => {
+    if (!selectedAttendanceWorkerId) return;
+    const isPastUnpaid = selectedPayPeriodKey === "past-unpaid";
+    if (!isPastUnpaid && !currentPayPeriod) return;
+    try {
+      setMarkingPayPeriodPaid(true);
+      const response = await fetch("/api/workers/pay-periods", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workerId: selectedAttendanceWorkerId,
+          endDate: isPastUnpaid
+            ? undefined
+            : getLocalDayKey(new Date(currentPayPeriod?.endDate || TODAY)),
+          payPeriodType: isPastUnpaid ? "past_unpaid" : "current",
+          sendReport: true,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to mark pay period paid");
+      toast.success(data.reportSent ? "Pay period marked paid and WhatsApp report sent" : "Pay period marked paid");
+      if (data.reportError) {
+        toast.warning(`WhatsApp report not sent: ${data.reportError}`);
+      }
+      setWorkerDetailMode("payperiod");
+      setSelectedPayPeriodKey(data.payPeriod?._id || "current");
+      await fetchWorkerPayPeriods(selectedAttendanceWorkerId);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to mark pay period paid");
+    } finally {
+      setMarkingPayPeriodPaid(false);
+    }
+  };
+
+  const resendSelectedPayPeriodReport = async () => {
+    if (!selectedAttendanceWorkerId || !selectedPayPeriod?._id) return;
+    try {
+      setResendingPayPeriodReportId(selectedPayPeriod._id);
+      const response = await fetch("/api/workers/pay-periods", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "resend_report",
+          payPeriodId: selectedPayPeriod._id,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to send WhatsApp report");
+      if (data.reportSent) {
+        toast.success("WhatsApp report sent again");
+      } else {
+        toast.info("Report was not sent, please try again");
+      }
+      if (data.reportError) {
+        toast.warning(`WhatsApp report not sent: ${data.reportError}`);
+      }
+      await fetchWorkerPayPeriods(selectedAttendanceWorkerId);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to send WhatsApp report");
+    } finally {
+      setResendingPayPeriodReportId("");
+    }
+  };
+
+  const openAttendanceDate = (dateKey: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", "attendance");
+    params.set("attendanceDate", dateKey);
+    params.delete("attendanceWorkerId");
+    params.delete("workerDetailMode");
+    router.replace(`?${params.toString()}`, { scroll: false });
+  };
+
+  const openMarkAttendanceForDate = (dateKey = selectedAttendanceDate || TODAY) => {
+    setAttendanceForm((prev) => ({
+      ...prev,
+      workerId: "",
+      date: dateKey,
+      projectId: "",
+      note: "",
+    }));
+    setFormDialogOpen(true);
+  };
+
+  const closeAttendanceDate = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("attendanceDate");
+    params.delete("attendanceWorkerId");
+    params.delete("workerDetailMode");
+    router.replace(`?${params.toString()}`, { scroll: false });
+  };
+
+  const openAttendanceWorker = (workerId: string, options?: { keepTab?: boolean; mode?: "month" | "payperiod" }) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (!options?.keepTab) params.set("tab", "attendance");
+    params.set("attendanceWorkerId", workerId);
+    if (options?.mode) {
+      params.set("workerDetailMode", options.mode);
+      setWorkerDetailMode(options.mode);
+    }
+    router.replace(`?${params.toString()}`, { scroll: false });
+  };
+
+  const closeAttendanceWorker = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("attendanceWorkerId");
+    params.delete("workerDetailMode");
+    router.replace(`?${params.toString()}`, { scroll: false });
+  };
+
+  const addManualProject = () => {
+    const name = manualProjectName.trim();
+    const address = manualProjectAddress.trim();
+    if (!name) {
+      toast.error("Manual project name is required");
+      return;
+    }
+
+    const project: AttendanceProject = {
+      _id: `manual:${Date.now()}`,
+      projectId: `manual-${Date.now()}`,
+      clientName: name,
+      clientAddress: address || "Manual project",
+    };
+    setManualProjects((prev) => [project, ...prev]);
+    setAttendanceForm((prev) => ({ ...prev, projectId: project._id }));
+    setManualProjectName("");
+    setManualProjectAddress("");
+    setAddManualProjectDialogOpen(false);
+  };
+
   useEffect(() => {
     if (status === "loading") return;
 
@@ -652,7 +1034,12 @@ function WorkforcePageContent() {
     const load = async () => {
       try {
         setLoading(true);
-        await Promise.all([fetchWorkers(), fetchActiveProjects(), fetchAttendance(TODAY), fetchAdvances(TODAY)]);
+        await Promise.all([
+          fetchWorkers(),
+          fetchActiveProjects(),
+          fetchAdvances(TODAY),
+          refreshAttendanceMonth(CURRENT_MONTH),
+        ]);
       } catch (error) {
         console.error(error);
         toast.error(error instanceof Error ? error.message : "Failed to load workforce data");
@@ -666,11 +1053,25 @@ function WorkforcePageContent() {
   }, [status, session]);
 
   useEffect(() => {
-    fetchAttendance(attendanceFilterDate).catch((error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to load attendance");
+    refreshAttendanceMonth(attendanceMonth).catch((error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to load monthly attendance");
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attendanceFilterDate]);
+  }, [attendanceMonth]);
+
+  useEffect(() => {
+    if (!selectedAttendanceWorkerId) return;
+    fetchWorkerPayPeriods(selectedAttendanceWorkerId).catch((error) => {
+      toast.error(error instanceof Error ? error.message : "Failed to load pay periods");
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAttendanceWorkerId]);
+
+  useEffect(() => {
+    if (selectedWorkerDetailMode === "month" || selectedWorkerDetailMode === "payperiod") {
+      setWorkerDetailMode(selectedWorkerDetailMode);
+    }
+  }, [selectedWorkerDetailMode]);
 
   useEffect(() => {
     fetchAdvances(advanceFilterDate).catch((error) => {
@@ -745,6 +1146,14 @@ function WorkforcePageContent() {
   const markAttendance = async () => {
     try {
       setSavingAttendance(true);
+      const selectedProject = projectOptions.find((project) => project._id === attendanceForm.projectId);
+      const isManualProject = Boolean(selectedProject?._id.startsWith("manual:"));
+      const note = isManualProject
+        ? [
+            `Manual project: ${selectedProject?.clientName}${selectedProject?.clientAddress ? ` - ${selectedProject.clientAddress}` : ""}`,
+            attendanceForm.note.trim(),
+          ].filter(Boolean).join("\n")
+        : attendanceForm.note;
       const response = await fetch("/api/workers/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -752,16 +1161,16 @@ function WorkforcePageContent() {
           workerId: attendanceForm.workerId,
           date: attendanceForm.date,
           units: Number(attendanceForm.units),
-          projectId: attendanceForm.projectId || undefined,
-          note: attendanceForm.note,
+          projectId: isManualProject ? undefined : attendanceForm.projectId || undefined,
+          note,
         }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to mark attendance");
 
       toast.success("Attendance marked");
-      setAttendanceForm((prev) => ({ ...prev, projectId: "", note: "" }));
-      await fetchAttendance();
+      setAttendanceForm((prev) => ({ ...prev, workerId: "", projectId: "", note: "" }));
+      await refreshAttendanceMonth();
       await fetchPayrollSummary();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to mark attendance");
@@ -789,6 +1198,7 @@ function WorkforcePageContent() {
       toast.success("Advance added");
       setAdvanceForm((prev) => ({ ...prev, amount: "", note: "" }));
       await fetchAdvances();
+      await refreshAttendanceMonth();
       await fetchPayrollSummary();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to add advance");
@@ -845,7 +1255,7 @@ function WorkforcePageContent() {
 
       toast.success("Attendance updated");
       setEditingAttendance(null);
-      await fetchAttendance();
+      await refreshAttendanceMonth();
       await fetchPayrollSummary();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update attendance");
@@ -861,7 +1271,7 @@ function WorkforcePageContent() {
 
       toast.success("Attendance deleted");
       setAttendanceToDelete(null);
-      await fetchAttendance();
+      await refreshAttendanceMonth();
       await fetchPayrollSummary();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete attendance");
@@ -893,6 +1303,7 @@ function WorkforcePageContent() {
       toast.success("Advance updated");
       setEditingAdvance(null);
       await fetchAdvances();
+      await refreshAttendanceMonth();
       await fetchPayrollSummary();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update advance");
@@ -909,6 +1320,7 @@ function WorkforcePageContent() {
       toast.success("Advance deleted");
       setAdvanceToDelete(null);
       await fetchAdvances();
+      await refreshAttendanceMonth();
       await fetchPayrollSummary();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete advance");
@@ -943,7 +1355,13 @@ function WorkforcePageContent() {
             <button
               onClick={() => {
                 if (activeTab === "workers") setAddWorkerDialogOpen(true);
-                else setFormDialogOpen(true);
+                else {
+                  if (activeTab === "attendance") {
+                    openMarkAttendanceForDate(selectedAttendanceDate || attendanceForm.date || TODAY);
+                  } else {
+                    setFormDialogOpen(true);
+                  }
+                }
               }}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm"
               aria-label="Add new"
@@ -1009,7 +1427,16 @@ function WorkforcePageContent() {
                 {workers.map((worker) => (
                   <div
                     key={worker._id}
-                    className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-shadow relative"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openAttendanceWorker(worker._id, { keepTab: true, mode: workerDetailMode })}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openAttendanceWorker(worker._id, { keepTab: true, mode: workerDetailMode });
+                      }
+                    }}
+                    className="relative cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                   >
                     <div className="flex items-start gap-4">
                       {/* Avatar */}
@@ -1057,12 +1484,22 @@ function WorkforcePageContent() {
                     <div className="absolute top-4 right-2">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-slate-400 hover:text-slate-600">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(event) => event.stopPropagation()}
+                            className="h-8 w-8 rounded-full text-slate-400 hover:text-slate-600"
+                          >
                             <MoreVertical className="h-5 w-5" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => toggleWorkerStatus(worker)}>
+                          <DropdownMenuItem
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleWorkerStatus(worker);
+                            }}
+                          >
                             {worker.status === "active" ? "Deactivate Worker" : "Activate Worker"}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -1078,104 +1515,119 @@ function WorkforcePageContent() {
           {activeTab === "attendance" && (
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                
-                {/* Black Header */}
-                <div className="bg-slate-900 px-4 py-3 sm:px-6 sm:py-4 flex flex-row items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
+                <div className="bg-slate-900 px-4 py-3 sm:px-6 sm:py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
                     <CalendarCheck className="h-5 w-5 text-blue-400" />
-                    <h3 className="text-lg font-semibold text-white">Logs</h3>
+                    <h3 className="text-lg font-semibold text-white truncate">Attendance Calendar</h3>
                     <span className="bg-slate-800 text-slate-300 text-xs px-2 py-0.5 rounded-full ml-2">
-                      {attendance.length}
+                      {attendanceMonthEntries.reduce((sum, entry) => sum + Number(entry.units || 0), 0)} Hajiri
                     </span>
                   </div>
-                  <div className="relative flex items-center bg-slate-800 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-slate-700 transition-colors">
-                    <span className="text-white text-sm font-medium">
-                      {new Date(attendanceFilterDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                    </span>
-                    <ChevronDown className="h-4 w-4 ml-2 text-slate-400" />
-                    <input
-                      ref={attendanceDateInputRef}
-                      type="date"
-                      value={attendanceFilterDate}
-                      onChange={(e) => setAttendanceFilterDate(e.target.value)}
-                      onClick={(e) => e.currentTarget.showPicker()}
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    />
+                  <div className="flex items-center justify-between gap-2 sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => changeAttendanceMonth("previous")}
+                      className="h-9 w-9 rounded-full bg-slate-800 text-white hover:bg-slate-700 hover:text-white"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="min-w-[150px] text-center text-sm font-semibold text-white">
+                      {attendanceMonthLabel}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => changeAttendanceMonth("next")}
+                      className="h-9 w-9 rounded-full bg-slate-800 text-white hover:bg-slate-700 hover:text-white"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
 
-                {/* List Body */}
-                <div className="divide-y divide-slate-100">
-                  {attendance.length === 0 ? (
-                    <div className="p-8 text-center text-slate-500">
-                      No attendance records found for this date.
+                <div className="relative">
+                  {loadingAttendanceMonth ? (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-[1px]">
+                      <Loader2 className="h-7 w-7 animate-spin text-slate-700" />
                     </div>
-                  ) : (
-                    attendance.map((entry) => (
-                      <div key={entry._id} className="p-4 sm:p-5 hover:bg-slate-50 transition-colors relative group">
-                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                          {/* Worker Details (Left) */}
-                          <div className="flex items-start gap-3 flex-1 min-w-0 pr-8">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700 font-bold text-sm">
-                              {(entry.workerId?.name || entry.workerId?.workerCode || "?").charAt(0).toUpperCase()}
-                            </div>
-                            <div className="min-w-0">
-                              <h4 className="text-sm font-semibold text-slate-900 truncate">
-                                {entry.workerId?.name || "Unnamed Worker"}
-                              </h4>
-                              <p className="text-xs text-slate-500 mt-0.5">
-                                {entry.workerId?.workerCode || "No Code"}
-                              </p>
-                              
-                              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                                <span className="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-md font-medium border border-blue-100">
-                                  {entry.units} {entry.units > 1 ? 'Units' : 'Unit'}
-                                </span>
-                                <span className="bg-green-50 text-green-700 px-2.5 py-1 rounded-md font-medium border border-green-100">
-                                  Est. Wage: ₹{Math.round((entry.workerId?.dailyWage || 0) * entry.units)}
-                                </span>
-                                {entry.projectId ? (
-                                  <span className="bg-violet-50 text-violet-700 px-2.5 py-1 rounded-md font-medium border border-violet-100">
-                                    {entry.projectId.clientName} · {entry.projectId.clientAddress}
-                                  </span>
-                                ) : null}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Right Side Info */}
-                          <div className="flex flex-col sm:items-end sm:justify-start">
-                            {entry.note ? (
-                              <p className="text-xs text-slate-600 line-clamp-2 sm:text-right max-w-[200px] mt-1 sm:mt-0 italic">
-                                &quot;{entry.note}&quot;
-                              </p>
-                            ) : null}
-                          </div>
-
-                          {/* 3-dot Actions Menu (Top Right) */}
-                          <div className="absolute top-4 right-4 sm:top-5 sm:right-5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-slate-400 hover:text-slate-600 focus:opacity-100 data-[state=open]:opacity-100">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => openEditAttendanceDialog(entry)}>
-                                  <Pencil className="mr-2 h-4 w-4" />
-                                  <span>Edit</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setAttendanceToDelete(entry)} className="text-red-600 focus:text-red-600">
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  <span>Delete</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
+                  ) : null}
+                  <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center text-[10px] font-semibold uppercase text-slate-500 sm:text-xs">
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                      <div key={day} className="border-r border-slate-200 py-2 last:border-r-0">
+                        {day}
                       </div>
-                    ))
-                  )}
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 bg-white">
+                    {(() => {
+                      const [yearStr, monthStr] = attendanceMonth.split("-");
+                      const year = Number(yearStr);
+                      const monthIdx = Number(monthStr) - 1;
+                      const firstDay = new Date(year, monthIdx, 1);
+                      const lastDay = new Date(year, monthIdx + 1, 0);
+                      const days: Array<Date | null> = [];
+                      for (let i = 0; i < firstDay.getDay(); i += 1) days.push(null);
+                      for (let day = 1; day <= lastDay.getDate(); day += 1) days.push(new Date(year, monthIdx, day));
+                      const todayKey = getLocalDayKey(new Date());
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+
+                      return days.map((date, index) => {
+                        const isLastCol = (index + 1) % 7 === 0;
+                        if (!date) {
+                          return (
+                            <div
+                              key={`blank-${index}`}
+                              className={`min-h-[84px] bg-slate-50/60 sm:min-h-[112px] ${isLastCol ? "" : "border-r"} border-b border-slate-200`}
+                            />
+                          );
+                        }
+                        const dayKey = getLocalDayKey(date);
+                        const dayAttendance = attendanceByDay.get(dayKey);
+                        const dayAdvances = advancesByDay.get(dayKey);
+                        const isToday = dayKey === todayKey;
+                        const isFuture = date > today;
+                        return (
+                          <button
+                            key={dayKey}
+                            type="button"
+                            onClick={() => openAttendanceDate(dayKey)}
+                            className={`group flex min-h-[84px] flex-col items-start gap-2 border-b border-slate-200 p-2 text-left transition-colors hover:bg-blue-50 sm:min-h-[112px] sm:p-3 ${isLastCol ? "" : "border-r"} ${
+                              isToday ? "bg-emerald-50" : ""
+                            }`}
+                          >
+                            <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
+                              isToday ? "bg-emerald-600 text-white" : "text-slate-700"
+                            }`}>
+                              {date.getDate()}
+                            </span>
+                            <div className="mt-auto w-full space-y-1">
+                              {dayAttendance ? (
+                                <div className="px-2 py-1 text-xs font-semibold text-blue-700">
+                                  {dayAttendance.totalUnits} Hajiri
+                                </div>
+                              ) : isFuture ? null : (
+                                <div className="px-2 py-1 text-sm font-semibold text-slate-300">-</div>
+                              )}
+                              {dayAdvances ? (
+                                <div className="truncate rounded-md border border-amber-100 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+                                  ₹{dayAdvances.totalAmount} advance
+                                </div>
+                              ) : null}
+                            </div>
+                          </button>
+                        );
+                      });
+                    })()}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 px-4 py-3 text-xs text-slate-600">
+                    <span className="font-medium">{attendanceMonthEntries.length} attendance logs</span>
+                    <span className="font-medium">{advanceMonthEntries.length} advance logs</span>
+                    <span className="font-medium">{attendanceMonthRange.startDate} to {attendanceMonthRange.endDate}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1670,6 +2122,10 @@ function WorkforcePageContent() {
                   type="date"
                   value={attendanceForm.date}
                   onChange={(e) => setAttendanceForm((p) => ({ ...p, date: e.target.value }))}
+                  onClick={(e) => {
+                    const input = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
+                    input.showPicker?.();
+                  }}
                   className="border-slate-200"
                 />
               </div>
@@ -1691,19 +2147,42 @@ function WorkforcePageContent() {
                 </Select>
               </div>
               <div>
-                <Label className="text-slate-700 font-medium mb-1.5 block">Project</Label>
+                <div className="mb-1.5 flex items-center justify-between gap-3">
+                  <Label className="text-slate-700 font-medium">Project</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAddManualProjectDialogOpen(true)}
+                    className="h-8 px-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    Add project
+                  </Button>
+                </div>
                 <Select
                   value={attendanceForm.projectId || "none"}
                   onValueChange={(value) => setAttendanceForm((p) => ({ ...p, projectId: value === "none" ? "" : value }))}
                 >
-                  <SelectTrigger className="border-slate-200">
+                  <SelectTrigger className="h-auto min-h-10 border-slate-200 [&>span]:line-clamp-2">
                     <SelectValue placeholder="Select active project" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No project</SelectItem>
-                    {activeProjects.map((project) => (
-                      <SelectItem key={project._id} value={project._id}>
-                        {project.clientName} - {project.clientAddress}
+                  <SelectContent className="w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-2rem)]">
+                    <SelectItem value="none" className="min-h-10 border-b border-slate-100">
+                      No project
+                    </SelectItem>
+                    {manualProjects.length > 0 ? <SelectSeparator /> : null}
+                    {projectOptions.map((project) => (
+                      <SelectItem key={project._id} value={project._id} className="min-h-[58px] items-start border-b border-slate-100 py-2 last:border-b-0 [&>span:first-child]:top-3">
+                        <div className="min-w-0 pr-1">
+                          <p className="whitespace-normal break-words text-sm font-medium leading-snug">
+                            {project.clientName}
+                            {project._id.startsWith("manual:") ? <span className="ml-1 text-[10px] uppercase text-blue-600">Manual</span> : null}
+                          </p>
+                          <p className="mt-0.5 whitespace-normal break-words text-xs leading-snug text-slate-500">
+                            {project.clientAddress}
+                          </p>
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1966,6 +2445,449 @@ function WorkforcePageContent() {
               );
             })}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={activeTab === "attendance" && !!selectedAttendanceDate} onOpenChange={(open) => !open && closeAttendanceDate()}>
+        <DialogContent data-attendance-dialog="true" className="h-[100dvh] w-screen max-w-none gap-0 overflow-hidden rounded-none border-0 p-0 sm:max-w-none md:left-[calc(50%+8rem)] md:w-[calc(100vw-16rem)] [&>button:last-child]:hidden">
+          <div className="flex h-full min-h-0 flex-col bg-slate-50">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+              <div className="min-w-0">
+                <DialogTitle className="text-lg font-semibold text-slate-900">
+                  {selectedAttendanceDate ? formatDateLabel(selectedAttendanceDate, { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "Attendance Details"}
+                </DialogTitle>
+                <DialogDescription className="text-sm text-slate-500">
+                  {selectedDayAttendance.reduce((sum, entry) => sum + Number(entry.units || 0), 0)} Hajiri · ₹{selectedDayAdvances.reduce((sum, entry) => sum + Number(entry.amount || 0), 0)} advance
+                </DialogDescription>
+              </div>
+              <Button type="button" variant="ghost" size="icon" onClick={closeAttendanceDate} className="h-9 w-9 shrink-0 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label="Close attendance details">
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+              {selectedDayWorkerRows.length === 0 ? (
+                <div className="flex min-h-[320px] flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-slate-300 bg-white px-4 text-center">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">No attendance or advance records found for this date.</p>
+                    <p className="mt-1 text-sm text-slate-500">Add attendance here without going back to the calendar.</p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => openMarkAttendanceForDate()}
+                    className="rounded-full bg-slate-900 px-5 text-sm font-semibold text-white hover:bg-slate-800"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Mark Attendance
+                  </Button>
+                </div>
+              ) : (
+                <div className="mx-auto w-full max-w-5xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                  {selectedDayWorkerRows.map((row) => (
+                    <button
+                      key={row.worker._id}
+                      type="button"
+                      onClick={() => openAttendanceWorker(row.worker._id)}
+                      className="block w-full border-b border-slate-100 p-4 text-left transition-colors last:border-b-0 hover:bg-blue-50 sm:p-5"
+                    >
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
+                          {(row.worker.name || row.worker.workerCode || "?").charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-slate-900">
+                            {row.worker.name || "Unnamed Worker"}{" "}
+                            <span className="font-normal text-slate-500">({row.worker.workerCode} · {row.worker.mobile})</span>
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <span className="rounded-md border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                              {row.totalUnits} Hajiri
+                            </span>
+                            <span className="rounded-md border border-amber-100 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                              ₹{row.totalAdvance} advance
+                            </span>
+                            <span className="rounded-md border border-green-100 bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700">
+                              ₹{Math.round((row.worker.dailyWage || 0) * row.totalUnits)} wage
+                            </span>
+                            <span className="rounded-md border border-slate-100 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                              ₹{row.worker.dailyWage || 0} daily wage
+                            </span>
+                          </div>
+                        </div>
+                        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-300" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!selectedAttendanceWorkerId} onOpenChange={(open) => !open && closeAttendanceWorker()}>
+        <DialogContent data-attendance-dialog="true" className="h-[100dvh] w-screen max-w-none gap-0 overflow-hidden rounded-none border-0 p-0 sm:max-w-none md:left-[calc(50%+8rem)] md:w-[calc(100vw-16rem)] [&>button:last-child]:hidden">
+          <div className="flex h-full min-h-0 flex-col bg-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-6">
+              <div className="min-w-0">
+                <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+                  <UserRound className="h-5 w-5 text-blue-600" />
+                  <span className="truncate">{selectedAttendanceWorker?.name || selectedAttendanceWorker?.workerCode || "Worker"}</span>
+                </DialogTitle>
+                <DialogDescription className="text-sm text-slate-500">
+                  {selectedAttendanceWorker?.workerCode || "No code"} · {selectedWorkerPeriodLabel}
+                </DialogDescription>
+              </div>
+              <Button type="button" variant="ghost" size="icon" onClick={closeAttendanceWorker} className="h-9 w-9 shrink-0 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label="Close worker details">
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+              <div className="mx-auto grid w-full max-w-5xl gap-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex rounded-full bg-slate-100 p-1">
+                      {(["month", "payperiod"] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => {
+                            setWorkerDetailMode(mode);
+                            const params = new URLSearchParams(searchParams.toString());
+                            params.set("workerDetailMode", mode);
+                            router.replace(`?${params.toString()}`, { scroll: false });
+                          }}
+                          className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
+                            workerDetailMode === mode ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          {mode === "month" ? "Month" : "Pay Period"}
+                        </button>
+                      ))}
+                    </div>
+
+                    {workerDetailMode === "month" ? (
+                      <div className="flex items-center justify-between gap-2 lg:justify-end">
+                        <Button type="button" variant="outline" size="icon" onClick={() => changeAttendanceMonth("previous")} className="h-9 w-9 rounded-full">
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="min-w-[140px] text-center text-sm font-semibold text-slate-800">{attendanceMonthLabel}</span>
+                        <Button type="button" variant="outline" size="icon" onClick={() => changeAttendanceMonth("next")} className="h-9 w-9 rounded-full">
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <Select value={selectedPayPeriodKey} onValueChange={setSelectedPayPeriodKey}>
+                          <SelectTrigger className="h-9 min-w-[230px] border-slate-200">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="current" disabled={!currentPayPeriod}>
+                              {currentPayPeriod
+                                ? `Current unpaid · ${formatDateLabel(currentPayPeriod.startDate, { day: "numeric", month: "short" })} - ${formatDateLabel(currentPayPeriod.endDate, { day: "numeric", month: "short" })}`
+                                : "No current unpaid period"}
+                            </SelectItem>
+                            {pastUnpaidPayPeriod ? (
+                              <SelectItem value="past-unpaid">
+                                Past unpaid · {pastUnpaidPayPeriod.totalUnits} Hajiri · ₹{Math.round(pastUnpaidPayPeriod.netPayable)}
+                              </SelectItem>
+                            ) : null}
+                            {payPeriods.length > 0 ? <SelectSeparator /> : null}
+                            {payPeriods.map((period) => (
+                              <SelectItem key={period._id || period.id} value={period._id || period.id || ""}>
+                                {formatDateLabel(period.startDate, { day: "numeric", month: "short" })} - {formatDateLabel(period.endDate, { day: "numeric", month: "short", year: "numeric" })}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          onClick={markSelectedPayPeriodPaid}
+                          disabled={
+                            markingPayPeriodPaid ||
+                            loadingPayPeriods ||
+                            (selectedPayPeriodKey !== "current" && selectedPayPeriodKey !== "past-unpaid") ||
+                            (selectedPayPeriodKey === "current" && !currentPayPeriod) ||
+                            (selectedPayPeriodKey === "past-unpaid" && !pastUnpaidPayPeriod)
+                          }
+                          className="h-9 rounded-full bg-green-600 px-4 text-xs font-semibold hover:bg-green-700"
+                        >
+                          {markingPayPeriodPaid
+                            ? "Marking..."
+                            : selectedPayPeriodKey === "past-unpaid"
+                              ? "Mark Past Paid"
+                              : "Mark Paid"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  {loadingAttendanceMonth || loadingPayPeriods ? (
+                    [1, 2, 3, 4].map((item) => (
+                      <div key={item} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="mt-4 h-8 w-16" />
+                      </div>
+                    ))
+                  ) : (
+                    [
+                      { title: "Total Hajiri", value: selectedWorkerUnits, tone: "text-blue-700", bg: "bg-blue-50", icon: CalendarCheck },
+                      { title: "Gross Wage", value: `₹${selectedWorkerGrossWage}`, tone: "text-green-700", bg: "bg-green-50", icon: Banknote },
+                      { title: "Advance", value: `₹${selectedWorkerAdvanceTotal}`, tone: "text-amber-700", bg: "bg-amber-50", icon: Wallet },
+                      { title: "Net", value: `₹${selectedWorkerNetWage}`, tone: "text-indigo-700", bg: "bg-indigo-50", icon: Coins },
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <div key={item.title} className={`rounded-2xl border border-slate-200 p-4 shadow-sm ${item.bg}`}>
+                          <div className="mb-4 flex items-center justify-between gap-2">
+                            <p className="text-xs font-medium text-slate-500">{item.title}</p>
+                            <Icon className={`h-4 w-4 ${item.tone}`} />
+                          </div>
+                          <p className={`text-2xl font-bold ${item.tone}`}>{item.value}</p>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex items-center gap-2 bg-slate-900 px-4 py-3 text-white">
+                      <CalendarCheck className="h-5 w-5 text-blue-300" />
+                      <h3 className="font-semibold">Attendance</h3>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {loadingAttendanceMonth || loadingPayPeriods ? (
+                        [1, 2, 3].map((item) => (
+                          <div key={item} className="p-4">
+                            <Skeleton className="h-4 w-40" />
+                            <Skeleton className="mt-2 h-3 w-28" />
+                          </div>
+                        ))
+                      ) : visibleWorkerAttendanceEntries.length === 0 ? (
+                        <p className="p-4 text-sm text-slate-500">
+                          No attendance for this {workerDetailMode === "payperiod" ? "pay period" : "month"}.
+                        </p>
+                      ) : (
+                        visibleWorkerAttendanceEntries.map((entry) => (
+                          <div key={entry._id} className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">
+                                  {formatDateLabel(entry.date, { weekday: "short", day: "numeric", month: "short" })}
+                                </p>
+                                {entry.projectId ? (
+                                  <p className="mt-1 text-xs text-slate-500">{entry.projectId.clientName} · {entry.projectId.clientAddress}</p>
+                                ) : null}
+                                {entry.note ? <p className="mt-1 text-xs italic text-slate-500">&quot;{entry.note}&quot;</p> : null}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="rounded-md bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{entry.units} Hajiri</span>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-slate-400">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => openEditAttendanceDialog(entry)}>
+                                      <Pencil className="mr-2 h-4 w-4" />
+                                      Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setAttendanceToDelete(entry)} className="text-red-600 focus:text-red-600">
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex items-center gap-2 bg-slate-900 px-4 py-3 text-white">
+                      <Wallet className="h-5 w-5 text-amber-300" />
+                      <h3 className="font-semibold">Advances</h3>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {loadingAttendanceMonth || loadingPayPeriods ? (
+                        [1, 2, 3].map((item) => (
+                          <div key={item} className="p-4">
+                            <Skeleton className="h-4 w-40" />
+                            <Skeleton className="mt-2 h-3 w-24" />
+                          </div>
+                        ))
+                      ) : visibleWorkerAdvanceEntries.length === 0 ? (
+                        <p className="p-4 text-sm text-slate-500">
+                          No advances for this {workerDetailMode === "payperiod" ? "pay period" : "month"}.
+                        </p>
+                      ) : (
+                        visibleWorkerAdvanceEntries.map((entry) => (
+                          <div key={entry._id} className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">
+                                  {formatDateLabel(entry.date, { weekday: "short", day: "numeric", month: "short" })}
+                                </p>
+                                {entry.note ? <p className="mt-1 text-xs italic text-slate-500">&quot;{entry.note}&quot;</p> : null}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="rounded-md bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">₹{entry.amount}</span>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-slate-400">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => openEditAdvanceDialog(entry)}>
+                                      <Pencil className="mr-2 h-4 w-4" />
+                                      Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setAdvanceToDelete(entry)} className="text-red-600 focus:text-red-600">
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {workerDetailMode === "payperiod" && selectedPayPeriod ? (
+                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-col gap-1 border-b border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">Pay Period History</h3>
+                        <p className="text-xs text-slate-500">
+                          {selectedWorkerPeriodLabel}
+                          {selectedPayPeriod.paidAt ? ` · Paid ${formatDateLabel(selectedPayPeriod.paidAt, { day: "numeric", month: "short", year: "numeric" })}` : ""}
+                          {selectedPayPeriod.reportSentAt ? ` · Sent ${formatDateLabel(selectedPayPeriod.reportSentAt, { day: "numeric", month: "short" })}` : ""}
+                        </p>
+                        {selectedPayPeriod.reportError ? (
+                          <p className="mt-1 text-xs text-amber-600">WhatsApp: {selectedPayPeriod.reportError}</p>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                        <span className="rounded-md bg-blue-50 px-2.5 py-1 text-blue-700">{selectedWorkerUnits} Hajiri</span>
+                        <span className="rounded-md bg-amber-50 px-2.5 py-1 text-amber-700">₹{selectedWorkerAdvanceTotal} advance</span>
+                        <span className="rounded-md bg-indigo-50 px-2.5 py-1 text-indigo-700">₹{selectedWorkerNetWage} net</span>
+                        {selectedPayPeriod._id ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={resendSelectedPayPeriodReport}
+                            disabled={resendingPayPeriodReportId === selectedPayPeriod._id}
+                            className="h-7 rounded-md border-green-200 bg-green-50 px-2.5 text-xs font-semibold text-green-700 hover:bg-green-100 hover:text-green-800"
+                          >
+                            {resendingPayPeriodReportId === selectedPayPeriod._id ? (
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Send className="mr-1.5 h-3.5 w-3.5" />
+                            )}
+                            Send Again
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                    {selectedPayPeriodHistoryRows.length === 0 ? (
+                      <p className="p-4 text-sm text-slate-500">No date-wise history stored for this pay period.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[560px] text-left text-sm">
+                          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                            <tr>
+                              <th className="px-4 py-3 font-semibold">Date</th>
+                              <th className="px-4 py-3 font-semibold">Hajiri</th>
+                              <th className="px-4 py-3 font-semibold">Advance</th>
+                              <th className="px-4 py-3 font-semibold">Notes</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {selectedPayPeriodHistoryRows.map((row) => (
+                              <tr key={row.date}>
+                                <td className="px-4 py-3 font-medium text-slate-900">
+                                  {formatDateLabel(row.date, { weekday: "short", day: "numeric", month: "short" })}
+                                </td>
+                                <td className="px-4 py-3 text-blue-700">{row.units}</td>
+                                <td className="px-4 py-3 text-amber-700">₹{row.advance}</td>
+                                <td className="px-4 py-3 text-slate-500">
+                                  {[...row.attendanceNotes, ...row.advanceNotes].join(" · ") || "-"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={addManualProjectDialogOpen}
+        onOpenChange={(open) => {
+          setAddManualProjectDialogOpen(open);
+          if (!open) {
+            setManualProjectName("");
+            setManualProjectAddress("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Project</DialogTitle>
+            <DialogDescription>
+              Add a temporary project for this attendance entry.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div>
+              <Label className="text-slate-700 font-medium mb-1.5 block">Project name</Label>
+              <Input
+                value={manualProjectName}
+                onChange={(e) => setManualProjectName(e.target.value)}
+                placeholder="Project name"
+                className="border-slate-200"
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label className="text-slate-700 font-medium mb-1.5 block">Address or location</Label>
+              <Input
+                value={manualProjectAddress}
+                onChange={(e) => setManualProjectAddress(e.target.value)}
+                placeholder="Address or short location"
+                className="border-slate-200"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddManualProjectDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={addManualProject} className="bg-slate-900 hover:bg-slate-800">
+              Add Project
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
