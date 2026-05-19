@@ -17,7 +17,7 @@ function toDayRange(dateInput: Date | string) {
 }
 
 function isValidUnits(value: number) {
-  return [0.5, 1, 1.5, 2].includes(value);
+  return [0, 0.5, 1, 1.5, 2].includes(value);
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
@@ -29,11 +29,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const body = await req.json();
 
     const units = Number(body?.units);
-    const projectId = typeof body?.projectId === "string" && body.projectId.trim() ? body.projectId.trim() : undefined;
+    const projectId =
+      units > 0 && typeof body?.projectId === "string" && body.projectId.trim()
+        ? body.projectId.trim()
+        : undefined;
     const note = typeof body?.note === "string" ? body.note : "";
 
     if (!isValidUnits(units)) {
-      return NextResponse.json({ error: "units must be one of 0.5, 1, 1.5, 2" }, { status: 400 });
+      return NextResponse.json({ error: "units must be one of 0, 0.5, 1, 1.5, 2" }, { status: 400 });
     }
 
     await dbConnect();
@@ -73,6 +76,26 @@ export async function PUT(req: NextRequest, { params }: Params) {
     ]);
 
     const existingUnitsExcludingCurrent = totals[0]?.totalUnits || 0;
+    const existingAbsence = await WorkerAttendance.findOne({
+      _id: { $ne: existingEntry._id },
+      workerId: existingEntry.workerId,
+      date: { $gte: day.start, $lte: day.end },
+      units: 0,
+    }).lean();
+
+    if (units === 0 && existingUnitsExcludingCurrent > 0) {
+      return NextResponse.json(
+        { error: "Worker already has present attendance for this date" },
+        { status: 400 }
+      );
+    }
+
+    if (units > 0 && existingAbsence) {
+      return NextResponse.json(
+        { error: "Worker is already marked absent for this date" },
+        { status: 409 }
+      );
+    }
 
     const duplicateQuery: Record<string, unknown> = {
       _id: { $ne: existingEntry._id },

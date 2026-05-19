@@ -85,6 +85,7 @@ export async function GET(req: NextRequest) {
           $match: {
             workerId: worker._id,
             date: { $gte: monthRange.start, $lte: monthRange.end },
+            units: { $gt: 0 },
           },
         },
         {

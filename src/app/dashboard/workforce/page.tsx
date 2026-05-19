@@ -123,8 +123,21 @@ type LoyaltyLeaderboardEntry = {
   totalRupees: number;
 };
 
+type WorkforceCache = {
+  cachedAt: number;
+  workers?: Worker[];
+  activeProjects?: AttendanceProject[];
+  advances?: AdvanceEntry[];
+  advanceFilterDate?: string;
+  attendanceMonth?: string;
+  attendanceMonthEntries?: AttendanceEntry[];
+  advanceMonthEntries?: AdvanceEntry[];
+};
+
 const TODAY = new Date().toISOString().slice(0, 10);
 const CURRENT_MONTH = new Date().toISOString().slice(0, 7);
+const WORKFORCE_CACHE_KEY = "dashboard-workforce-cache-v1";
+const WORKFORCE_CACHE_TTL_MS = 30_000;
 const COUNTRY_CODES = [
   { code: "+91", label: "India (+91)", localLength: 10 },
   { code: "+1", label: "United States (+1)", localLength: 10 },
@@ -184,11 +197,12 @@ function WorkforcePageContent() {
   const initialTab = searchParams.get("tab");
   const validTab = initialTab === "workers" || initialTab === "attendance" || initialTab === "advances" || initialTab === "payroll"
     ? initialTab
-    : "workers";
+    : "attendance";
   const activeTab = validTab as "workers" | "attendance" | "advances" | "payroll";
   const selectedAttendanceDate = searchParams.get("attendanceDate");
   const selectedAttendanceWorkerId = searchParams.get("attendanceWorkerId");
   const selectedWorkerDetailMode = searchParams.get("workerDetailMode");
+  const initialCacheSkipsRef = useRef({ attendanceMonth: false, advances: false });
 
   const setTabInUrl = (tab: "workers" | "attendance" | "advances" | "payroll") => {
     const params = new URLSearchParams(searchParams.toString());
@@ -196,11 +210,10 @@ function WorkforcePageContent() {
     params.delete("attendanceDate");
     params.delete("attendanceWorkerId");
     params.delete("workerDetailMode");
-    router.replace(`?${params.toString()}`, { scroll: false });
+    router.push(`?${params.toString()}`, { scroll: false });
   };
 
   const chipScrollRef = useRef<HTMLDivElement>(null);
-  const advanceDateInputRef = useRef<HTMLInputElement>(null);
   const payrollMonthInputRef = useRef<HTMLInputElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -284,6 +297,7 @@ function WorkforcePageContent() {
   const [attendanceForm, setAttendanceForm] = useState({
     workerId: "",
     date: TODAY,
+    status: "present" as "present" | "absent",
     units: "1",
     projectId: "",
     note: "",
@@ -355,6 +369,7 @@ function WorkforcePageContent() {
   });
   const [uploadingLoyaltyImage, setUploadingLoyaltyImage] = useState(false);
   const [editingAttendance, setEditingAttendance] = useState<AttendanceEntry | null>(null);
+  const [editingAttendanceStatus, setEditingAttendanceStatus] = useState<"present" | "absent">("present");
   const [editingAttendanceUnits, setEditingAttendanceUnits] = useState("1");
   const [editingAttendanceProjectId, setEditingAttendanceProjectId] = useState("");
   const [editingAttendanceNote, setEditingAttendanceNote] = useState("");
@@ -364,6 +379,48 @@ function WorkforcePageContent() {
   const [editingAdvanceAmount, setEditingAdvanceAmount] = useState("");
   const [editingAdvanceNote, setEditingAdvanceNote] = useState("");
   const [advanceToDelete, setAdvanceToDelete] = useState<AdvanceEntry | null>(null);
+
+  const readWorkforceCache = () => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.sessionStorage.getItem(WORKFORCE_CACHE_KEY);
+      if (!raw) return null;
+      const cache = JSON.parse(raw) as WorkforceCache;
+      if (!cache.cachedAt || Date.now() - cache.cachedAt > WORKFORCE_CACHE_TTL_MS) {
+        window.sessionStorage.removeItem(WORKFORCE_CACHE_KEY);
+        return null;
+      }
+      return cache;
+    } catch {
+      window.sessionStorage.removeItem(WORKFORCE_CACHE_KEY);
+      return null;
+    }
+  };
+
+  const writeWorkforceCache = (patch: Partial<WorkforceCache>) => {
+    if (typeof window === "undefined") return;
+    const current = readWorkforceCache() || { cachedAt: Date.now() };
+    window.sessionStorage.setItem(
+      WORKFORCE_CACHE_KEY,
+      JSON.stringify({ ...current, ...patch, cachedAt: Date.now() })
+    );
+  };
+
+  const applyWorkforceCache = (cache: WorkforceCache) => {
+    setWorkers(cache.workers || []);
+    setActiveProjects(cache.activeProjects || []);
+    setAdvances(cache.advances || []);
+    setAttendanceMonth(cache.attendanceMonth || CURRENT_MONTH);
+    setAdvanceFilterDate(cache.advanceFilterDate || TODAY);
+    setAttendanceMonthEntries(cache.attendanceMonthEntries || []);
+    setAdvanceMonthEntries(cache.advanceMonthEntries || []);
+
+    const firstActive = cache.workers?.find((worker) => worker.status === "active");
+    if (firstActive) {
+      setAdvanceForm((prev) => ({ ...prev, workerId: prev.workerId || firstActive._id }));
+      setSelectedWorkerForPayroll((prev) => prev || firstActive._id);
+    }
+  };
 
   const activeWorkers = useMemo(
     () => workers.filter((worker) => worker.status === "active"),
@@ -378,6 +435,11 @@ function WorkforcePageContent() {
   };
   const formatDateLabel = (dateValue: string | Date, options?: Intl.DateTimeFormatOptions) =>
     new Date(dateValue).toLocaleDateString("en-IN", options || { day: "numeric", month: "short", year: "numeric" });
+  const formatFullDateLabel = (dateValue: string | Date) =>
+    formatDateLabel(dateValue, { day: "numeric", month: "long", year: "numeric" });
+  const formatAttendanceUnits = (units: number) => units > 0 ? `${units} Hajiri` : "Absent";
+  const formatAttendanceSummary = (units: number, hasAttendance: boolean) =>
+    hasAttendance ? formatAttendanceUnits(units) : "0 Hajiri";
   const attendanceMonthLabel = useMemo(() => {
     const [year, month] = attendanceMonth.split("-");
     return new Date(Number(year), Number(month) - 1, 1).toLocaleDateString("en-IN", {
@@ -390,11 +452,13 @@ function WorkforcePageContent() {
     [attendanceMonth]
   );
   const attendanceByDay = useMemo(() => {
-    const map = new Map<string, { totalUnits: number; entries: AttendanceEntry[] }>();
+    const map = new Map<string, { totalUnits: number; absentCount: number; entries: AttendanceEntry[] }>();
     for (const entry of attendanceMonthEntries) {
       const dayKey = getLocalDayKey(entry.date);
-      const current = map.get(dayKey) || { totalUnits: 0, entries: [] };
-      current.totalUnits += Number(entry.units || 0);
+      const current = map.get(dayKey) || { totalUnits: 0, absentCount: 0, entries: [] };
+      const units = Number(entry.units || 0);
+      current.totalUnits += units;
+      if (units === 0) current.absentCount += 1;
       current.entries.push(entry);
       map.set(dayKey, current);
     }
@@ -621,6 +685,33 @@ function WorkforcePageContent() {
     return !matchedWeek || matchedWeek.payoutStatus === "pending";
   };
 
+  const FormattedDateInput = ({
+    value,
+    onChange,
+    className = "border-slate-200 bg-white text-slate-900",
+    iconClassName = "text-slate-400",
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+    className?: string;
+    iconClassName?: string;
+  }) => (
+    <div className={`relative flex h-10 items-center justify-between gap-3 rounded-md border px-3 text-sm ${className}`}>
+      <span className="font-medium">{formatFullDateLabel(value)}</span>
+      <CalendarDays className={`h-4 w-4 shrink-0 ${iconClassName}`} />
+      <input
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onClick={(event) => {
+          const input = event.currentTarget as HTMLInputElement & { showPicker?: () => void };
+          input.showPicker?.();
+        }}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+      />
+    </div>
+  );
+
   const fetchWorkers = async () => {
     const response = await fetch("/api/workers?status=all");
     const data = await response.json();
@@ -628,6 +719,7 @@ function WorkforcePageContent() {
 
     const fetchedWorkers: Worker[] = data.workers || [];
     setWorkers(fetchedWorkers);
+    writeWorkforceCache({ workers: fetchedWorkers });
 
     if (!selectedWorkerForPayroll && fetchedWorkers.length > 0) {
       const firstActive = fetchedWorkers.find((w) => w.status === "active");
@@ -636,20 +728,28 @@ function WorkforcePageContent() {
         setSelectedWorkerForPayroll(firstActive._id);
       }
     }
+
+    return fetchedWorkers;
   };
 
   const fetchActiveProjects = async () => {
     const response = await fetch("/api/projects/ongoing");
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Failed to fetch active projects");
-    setActiveProjects(data.projects || []);
+    const projects: AttendanceProject[] = data.projects || [];
+    setActiveProjects(projects);
+    writeWorkforceCache({ activeProjects: projects });
+    return projects;
   };
 
   const fetchAdvances = async (date = advanceFilterDate) => {
     const response = await fetch(`/api/workers/advances?date=${date}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Failed to fetch advances");
-    setAdvances(data.advances || []);
+    const fetchedAdvances: AdvanceEntry[] = data.advances || [];
+    setAdvances(fetchedAdvances);
+    writeWorkforceCache({ advances: fetchedAdvances, advanceFilterDate: date });
+    return fetchedAdvances;
   };
 
   const fetchAttendanceMonth = async (month = attendanceMonth) => {
@@ -657,7 +757,10 @@ function WorkforcePageContent() {
     const response = await fetch(`/api/workers/attendance?startDate=${startDate}&endDate=${endDate}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Failed to fetch monthly attendance");
-    setAttendanceMonthEntries(data.attendance || []);
+    const attendance: AttendanceEntry[] = data.attendance || [];
+    setAttendanceMonthEntries(attendance);
+    writeWorkforceCache({ attendanceMonth: month, attendanceMonthEntries: attendance });
+    return attendance;
   };
 
   const fetchAdvanceMonth = async (month = attendanceMonth) => {
@@ -665,13 +768,17 @@ function WorkforcePageContent() {
     const response = await fetch(`/api/workers/advances?startDate=${startDate}&endDate=${endDate}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Failed to fetch monthly advances");
-    setAdvanceMonthEntries(data.advances || []);
+    const fetchedAdvances: AdvanceEntry[] = data.advances || [];
+    setAdvanceMonthEntries(fetchedAdvances);
+    writeWorkforceCache({ attendanceMonth: month, advanceMonthEntries: fetchedAdvances });
+    return fetchedAdvances;
   };
 
   const refreshAttendanceMonth = async (month = attendanceMonth) => {
     setLoadingAttendanceMonth(true);
     try {
-      await Promise.all([fetchAttendanceMonth(month), fetchAdvanceMonth(month)]);
+      const [attendance, monthAdvances] = await Promise.all([fetchAttendanceMonth(month), fetchAdvanceMonth(month)]);
+      return { attendance, advances: monthAdvances };
     } finally {
       setLoadingAttendanceMonth(false);
     }
@@ -970,6 +1077,8 @@ function WorkforcePageContent() {
       ...prev,
       workerId: "",
       date: dateKey,
+      status: "present",
+      units: prev.units === "0" ? "1" : prev.units,
       projectId: "",
       note: "",
     }));
@@ -1033,13 +1142,30 @@ function WorkforcePageContent() {
 
     const load = async () => {
       try {
+        const cached = readWorkforceCache();
+        if (cached) {
+          initialCacheSkipsRef.current = { attendanceMonth: true, advances: true };
+          applyWorkforceCache(cached);
+          setLoading(false);
+          return;
+        }
+
         setLoading(true);
-        await Promise.all([
+        const [fetchedWorkers, fetchedProjects, fetchedAdvances, monthData] = await Promise.all([
           fetchWorkers(),
           fetchActiveProjects(),
           fetchAdvances(TODAY),
           refreshAttendanceMonth(CURRENT_MONTH),
         ]);
+        writeWorkforceCache({
+          workers: fetchedWorkers,
+          activeProjects: fetchedProjects,
+          advances: fetchedAdvances,
+          advanceFilterDate: TODAY,
+          attendanceMonth: CURRENT_MONTH,
+          attendanceMonthEntries: monthData.attendance,
+          advanceMonthEntries: monthData.advances,
+        });
       } catch (error) {
         console.error(error);
         toast.error(error instanceof Error ? error.message : "Failed to load workforce data");
@@ -1053,6 +1179,10 @@ function WorkforcePageContent() {
   }, [status, session]);
 
   useEffect(() => {
+    if (initialCacheSkipsRef.current.attendanceMonth) {
+      initialCacheSkipsRef.current.attendanceMonth = false;
+      return;
+    }
     refreshAttendanceMonth(attendanceMonth).catch((error) => {
       toast.error(error instanceof Error ? error.message : "Failed to load monthly attendance");
     });
@@ -1074,6 +1204,10 @@ function WorkforcePageContent() {
   }, [selectedWorkerDetailMode]);
 
   useEffect(() => {
+    if (initialCacheSkipsRef.current.advances) {
+      initialCacheSkipsRef.current.advances = false;
+      return;
+    }
     fetchAdvances(advanceFilterDate).catch((error) => {
       toast.error(error instanceof Error ? error.message : "Failed to load advances");
     });
@@ -1081,6 +1215,7 @@ function WorkforcePageContent() {
   }, [advanceFilterDate]);
 
   useEffect(() => {
+    if (activeTab !== "payroll") return;
     if (!selectedWorkerForPayroll) return;
 
     fetchPayrollSummary().catch((error) => {
@@ -1093,7 +1228,7 @@ function WorkforcePageContent() {
       toast.error(error instanceof Error ? error.message : "Failed to load loyalty leaderboard");
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedWorkerForPayroll, payrollMonth]);
+  }, [activeTab, selectedWorkerForPayroll, payrollMonth]);
 
   useEffect(() => {
     const categories = loyaltyForm.entryType === "credit" ? LOYALTY_CREDIT_CATEGORIES : LOYALTY_DEBIT_CATEGORIES;
@@ -1146,8 +1281,9 @@ function WorkforcePageContent() {
   const markAttendance = async () => {
     try {
       setSavingAttendance(true);
+      const isAbsent = attendanceForm.status === "absent";
       const selectedProject = projectOptions.find((project) => project._id === attendanceForm.projectId);
-      const isManualProject = Boolean(selectedProject?._id.startsWith("manual:"));
+      const isManualProject = !isAbsent && Boolean(selectedProject?._id.startsWith("manual:"));
       const note = isManualProject
         ? [
             `Manual project: ${selectedProject?.clientName}${selectedProject?.clientAddress ? ` - ${selectedProject.clientAddress}` : ""}`,
@@ -1160,20 +1296,22 @@ function WorkforcePageContent() {
         body: JSON.stringify({
           workerId: attendanceForm.workerId,
           date: attendanceForm.date,
-          units: Number(attendanceForm.units),
-          projectId: isManualProject ? undefined : attendanceForm.projectId || undefined,
+          units: isAbsent ? 0 : Number(attendanceForm.units),
+          projectId: isAbsent || isManualProject ? undefined : attendanceForm.projectId || undefined,
           note,
         }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to mark attendance");
 
-      toast.success("Attendance marked");
-      setAttendanceForm((prev) => ({ ...prev, workerId: "", projectId: "", note: "" }));
+      toast.success(isAbsent ? "Absence marked" : "Attendance marked");
+      setAttendanceForm((prev) => ({ ...prev, workerId: "", status: "present", projectId: "", note: "" }));
       await refreshAttendanceMonth();
       await fetchPayrollSummary();
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to mark attendance");
+      return false;
     } finally {
       setSavingAttendance(false);
     }
@@ -1228,16 +1366,17 @@ function WorkforcePageContent() {
 
   const openEditAttendanceDialog = (entry: AttendanceEntry) => {
     setEditingAttendance(entry);
-    setEditingAttendanceUnits(String(entry.units));
+    setEditingAttendanceStatus(entry.units > 0 ? "present" : "absent");
+    setEditingAttendanceUnits(entry.units > 0 ? String(entry.units) : "1");
     setEditingAttendanceProjectId(entry.projectId?._id || "");
     setEditingAttendanceNote(entry.note || "");
   };
 
   const updateAttendance = async () => {
     if (!editingAttendance) return;
-    const units = Number(editingAttendanceUnits);
-    if (![0.5, 1, 1.5, 2].includes(units)) {
-      toast.error("Units must be 0.5, 1, 1.5, or 2");
+    const units = editingAttendanceStatus === "absent" ? 0 : Number(editingAttendanceUnits);
+    if (![0, 0.5, 1, 1.5, 2].includes(units)) {
+      toast.error("Units must be 0, 0.5, 1, 1.5, or 2");
       return;
     }
     try {
@@ -1246,7 +1385,7 @@ function WorkforcePageContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           units,
-          projectId: editingAttendanceProjectId || undefined,
+          projectId: editingAttendanceStatus === "absent" ? undefined : editingAttendanceProjectId || undefined,
           note: editingAttendanceNote,
         }),
       });
@@ -1345,9 +1484,9 @@ function WorkforcePageContent() {
         <div className="sticky top-0 z-30 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 pt-2 pb-4 bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 backdrop-blur-sm">
           <div className="flex items-center justify-between mb-3">
             <button
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.back()}
               className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-slate-200 transition-colors"
-              aria-label="Back to dashboard"
+              aria-label="Go back"
             >
               <ArrowLeft className="h-5 w-5 text-slate-700" />
             </button>
@@ -1388,10 +1527,10 @@ function WorkforcePageContent() {
             style={{ paddingLeft: canScrollLeft ? 32 : 0, paddingRight: canScrollRight ? 32 : 0 }}
           >
             {[
-              { id: "workers", label: "Workers" },
               { id: "attendance", label: "Attendance" },
               { id: "advances", label: "Advances" },
               { id: "payroll", label: "Payroll" },
+              { id: "workers", label: "Workers" },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -1604,14 +1743,23 @@ function WorkforcePageContent() {
                             }`}>
                               {date.getDate()}
                             </span>
-                            <div className="mt-auto w-full space-y-1">
-                              {dayAttendance ? (
-                                <div className="px-2 py-1 text-xs font-semibold text-blue-700">
-                                  {dayAttendance.totalUnits} Hajiri
-                                </div>
-                              ) : isFuture ? null : (
-                                <div className="px-2 py-1 text-sm font-semibold text-slate-300">-</div>
-                              )}
+	                            <div className="mt-auto w-full space-y-1">
+	                              {dayAttendance ? (
+                                  <>
+                                    {dayAttendance.absentCount > 0 ? (
+                                      <div className="px-2 py-1 text-xs font-semibold text-red-600">
+                                        {dayAttendance.absentCount} A
+                                      </div>
+                                    ) : null}
+                                    {dayAttendance.totalUnits > 0 ? (
+                                      <div className="px-2 py-1 text-xs font-semibold text-blue-700">
+                                        {dayAttendance.totalUnits} P
+                                      </div>
+                                    ) : null}
+                                  </>
+	                              ) : isFuture ? null : (
+	                                <div className="px-2 py-1 text-sm font-semibold text-slate-300">-</div>
+	                              )}
                               {dayAdvances ? (
                                 <div className="truncate rounded-md border border-amber-100 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
                                   ₹{dayAdvances.totalAmount} advance
@@ -1626,7 +1774,7 @@ function WorkforcePageContent() {
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 px-4 py-3 text-xs text-slate-600">
                     <span className="font-medium">{attendanceMonthEntries.length} attendance logs</span>
                     <span className="font-medium">{advanceMonthEntries.length} advance logs</span>
-                    <span className="font-medium">{attendanceMonthRange.startDate} to {attendanceMonthRange.endDate}</span>
+                    <span className="font-medium">{formatFullDateLabel(attendanceMonthRange.startDate)} to {formatFullDateLabel(attendanceMonthRange.endDate)}</span>
                   </div>
                 </div>
               </div>
@@ -1647,20 +1795,12 @@ function WorkforcePageContent() {
                       {advances.length}
                     </span>
                   </div>
-                  <div className="relative flex items-center bg-slate-800 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-slate-700 transition-colors">
-                    <span className="text-white text-sm font-medium">
-                      {new Date(advanceFilterDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                    </span>
-                    <ChevronDown className="h-4 w-4 ml-2 text-slate-400" />
-                    <input
-                      ref={advanceDateInputRef}
-                      type="date"
-                      value={advanceFilterDate}
-                      onChange={(e) => setAdvanceFilterDate(e.target.value)}
-                      onClick={(e) => e.currentTarget.showPicker()}
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    />
-                  </div>
+                  <FormattedDateInput
+                    value={advanceFilterDate}
+                    onChange={setAdvanceFilterDate}
+                    className="h-9 border-slate-700 bg-slate-800 text-white hover:bg-slate-700"
+                    iconClassName="text-slate-400"
+                  />
                 </div>
 
                 {/* List Body */}
@@ -1866,7 +2006,7 @@ function WorkforcePageContent() {
                                     Week {week.isoWeek}
                                   </p>
                                   <span className="text-xs text-slate-500">
-                                    {new Date(week.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric" })} - {new Date(week.weekEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                    {formatDateLabel(week.weekStart, { day: "numeric", month: "long" })} - {formatDateLabel(week.weekEnd, { day: "numeric", month: "long" })}
                                   </span>
                                   <span
                                     className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
@@ -1964,7 +2104,7 @@ function WorkforcePageContent() {
                               <div className="min-w-0 flex-1">
                                 <div className="mb-3 flex flex-wrap items-center gap-2">
                                   <p className="text-sm font-semibold text-slate-900">
-                                    {new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    {formatFullDateLabel(entry.date)}
                                   </p>
                                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                                     entry.entryType === "credit"
@@ -2118,76 +2258,104 @@ function WorkforcePageContent() {
               </div>
               <div>
                 <Label className="text-slate-700 font-medium mb-1.5 block">Date</Label>
-                <Input
-                  type="date"
+                <FormattedDateInput
                   value={attendanceForm.date}
-                  onChange={(e) => setAttendanceForm((p) => ({ ...p, date: e.target.value }))}
-                  onClick={(e) => {
-                    const input = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
-                    input.showPicker?.();
-                  }}
-                  className="border-slate-200"
+                  onChange={(value) => setAttendanceForm((p) => ({ ...p, date: value }))}
                 />
               </div>
               <div>
-                <Label className="text-slate-700 font-medium mb-1.5 block">Units</Label>
-                <Select
-                  value={attendanceForm.units}
-                  onValueChange={(value) => setAttendanceForm((p) => ({ ...p, units: value }))}
-                >
-                  <SelectTrigger className="border-slate-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0.5">0.5</SelectItem>
-                    <SelectItem value="1">1</SelectItem>
-                    <SelectItem value="1.5">1.5</SelectItem>
-                    <SelectItem value="2">2</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <div className="mb-1.5 flex items-center justify-between gap-3">
-                  <Label className="text-slate-700 font-medium">Project</Label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setAddManualProjectDialogOpen(true)}
-                    className="h-8 px-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 hover:text-blue-800"
-                  >
-                    <Plus className="mr-1 h-3.5 w-3.5" />
-                    Add project
-                  </Button>
+                <Label className="text-slate-700 font-medium mb-1.5 block">Status</Label>
+                <div className="grid grid-cols-2 gap-2 rounded-full bg-slate-100 p-1">
+                  {[
+                    { value: "present", label: "P" },
+                    { value: "absent", label: "A" },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() =>
+                        setAttendanceForm((p) => ({
+                          ...p,
+                          status: option.value as "present" | "absent",
+                          projectId: option.value === "absent" ? "" : p.projectId,
+                        }))
+                      }
+                      className={`h-10 rounded-full text-sm font-bold transition-colors ${
+                        attendanceForm.status === option.value
+                          ? option.value === "present"
+                            ? "bg-green-600 text-white shadow-sm"
+                            : "bg-red-600 text-white shadow-sm"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
-                <Select
-                  value={attendanceForm.projectId || "none"}
-                  onValueChange={(value) => setAttendanceForm((p) => ({ ...p, projectId: value === "none" ? "" : value }))}
-                >
-                  <SelectTrigger className="h-auto min-h-10 border-slate-200 [&>span]:line-clamp-2">
-                    <SelectValue placeholder="Select active project" />
-                  </SelectTrigger>
-                  <SelectContent className="w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-2rem)]">
-                    <SelectItem value="none" className="min-h-10 border-b border-slate-100">
-                      No project
-                    </SelectItem>
-                    {manualProjects.length > 0 ? <SelectSeparator /> : null}
-                    {projectOptions.map((project) => (
-                      <SelectItem key={project._id} value={project._id} className="min-h-[58px] items-start border-b border-slate-100 py-2 last:border-b-0 [&>span:first-child]:top-3">
-                        <div className="min-w-0 pr-1">
-                          <p className="whitespace-normal break-words text-sm font-medium leading-snug">
-                            {project.clientName}
-                            {project._id.startsWith("manual:") ? <span className="ml-1 text-[10px] uppercase text-blue-600">Manual</span> : null}
-                          </p>
-                          <p className="mt-0.5 whitespace-normal break-words text-xs leading-snug text-slate-500">
-                            {project.clientAddress}
-                          </p>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
+              {attendanceForm.status === "present" ? (
+                <>
+                  <div>
+                    <Label className="text-slate-700 font-medium mb-1.5 block">Units</Label>
+                    <Select
+                      value={attendanceForm.units}
+                      onValueChange={(value) => setAttendanceForm((p) => ({ ...p, units: value }))}
+                    >
+                      <SelectTrigger className="border-slate-200">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0.5">0.5</SelectItem>
+                        <SelectItem value="1">1</SelectItem>
+                        <SelectItem value="1.5">1.5</SelectItem>
+                        <SelectItem value="2">2</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <div className="mb-1.5 flex items-center justify-between gap-3">
+                      <Label className="text-slate-700 font-medium">Project</Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setAddManualProjectDialogOpen(true)}
+                        className="h-8 px-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                      >
+                        <Plus className="mr-1 h-3.5 w-3.5" />
+                        Add project
+                      </Button>
+                    </div>
+                    <Select
+                      value={attendanceForm.projectId || "none"}
+                      onValueChange={(value) => setAttendanceForm((p) => ({ ...p, projectId: value === "none" ? "" : value }))}
+                    >
+                      <SelectTrigger className="h-auto min-h-10 border-slate-200 [&>span]:line-clamp-2">
+                        <SelectValue placeholder="Select active project" />
+                      </SelectTrigger>
+                      <SelectContent className="w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-2rem)]">
+                        <SelectItem value="none" className="min-h-10 border-b border-slate-100">
+                          No project
+                        </SelectItem>
+                        {manualProjects.length > 0 ? <SelectSeparator /> : null}
+                        {projectOptions.map((project) => (
+                          <SelectItem key={project._id} value={project._id} className="min-h-[58px] items-start border-b border-slate-100 py-2 last:border-b-0 [&>span:first-child]:top-3">
+                            <div className="min-w-0 pr-1">
+                              <p className="whitespace-normal break-words text-sm font-medium leading-snug">
+                                {project.clientName}
+                                {project._id.startsWith("manual:") ? <span className="ml-1 text-[10px] uppercase text-blue-600">Manual</span> : null}
+                              </p>
+                              <p className="mt-0.5 whitespace-normal break-words text-xs leading-snug text-slate-500">
+                                {project.clientAddress}
+                              </p>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              ) : null}
               <div>
                 <Label className="text-slate-700 font-medium mb-1.5 block">Note</Label>
                 <Input
@@ -2198,11 +2366,14 @@ function WorkforcePageContent() {
                 />
               </div>
               <Button
-                onClick={() => { markAttendance(); setFormDialogOpen(false); }}
+                onClick={async () => {
+                  const saved = await markAttendance();
+                  if (saved) setFormDialogOpen(false);
+                }}
                 disabled={savingAttendance || !attendanceForm.workerId}
                 className="w-full bg-green-600 hover:bg-green-700"
               >
-                {savingAttendance ? "Saving..." : "Mark Attendance"}
+                {savingAttendance ? "Saving..." : attendanceForm.status === "absent" ? "Mark Absent" : "Mark Attendance"}
               </Button>
             </div>
           )}
@@ -2230,11 +2401,9 @@ function WorkforcePageContent() {
               </div>
               <div>
                 <Label className="text-slate-700 font-medium mb-1.5 block">Date</Label>
-                <Input
-                  type="date"
+                <FormattedDateInput
                   value={advanceForm.date}
-                  onChange={(e) => setAdvanceForm((p) => ({ ...p, date: e.target.value }))}
-                  className="border-slate-200"
+                  onChange={(value) => setAdvanceForm((p) => ({ ...p, date: value }))}
                 />
               </div>
               <div>
@@ -2287,11 +2456,9 @@ function WorkforcePageContent() {
               </div>
               <div>
                 <Label className="text-slate-700 font-medium mb-1.5 block">Date</Label>
-                <Input
-                  type="date"
+                <FormattedDateInput
                   value={loyaltyForm.date}
-                  onChange={(e) => setLoyaltyForm((prev) => ({ ...prev, date: e.target.value }))}
-                  className="border-slate-200"
+                  onChange={(value) => setLoyaltyForm((prev) => ({ ...prev, date: value }))}
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -2457,7 +2624,7 @@ function WorkforcePageContent() {
                   {selectedAttendanceDate ? formatDateLabel(selectedAttendanceDate, { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "Attendance Details"}
                 </DialogTitle>
                 <DialogDescription className="text-sm text-slate-500">
-                  {selectedDayAttendance.reduce((sum, entry) => sum + Number(entry.units || 0), 0)} Hajiri · ₹{selectedDayAdvances.reduce((sum, entry) => sum + Number(entry.amount || 0), 0)} advance
+                  {formatAttendanceSummary(selectedDayAttendance.reduce((sum, entry) => sum + Number(entry.units || 0), 0), selectedDayAttendance.length > 0)} · ₹{selectedDayAdvances.reduce((sum, entry) => sum + Number(entry.amount || 0), 0)} advance
                 </DialogDescription>
               </div>
               <Button type="button" variant="ghost" size="icon" onClick={closeAttendanceDate} className="h-9 w-9 shrink-0 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label="Close attendance details">
@@ -2500,8 +2667,14 @@ function WorkforcePageContent() {
                             <span className="font-normal text-slate-500">({row.worker.workerCode} · {row.worker.mobile})</span>
                           </p>
                           <div className="mt-2 flex flex-wrap gap-2">
-                            <span className="rounded-md border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                              {row.totalUnits} Hajiri
+                            <span className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
+                              row.totalUnits > 0
+                                ? "border-blue-100 bg-blue-50 text-blue-700"
+                                : row.attendance.length > 0
+                                  ? "border-red-100 bg-red-50 text-red-700"
+                                  : "border-slate-100 bg-slate-50 text-slate-600"
+                            }`}>
+                              {formatAttendanceSummary(row.totalUnits, row.attendance.length > 0)}
                             </span>
                             <span className="rounded-md border border-amber-100 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
                               ₹{row.totalAdvance} advance
@@ -2686,7 +2859,11 @@ function WorkforcePageContent() {
                                 {entry.note ? <p className="mt-1 text-xs italic text-slate-500">&quot;{entry.note}&quot;</p> : null}
                               </div>
                               <div className="flex items-center gap-1">
-                                <span className="rounded-md bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{entry.units} Hajiri</span>
+                                <span className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+                                  entry.units > 0 ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-700"
+                                }`}>
+                                  {formatAttendanceUnits(entry.units)}
+                                </span>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-slate-400">
@@ -3009,38 +3186,69 @@ function WorkforcePageContent() {
           </DialogHeader>
           <div className="grid gap-3">
             <div>
-              <Label>Units</Label>
-              <Select value={editingAttendanceUnits} onValueChange={setEditingAttendanceUnits}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0.5">0.5</SelectItem>
-                  <SelectItem value="1">1</SelectItem>
-                  <SelectItem value="1.5">1.5</SelectItem>
-                  <SelectItem value="2">2</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Status</Label>
+              <div className="mt-1 grid grid-cols-2 gap-2 rounded-full bg-slate-100 p-1">
+                {[
+                  { value: "present", label: "P" },
+                  { value: "absent", label: "A" },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      setEditingAttendanceStatus(option.value as "present" | "absent");
+                      if (option.value === "absent") setEditingAttendanceProjectId("");
+                    }}
+                    className={`h-10 rounded-full text-sm font-bold transition-colors ${
+                      editingAttendanceStatus === option.value
+                        ? option.value === "present"
+                          ? "bg-green-600 text-white shadow-sm"
+                          : "bg-red-600 text-white shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div>
-              <Label>Project</Label>
-              <Select
-                value={editingAttendanceProjectId || "none"}
-                onValueChange={(value) => setEditingAttendanceProjectId(value === "none" ? "" : value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select active project" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No project</SelectItem>
-                  {activeProjects.map((project) => (
-                    <SelectItem key={project._id} value={project._id}>
-                      {project.clientName} - {project.clientAddress}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {editingAttendanceStatus === "present" ? (
+              <>
+                <div>
+                  <Label>Units</Label>
+                  <Select value={editingAttendanceUnits} onValueChange={setEditingAttendanceUnits}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0.5">0.5</SelectItem>
+                      <SelectItem value="1">1</SelectItem>
+                      <SelectItem value="1.5">1.5</SelectItem>
+                      <SelectItem value="2">2</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Project</Label>
+                  <Select
+                    value={editingAttendanceProjectId || "none"}
+                    onValueChange={(value) => setEditingAttendanceProjectId(value === "none" ? "" : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select active project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No project</SelectItem>
+                      {activeProjects.map((project) => (
+                        <SelectItem key={project._id} value={project._id}>
+                          {project.clientName} - {project.clientAddress}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            ) : null}
             <div>
               <Label>Note</Label>
               <Input

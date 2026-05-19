@@ -16,7 +16,7 @@ const WorkerAttendanceSchema = new Schema<IWorkerAttendance>(
     workerId: { type: Schema.Types.ObjectId, ref: "Worker", required: true, index: true },
     projectId: { type: Schema.Types.ObjectId, ref: "Project", default: null },
     date: { type: Date, required: true, index: true },
-    units: { type: Number, required: true, min: 0.5, max: 2 },
+    units: { type: Number, required: true, min: 0, max: 2 },
     note: { type: String },
     markedBy: { type: Schema.Types.ObjectId, ref: "User" },
   },
@@ -26,5 +26,17 @@ const WorkerAttendanceSchema = new Schema<IWorkerAttendance>(
 WorkerAttendanceSchema.index({ workerId: 1, date: -1 });
 WorkerAttendanceSchema.index({ workerId: 1, date: 1, projectId: 1 });
 
-export default mongoose.models.WorkerAttendance ||
+const existingWorkerAttendanceModel = mongoose.models.WorkerAttendance as mongoose.Model<IWorkerAttendance> | undefined;
+const existingUnitsPath = existingWorkerAttendanceModel?.schema.path("units") as
+  | { options?: { min?: number | [number, string] } }
+  | undefined;
+const existingUnitsMin = Array.isArray(existingUnitsPath?.options?.min)
+  ? existingUnitsPath?.options?.min[0]
+  : existingUnitsPath?.options?.min;
+
+if (existingWorkerAttendanceModel && existingUnitsMin !== 0) {
+  delete mongoose.models.WorkerAttendance;
+}
+
+export default (mongoose.models.WorkerAttendance as mongoose.Model<IWorkerAttendance> | undefined) ||
   mongoose.model<IWorkerAttendance>("WorkerAttendance", WorkerAttendanceSchema);

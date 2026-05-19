@@ -4,8 +4,6 @@ import Post from "@/models/Post";
 import { services } from "@/app/lib/servicesData";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  await dbConnect();
-
   const baseUrl = "https://www.zycrainterior.com"; // Replace with actual domain if env var available, or use a default
 
   // Static pages
@@ -27,15 +25,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: route === "" ? 1 : 0.8,
   }));
 
-  // Dynamic Blog Posts
-  const posts = await Post.find({ isPublished: true }).select("slug updatedAt");
-
-  const blogRoutes = posts.map((post) => ({
-    url: `${baseUrl}/blog/${post.slug}`,
-    lastModified: post.updatedAt,
-    changeFrequency: "weekly" as const,
-    priority: 0.7,
-  }));
+  let blogRoutes: MetadataRoute.Sitemap = [];
+  try {
+    await dbConnect();
+    const posts = await Post.find({ isPublished: true }).select("slug updatedAt").lean();
+    blogRoutes = posts.map((post) => ({
+      url: `${baseUrl}/blog/${post.slug}`,
+      lastModified: post.updatedAt,
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    }));
+  } catch (error) {
+    console.warn("Skipping dynamic blog sitemap routes:", error);
+  }
 
   const serviceRoutes = services.map((service) => ({
     url: `${baseUrl}/services/${service.slug}`,

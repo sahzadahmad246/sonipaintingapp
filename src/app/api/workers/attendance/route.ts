@@ -19,7 +19,7 @@ function toDayRange(dateInput: string) {
 }
 
 function isValidUnits(value: number) {
-  return [0.5, 1, 1.5, 2].includes(value);
+  return [0, 0.5, 1, 1.5, 2].includes(value);
 }
 
 export async function GET(req: NextRequest) {
@@ -93,9 +93,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     const workerId = body?.workerId;
-    const projectId = typeof body?.projectId === "string" && body.projectId.trim() ? body.projectId.trim() : undefined;
     const dateInput = body?.date;
     const units = Number(body?.units);
+    const projectId =
+      units > 0 && typeof body?.projectId === "string" && body.projectId.trim()
+        ? body.projectId.trim()
+        : undefined;
     const note = typeof body?.note === "string" ? body.note : "";
 
     if (!workerId || typeof workerId !== "string") {
@@ -107,7 +110,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!isValidUnits(units)) {
-      return NextResponse.json({ error: "units must be one of 0.5, 1, 1.5, 2" }, { status: 400 });
+      return NextResponse.json({ error: "units must be one of 0, 0.5, 1, 1.5, 2" }, { status: 400 });
     }
 
     const range = toDayRange(dateInput);
@@ -143,6 +146,25 @@ export async function POST(req: NextRequest) {
     ]);
 
     const existingUnits = totals[0]?.totalUnits || 0;
+    const existingAbsence = await WorkerAttendance.findOne({
+      workerId: worker._id,
+      date: { $gte: range.start, $lte: range.end },
+      units: 0,
+    }).lean();
+
+    if (units === 0 && existingUnits > 0) {
+      return NextResponse.json(
+        { error: "Worker already has present attendance for this date" },
+        { status: 400 }
+      );
+    }
+
+    if (units > 0 && existingAbsence) {
+      return NextResponse.json(
+        { error: "Worker is already marked absent for this date" },
+        { status: 409 }
+      );
+    }
 
     const duplicateQuery: Record<string, unknown> = {
       workerId: worker._id,

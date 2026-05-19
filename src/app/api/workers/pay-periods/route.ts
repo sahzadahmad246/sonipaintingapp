@@ -143,7 +143,7 @@ function summarizeEntries(worker: { dailyWage?: number }, attendanceEntries: unk
   }, 0);
   const attendanceDays = new Set(
     attendanceEntries
-      .map((entry) => (isRecord(entry) ? entry.date : null))
+      .map((entry) => (isRecord(entry) && Number(entry.units || 0) > 0 ? entry.date : null))
       .filter(Boolean)
       .map((date) => new Date(String(date)).toISOString().slice(0, 10))
   ).size;
@@ -198,7 +198,7 @@ async function buildPastUnpaidSummary(
   return {
     id: "past-unpaid",
     status: "past_unpaid",
-    startDate: attendanceEntries.concat(advances).reduce<Date | null>((oldest, entry) => {
+    startDate: ([...attendanceEntries, ...advances] as unknown[]).reduce<Date | null>((oldest, entry) => {
       if (!isRecord(entry) || !entry.date) return oldest;
       const date = new Date(String(entry.date));
       if (Number.isNaN(date.getTime())) return oldest;
